@@ -88,12 +88,34 @@ int rgw_process_authenticated(RGWHandler_REST * const handler,
                               req_state * const s,
                               const bool skip_retarget)
 {
+
+
+    /* ugur-wb
+    If data sits in the datalake
+    we issue remote_fetch operation
+    data is read from backend , stored in osds and also served back to client
+    */
+  int ret;
+  if ( (strcmp("get_obj",op->name()) == 0) && (s->cct->_conf->rgw_datacache_enabled) ){
+    op->directory_lookup();
+//    op->dir_val.location = "128.31.25.83:8000";
+    if ( op->dir_val.location == "datalake" ) {
+  //  if (true) {
+      s->obj_size = 8000000;
+      ldpp_dout(op, 2) << "Cache miss reading from datalake" << dendl;
+      ldpp_dout(op, 2) << "executing" << dendl;
+      op->fetch_remote_execute();
+      ldpp_dout(op, 2) << "completing" << dendl;
+      op->complete();
+      return 0;
+    }
+  }
+  
   ldpp_dout(op, 2) << "init permissions" << dendl;
-  int ret = handler->init_permissions(op);
+  ret = handler->init_permissions(op);
   if (ret < 0) {
     return ret;
   }
-
   /**
    * Only some accesses support website mode, and website mode does NOT apply
    * if you are using the REST endpoint either (ergo, no authenticated access)
@@ -108,6 +130,7 @@ int rgw_process_authenticated(RGWHandler_REST * const handler,
   } else {
     ldpp_dout(op, 2) << "retargeting skipped because of SubOp mode" << dendl;
   }
+
 
   /* If necessary extract object ACL and put them into req_state. */
   ldpp_dout(op, 2) << "reading permissions" << dendl;

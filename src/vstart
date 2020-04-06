@@ -678,8 +678,7 @@ EOF
         ;rgw crypt vault prefix = /v1/kv/data
         ;rgw crypt vault secret engine = transit
         ;rgw crypt vault prefix = /v1/transit/export/encryption-key/
-        debug ms = 1
-        debug rgw = 20
+
 $extra_conf
 EOF
 wconf <<EOF

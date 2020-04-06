@@ -6,6 +6,7 @@
 
 #include <functional>
 #include <boost/container/flat_map.hpp>
+#include <cpp_redis/cpp_redis> /*directort*/
 
 #include "include/rados/librados.hpp"
 #include "include/Context.h"
@@ -29,6 +30,8 @@
 
 #include "services/svc_rados.h"
 #include "services/svc_bi_rados.h"
+
+
 
 class RGWWatcher;
 class SafeTimer;
@@ -518,7 +521,15 @@ public:
                quota_handler(NULL),
                cr_registry(NULL),
                pctl(&ctl),
-               reshard(NULL) {}
+               reshard(NULL) {
+  /*
+    client.connect("127.0.0.1", 7000, [](const std::string& host, std::size_t port, cpp_redis::client::connect_state status) {
+	if (status == cpp_redis::client::connect_state::dropped) {
+	    std::cout << "client disconnected from " << host << ":" << port << std::endl;
+	}
+    });
+  */
+  }
 
   RGWRados& set_use_cache(bool status) {
     use_cache = status;
@@ -784,6 +795,7 @@ public:
       int read(int64_t ofs, int64_t end, bufferlist& bl, optional_yield y);
       int iterate(int64_t ofs, int64_t end, RGWGetDataCB *cb, optional_yield y);
       int get_attr(const char *name, bufferlist& dest, optional_yield y);
+      int fetch_from_backend(RGWGetDataCB *cb, string owner, string dest_bucket_name, string dest_obj_name, string location); // datacache
     };
 
     struct Write {
@@ -1083,6 +1095,13 @@ public:
 
   int rewrite_obj(RGWBucketInfo& dest_bucket_info, const rgw_obj& obj, const DoutPrefixProvider *dpp, optional_yield y);
 
+  // datacache
+  int create_bucket(RGWRados *store, string userid, string dest_bucket_name, CephContext *cct, RGWBucketInfo& bucket_info, map<string, bufferlist>& bucket_attrs, RGWAccessKey& accesskey); 
+  int get_s3_credentials(RGWRados *store, string userid, RGWAccessKey& s3_key);
+  int copy_remote(RGWRados *store, string tenant_id, string bucket_name, string obj_name, string location);
+  int fetch_remote(RGWRados *store, string userid, string dest_bucket_name, string dest_obj_name, string location, RGWGetDataCB *cb, RGWObjectCtx& ctx); 
+  // datacache
+
   int stat_remote_obj(RGWObjectCtx& obj_ctx,
                const rgw_user& user_id,
                req_info *info,
@@ -1266,6 +1285,28 @@ public:
                          RGWObjState *astate, void *arg);
 
   void get_obj_aio_completion_cb(librados::completion_t cb, void *arg);
+
+  // datacache
+  
+  cpp_redis::client client;
+
+  struct directory_values { 
+    string key;
+    string owner;
+    string time;
+    string bucket_name;
+    string obj_name;
+    string location;
+    uint64_t obj_size;
+    string etag;
+  };
+
+  int get_key(directory_values &dir_val); 
+  int set_key(string key, string timeStr, string bucket_name, string obj_name, string location, string owner, uint64_t obj_size, string etag);
+  std::vector<std::pair<std::string, std::string>> get_aged_keys(string startTime, string endTime);
+  // datacache
+
+
 
   /**
    * a simple object read without keeping state

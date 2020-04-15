@@ -90,7 +90,7 @@ int rgw_process_authenticated(RGWHandler_REST * const handler,
 {
 
 
-    /* ugur-wb
+    /* datacache
     If data sits in the datalake
     we issue remote_fetch operation
     data is read from backend , stored in osds and also served back to client

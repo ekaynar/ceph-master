@@ -8252,13 +8252,10 @@ void RGWGetObj::fetch_remote_execute()
   RGWRados::Object op_target(store->getRados(), dest_bucket_info, *static_cast<RGWObjectCtx *>(s->obj_ctx), obj);
   RGWRados::Object::Read read_op(&op_target);
   op_ret = read_op.fetch_from_backend(filter, dir_val.owner, dir_val.bucket_name, dir_val.obj_name, dir_val.location);
-  ldpp_dout(this, 10) << "fetch_remote_execute is done"<< op_ret << dendl;
-  //op_ret = read_op.fetch_from_backend(filter,"testuser", s->bucket_name, s->object.name, s);
 }
 
 void RGWGetObj::directory_lookup()
 {
-//  string key = s->bucket_name +"_"+s->object.name;
   dir_val.bucket_name = s->bucket_name;
   dir_val.obj_name = s->object.name;
   dir_val.key = s->bucket_name +"_"+s->object.name;

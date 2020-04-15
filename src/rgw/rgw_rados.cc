@@ -6216,6 +6216,30 @@ struct get_obj_data {
                uint64_t offset, optional_yield yield)
     : store(store), client_cb(cb), aio(aio), offset(offset), yield(yield) {}
 
+  
+  // datacache
+  std::list<string> pending_oid_list; 
+
+  string get_pending_oid()
+  {
+    string str;
+    str.clear();
+    if (!pending_oid_list.empty()) {
+      str = pending_oid_list.front();
+      pending_oid_list.pop_front();
+    }
+    return str;
+  }  
+
+  void add_pending_oid(std::string oid)
+  {
+    pending_oid_list.push_back(oid);
+  }
+
+
+  // datacache
+
+
   int flush(rgw::AioResultList&& results) {
     int r = rgw::check_for_errors(results);
     if (r < 0) {
@@ -6226,9 +6250,16 @@ struct get_obj_data {
     results.sort(cmp); // merge() requires results to be sorted first
     completed.merge(results, cmp); // merge results in sorted order
 
+    std::string oid; // datacache
     while (!completed.empty() && completed.front().id == offset) {
       auto bl = std::move(completed.front().data);
       completed.pop_front_and_dispose(std::default_delete<rgw::AioResultEntry>{});
+
+      // datacache
+      oid = d->get_pending_oid();
+      if (bl.length() == 0x400000)
+      data_cache.put(bl, bl.length(), oid);
+      // datacache
 
       offset += bl.length();
       int r = client_cb->handle_data(bl, 0, bl.length());
@@ -6300,6 +6331,9 @@ int RGWRados::get_obj_iterate_cb(const rgw_raw_obj& read_obj, off_t obj_ofs,
   }
 
   auto obj = d->store->svc.rados->obj(read_obj);
+  //datacache
+  d->add_pending_oid(read_obj.oid);
+
   int r = obj.open();
   if (r < 0) {
     ldout(cct, 4) << "failed to open rados context for " << read_obj << dendl;

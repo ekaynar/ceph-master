@@ -1304,7 +1304,9 @@ public:
   int get_key(directory_values &dir_val); 
   int set_key(string key, string timeStr, string bucket_name, string obj_name, string location, string owner, uint64_t obj_size, string etag);
   std::vector<std::pair<std::string, std::string>> get_aged_keys(string startTime, string endTime);
+  int put_data(string key, bufferlist& bl, unsigned int len);
   // datacache
+
 
 
 

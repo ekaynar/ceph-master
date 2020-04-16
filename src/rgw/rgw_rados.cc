@@ -9503,6 +9503,10 @@ int RGWRados::copy_remote(RGWRados *store, string userid, string bucket_name, st
 
 // Cache operation
 
+int RGWRados::put_data(string key, bufferlist& bl, unsigned int len){
+
+  return 0;
+}
 
 
 

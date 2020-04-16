@@ -324,6 +324,15 @@ int AtomicObjectProcessor::complete(size_t accounted_size,
   if (!obj_op.meta.canceled) {
     // on success, clear the set of objects for deletion
     writer.clear_written();
+    // datacache
+    string s3_bucket_name = op_target.get_obj().bucket.name;
+    string s3_object_name = op_target.get_obj().key.name;
+    string s3_userid =  op_target.get_bucket_info().owner.id;
+    string key = s3_bucket_name+"_"+s3_object_name;
+    r = store->getRados()->set_key(key, "time", s3_bucket_name, s3_object_name, "cache", s3_userid, manifest.get_obj_size(), etag);
+    // datacache
+
+
   }
   if (pcanceled) {
     *pcanceled = obj_op.meta.canceled;

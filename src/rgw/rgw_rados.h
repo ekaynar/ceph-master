@@ -784,6 +784,7 @@ public:
       int read(int64_t ofs, int64_t end, bufferlist& bl, optional_yield y);
       int iterate(int64_t ofs, int64_t end, RGWGetDataCB *cb, optional_yield y);
       int get_attr(const char *name, bufferlist& dest, optional_yield y);
+      int fetch_from_backend(RGWGetDataCB *cb, string owner, string dest_bucket_name, string dest_obj_name, string location); // datacache
     };
 
     struct Write {
@@ -1081,6 +1082,13 @@ public:
     ATTRSMOD_MERGE   = 2
   };
 
+  // datacache
+  int create_bucket(RGWRados *store, string userid, string dest_bucket_name, CephContext *cct, RGWBucketInfo& bucket_info, map<string, bufferlist>& bucket_attrs, RGWAccessKey& accesskey);
+  int get_s3_credentials(RGWRados *store, string userid, RGWAccessKey& s3_key);
+  int copy_remote(RGWRados *store, string tenant_id, string bucket_name, string obj_name, string location);
+  int fetch_remote(RGWRados *store, string userid, string dest_bucket_name, string dest_obj_name, string location, RGWGetDataCB *cb, RGWObjectCtx& ctx);
+  // datacache
+
   int rewrite_obj(RGWBucketInfo& dest_bucket_info, const rgw_obj& obj, const DoutPrefixProvider *dpp, optional_yield y);
 
   int stat_remote_obj(RGWObjectCtx& obj_ctx,
@@ -1266,6 +1274,26 @@ public:
                          RGWObjState *astate, void *arg);
 
   void get_obj_aio_completion_cb(librados::completion_t cb, void *arg);
+
+  /* datacache */
+    struct directory_values {
+    string key;
+    string owner;
+    string time;
+    string bucket_name;
+    string obj_name;
+    string location;
+    uint64_t obj_size;
+    string etag;
+  };
+
+  int get_key(directory_values &dir_val);
+  int set_key(string key, string timeStr, string bucket_name, string obj_name, string location, string owner, uint64_t obj_size, string etag);
+  std::vector<std::pair<std::string, std::string>> get_aged_keys(string startTime, string endTime);
+  int put_data(string key, bufferlist& bl, unsigned int len);
+  /* datacache */
+
+
 
   /**
    * a simple object read without keeping state

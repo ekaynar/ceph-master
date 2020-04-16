@@ -7000,6 +7000,12 @@ std::vector<Option> get_rgw_options() {
     .add_see_also("rgw_dmclock_metadata_wgt")
     .add_see_also("rgw_dmclock_metadata_lim"),
 
+    Option("rgw_datacache_enabled", Option::TYPE_BOOL, Option::LEVEL_ADVANCED)
+    .set_default(false)
+    .set_description(""),
+
+
+
     Option("rgw_dmclock_metadata_wgt", Option::TYPE_FLOAT, Option::LEVEL_ADVANCED)
     .set_default(500.0)
     .set_description("mclock weight for metadata requests")

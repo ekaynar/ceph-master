@@ -190,6 +190,11 @@ public:
   virtual int verify_op_mask();
   virtual void pre_exec() {}
   virtual void execute() = 0;
+  /*datacache*/
+  virtual void fetch_remote_execute() {} 
+  virtual void directory_lookup() {} 
+  RGWRados::directory_values dir_val;
+  /*datacache*/
   virtual void send_response() {}
   virtual void complete() {
     send_response();
@@ -340,6 +345,8 @@ public:
   int verify_permission() override;
   void pre_exec() override;
   void execute() override;
+  void fetch_remote_execute(); // datacache
+  void directory_lookup(); // datacache
   int parse_range();
   int read_user_manifest_part(
     rgw_bucket& bucket,

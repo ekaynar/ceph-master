@@ -98,11 +98,9 @@ int rgw_process_authenticated(RGWHandler_REST * const handler,
   int ret;
   if ( (strcmp("get_obj",op->name()) == 0) && (s->cct->_conf->rgw_datacache_enabled) ){
     op->directory_lookup();
-//    op->dir_val.location = "128.31.25.83:8000";
-    if ( op->dir_val.location == "datalake" ) {
+    if ( (op->dir_val.location == "datalake") && (OP_GET == s->op) ) {
   //  if (true) {
-      s->obj_size = 8000000;
-      ldpp_dout(op, 2) << "Cache miss reading from datalake" << dendl;
+      s->obj_size = 20971520;
       ldpp_dout(op, 2) << "executing" << dendl;
       op->fetch_remote_execute();
       ldpp_dout(op, 2) << "completing" << dendl;

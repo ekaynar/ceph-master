@@ -8243,12 +8243,12 @@ void RGWDeleteBucketPublicAccessBlock::execute()
 // datacache
 void RGWGetObj::fetch_remote_execute()
 {
-  ldpp_dout(this, 10) << "fetch_remote_execute is running" << dendl;
+ ldpp_dout(this, 10) << __func__  << dendl;
   this->total_len = s->obj_size;
   RGWGetObj_CB cb(this);
   RGWGetObj_Filter* filter = (RGWGetObj_Filter *)&cb;
   RGWBucketInfo dest_bucket_info;
-  map<string, bufferlist> dest_attrs;
+//  map<string, bufferlist> dest_attrs;
   RGWRados::Object op_target(store->getRados(), dest_bucket_info, *static_cast<RGWObjectCtx *>(s->obj_ctx), obj);
   RGWRados::Object::Read read_op(&op_target);
   op_ret = read_op.fetch_from_backend(filter, dir_val.owner, dir_val.bucket_name, dir_val.obj_name, dir_val.location);
@@ -8259,14 +8259,15 @@ void RGWGetObj::directory_lookup()
   dir_val.bucket_name = s->bucket_name;
   dir_val.obj_name = s->object.name;
   dir_val.key = s->bucket_name +"_"+s->object.name;
-  int ret = store->getRados()->get_key(this->dir_val);
+  ldpp_dout(this, 10) << __func__ << this->dir_val.key  << dendl;
+  //int ret = store->getRados()->get_key(this->dir_val);
   dir_val.location = "datalake";
   dir_val.owner = "testuser";
-  if (this->dir_val.location == "cache") {
+ /* if (this->dir_val.location == "cache") {
     ldpp_dout(this, 10) << "data in cache" << dendl;
   } else if (this->dir_val.location == "datalake") {
     ldpp_dout(this, 10) << "data in datalake" << dendl;
-  }
+  }*/
 }
 
 

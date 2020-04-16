@@ -3265,8 +3265,16 @@ class RGWRadosPutObj : public RGWHTTPStreamRWRequest::ReceiveCB
   map<string, bufferlist> src_attrs;
   uint64_t ofs{0};
   uint64_t lofs{0}; /* logical ofs */
+
+   /* datacache */
   RGWGetDataCB* client_cb;
   std::function<int(map<string, bufferlist>&)> attrs_handler;
+  bufferlist chunk_buffer;
+  string chunk_name;
+  uint64_t chunk_id{0}; 
+  uint64_t chunk_size = COPY_BUF_SIZE; 
+  RGWRados *store = NULL;
+
 public:
   RGWRadosPutObj(CephContext* cct,
                  CompressorRef& plugin,
@@ -3285,6 +3293,12 @@ public:
                        progress_data(_progress_data),
 		       client_cb(client_cb),
                        attrs_handler(_attrs_handler) {}
+
+  
+
+  void set_name(string key){
+    chunk_name = key;
+  }
 
   int process_attrs(void) {
     if (extra_data_bl.length()) {
@@ -3375,6 +3389,17 @@ public:
     bufferlist bl_temp;
     bl_temp.append(bl);
     client_cb->handle_data(bl_temp, 0, size);
+
+    chunk_buffer.append(bl);
+    if (chunk_buffer.length() >= chunk_size){
+      bufferlist tmp;
+      chunk_buffer.splice(0, chunk_size, &tmp); 
+      ldout(cct, 0) << "tmp_buffer size "<< tmp.length() << " remaining buffer " << chunk_buffer.length() << dendl;
+      string key = chunk_name + "_" + std::to_string(chunk_id);
+      int ret = store->put_data(key, tmp , tmp.length());
+      chunk_id += 1;
+    }
+
     return filter->process(std::move(bl), lofs);
   }
 
@@ -9475,6 +9500,9 @@ int RGWRados::copy_remote(RGWRados *store, string userid, string bucket_name, st
      }
 
 }
+
+// Cache operation
+
 
 
 

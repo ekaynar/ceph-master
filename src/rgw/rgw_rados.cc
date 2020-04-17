@@ -9457,7 +9457,11 @@ int RGWRados::put_data(string key, bufferlist& bl, unsigned int len){
 // redis operations
 
 int RGWRados::set_key(string key, string timeStr, string bucket_name, string obj_name, string location, string owner, uint64_t obj_size, string etag){
-/*
+
+  cpp_redis::client client;
+  //  //client.connect();
+  client.connect("127.0.0.1", 7000);
+
   dout(10) << __func__ << " redis set key ="  << key << dendl;
   std::vector<std::pair<std::string, std::string>> list;
   std::vector<std::string> keys;
@@ -9494,12 +9498,12 @@ int RGWRados::set_key(string key, string timeStr, string bucket_name, string obj
   // synchronous commit, no timeout
   client.sync_commit();
   return 0;
-*/
+
 }
 
 
 int RGWRados::get_key(directory_values &dir_val){
-/*
+
   string key;
   string owner;
   string time;
@@ -9509,6 +9513,11 @@ int RGWRados::get_key(directory_values &dir_val){
   string etag;
   string sizeStr;
   uint64_t obj_size;
+
+
+  cpp_redis::client client;
+  //  //client.connect();
+  client.connect("127.0.0.1", 7000);
 
   key = dir_val.key;
 
@@ -9550,15 +9559,17 @@ int RGWRados::get_key(directory_values &dir_val){
   client.sync_commit();
 
   return 0;
-*/
 }
 
 //returns all the keys between startTime and endTime as <key, time> paris
 std::vector<std::pair<std::string, std::string>> RGWRados::get_aged_keys(string startTime, string endTime){
-/*
   std::vector<std::pair<std::string, std::string>> list;
   std::string key;
   std::string time;
+
+  cpp_redis::client client;
+  //  //client.connect();
+  client.connect("127.0.0.1", 7000);
 
   std::string dirKey = "main_directory";
   client.zrangebyscore(dirKey, startTime, endTime, true, [&key, &time](cpp_redis::reply &reply){
@@ -9575,7 +9586,6 @@ std::vector<std::pair<std::string, std::string>> RGWRados::get_aged_keys(string 
   client.sync_commit();
 
   return list;
-*/
 }
 
 

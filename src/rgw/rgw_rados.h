@@ -30,6 +30,8 @@
 #include "services/svc_rados.h"
 #include "services/svc_bi_rados.h"
 
+#include <cpp_redis/cpp_redis>
+
 class RGWWatcher;
 class SafeTimer;
 class ACLOwner;

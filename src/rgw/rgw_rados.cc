@@ -3270,7 +3270,7 @@ class RGWRadosPutObj : public RGWHTTPStreamRWRequest::ReceiveCB
   string chunk_name;
   uint64_t chunk_id{0};
   uint64_t chunk_size = COPY_BUF_SIZE;
-  RGWRados *store = NULL;
+  RGWRados *store;
 
 
 public:
@@ -3281,6 +3281,7 @@ public:
                  void (*_progress_cb)(off_t, void *),
                  void *_progress_data,
 		 RGWGetDataCB* client_cb, 
+		 RGWRados* store,
                  std::function<int(map<string, bufferlist>&)> _attrs_handler) :
                        cct(cct),
                        filter(p),
@@ -3290,6 +3291,7 @@ public:
                        progress_cb(_progress_cb),
                        progress_data(_progress_data),
 		       client_cb(client_cb),
+		       store(store),
                        attrs_handler(_attrs_handler) {}
 
   void set_name(string key){
@@ -3787,7 +3789,7 @@ int RGWRados::fetch_remote_obj(RGWObjectCtx& obj_ctx,
 
   std::optional<rgw_user> override_owner;
 
-  RGWRadosPutObj cb(cct, plugin, compressor, &processor, progress_cb, progress_data, NULL,
+  RGWRadosPutObj cb(cct, plugin, compressor, &processor, progress_cb, progress_data, NULL, NULL, 
                     [&](map<string, bufferlist>& obj_attrs) {
                       const rgw_placement_rule *ptail_rule;
 
@@ -9223,7 +9225,7 @@ int RGWRados::fetch_remote(RGWRados *store, string userid, string dest_bucket_na
   std::optional<rgw_user> override_owner;
   void *progress_data = NULL ;
   void (*progress_cb)(off_t, void *) = NULL;
-    RGWRadosPutObj cb(cct, plugin, compressor, &processor, progress_cb, progress_data, client_cb,
+    RGWRadosPutObj cb(cct, plugin, compressor, &processor, progress_cb, progress_data, client_cb, this->store->getRados(), 
                     [&](map<string, bufferlist>& obj_attrs){
 
                       const rgw_placement_rule *ptail_rule;
@@ -9449,6 +9451,10 @@ int RGWRados::copy_remote(RGWRados *store, string userid, string bucket_name, st
 // Cache operation
 
 int RGWRados::put_data(string key, bufferlist& bl, unsigned int len){
+
+  int a = 10;
+  int b = 19;
+  dout(10) << __func__ << " redis set key ="  << key << dendl;
 
   return 0;
 }

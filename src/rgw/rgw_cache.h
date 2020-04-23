@@ -15,6 +15,20 @@
 #include "cls/version/cls_version_types.h"
 #include "rgw_common.h"
 
+
+/*datacache*/
+#include <errno.h>
+#include <unistd.h> 
+#include <signal.h> 
+#include <stdlib.h>
+#include <stdio.h>
+#include <iostream>
+#include "include/Context.h"
+#include <aio.h>
+struct DataCache;
+//class DataCache;
+
+
 enum {
   UPDATE_OBJ,
   REMOVE_OBJ,
@@ -214,6 +228,52 @@ public:
   void chain_cache(RGWChainedCache *cache);
   void unchain_cache(RGWChainedCache *cache);
   void invalidate_all();
+};
+
+/* datacache */
+
+struct cacheAioWriteRequest{
+  std::string key;
+  void *data;
+  int fd;
+  struct aiocb *cb;
+  DataCache *priv_data;
+  CephContext *cct;
+  bool write; 
+
+  cacheAioWriteRequest(CephContext *_cct) : cct(_cct) , write(false) {}
+  int create_io(bufferlist& bl, uint64_t len, std::string key);
+  
+  void release() {
+    ::close(fd);
+    cb->aio_buf = NULL;
+    free(data);
+    data = NULL;
+    free(cb);
+    free(this);
+  }
+};
+
+
+struct DataCache {
+private:
+  std::list<string> outstanding_write_list;
+  uint64_t capacity ;
+  CephContext *cct;
+  std::string path;
+  //ceph::mutex lock = ceph::make_mutex("DataCache::lock");
+public:
+  DataCache();
+  ~DataCache() {}
+  void put(bufferlist& bl, uint64_t len, string key);
+  int create_aio_write_request(bufferlist& bl, uint64_t len, std::string key);
+  void cache_aio_write_completion_cb(cacheAioWriteRequest *c);
+  void init(CephContext *_cct) {
+    cct = _cct;
+    capacity = 1000;
+    path = cct->_conf->rgw_datacache_path;
+
+  }
 };
 
 #endif

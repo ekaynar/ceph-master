@@ -1088,6 +1088,7 @@ public:
   int create_bucket(RGWRados *store, string userid, string dest_bucket_name, CephContext *cct, RGWBucketInfo& bucket_info, map<string, bufferlist>& bucket_attrs, RGWAccessKey& accesskey);
   int get_s3_credentials(RGWRados *store, string userid, RGWAccessKey& s3_key);
   int copy_remote(RGWRados *store, string tenant_id, string bucket_name, string obj_name, string location);
+  int delete_cache_obj(RGWRados *store, string userid, string bucket_name, string obj_name);
   int fetch_remote(RGWRados *store, string userid, string dest_bucket_name, string dest_obj_name, string location, RGWGetDataCB *cb, RGWObjectCtx& ctx);
   // datacache
 

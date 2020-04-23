@@ -1243,6 +1243,7 @@ OPTION(rados_tracing, OPT_BOOL) // true if LTTng-UST tracepoints should be enabl
 
 
 OPTION(rgw_datacache_enabled, OPT_BOOL) // datacache
+OPTION(rgw_datacache_path, OPT_STR) // datacache
 OPTION(rgw_max_attr_name_len, OPT_SIZE)
 OPTION(rgw_max_attr_size, OPT_SIZE)
 OPTION(rgw_max_attrs_num_in_req, OPT_U64)

@@ -3268,7 +3268,7 @@ class RGWRadosPutObj : public RGWHTTPStreamRWRequest::ReceiveCB
      /* datacache */
   bufferlist chunk_buffer;
   string chunk_name;
-  uint64_t chunk_id{0};
+  uint64_t chunk_id = 0 ;
   uint64_t chunk_size = COPY_BUF_SIZE;
   RGWRados *store;
 
@@ -3387,13 +3387,13 @@ public:
     bufferlist bl_temp;
     bl_temp.append(bl);
     client_cb->handle_data(bl_temp, 0, size);
-
     chunk_buffer.append(bl);
     if (chunk_buffer.length() >= chunk_size){
       bufferlist tmp;
       chunk_buffer.splice(0, chunk_size, &tmp);
-      ldout(cct, 0) << "tmp_buffer size "<< tmp.length() << " remaining buffer " << chunk_buffer.length() << dendl;
       string key = chunk_name + "_" + std::to_string(chunk_id);
+    //  ldout(cct, 0) << "tmp_buffer size "<< tmp.length() << " remaining buffer " << 
+//		    chunk_buffer.length() <<  " key " << key << dendl;
       int ret = store->put_data(key, tmp , tmp.length());
       chunk_id += 1;
     }
@@ -9259,6 +9259,8 @@ int RGWRados::fetch_remote(RGWRados *store, string userid, string dest_bucket_na
                       }
                       return 0;
                     });
+  string name = dest_bucket_name + "_" + dest_obj_name;
+  cb.set_name(name);
   string etag;
   real_time set_mtime;
   const real_time *pmod = NULL;
@@ -9448,13 +9450,40 @@ int RGWRados::copy_remote(RGWRados *store, string userid, string bucket_name, st
 
 }
 
+
+int RGWRados::delete_cache_obj(RGWRados *store, string userid, string src_bucket_name, string src_obj_name){
+    dout(10) << __func__ << " bucket_name " << src_bucket_name << " ,object_name "<< src_obj_name <<dendl;
+    RGWObjectCtx obj_ctx(this->store);
+    RGWBucketInfo src_bucket_info;
+    const string src_tenant_name = "";
+    map<string, bufferlist> src_attrs;
+    rgw_user user_id(userid);
+    int ret = store->get_bucket_info(&svc, src_tenant_name, src_bucket_name, src_bucket_info, NULL, null_yield, &src_attrs);
+    rgw_obj src_obj(src_bucket_info.bucket, src_obj_name);
+    //Check here whether object exists or not
+    ///* check if obj exists, read orig attrs */
+    RGWRados::Object src_op_target(store, src_bucket_info, obj_ctx, src_obj);
+    RGWRados::Object::Read read_op(&src_op_target);
+    read_op.params.attrs = &src_attrs;
+    ret = read_op.prepare(null_yield);
+    if (ret < 0) { return -1;}
+
+    obj_ctx.set_atomic(src_obj);
+    RGWRados::Object del_target(store, src_bucket_info, obj_ctx, src_obj);
+    RGWRados::Object::Delete del_op(&del_target);
+    del_op.params.versioning_status = src_bucket_info.versioning_status();
+    del_op.params.bucket_owner = src_bucket_info.owner;
+
+    return  del_op.delete_obj(null_yield);
+}
+
+
 // Cache operation
 
 int RGWRados::put_data(string key, bufferlist& bl, unsigned int len){
-
-  int a = 10;
-  int b = 19;
-  dout(10) << __func__ << " redis set key ="  << key << dendl;
+// store.svc.cache.datacache.name:q
+  dout(10) << __func__ << " local cache write "  << key << dendl;
+  svc.cache->get_datacache().put(bl,len,key); 
 
   return 0;
 }

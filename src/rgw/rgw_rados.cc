@@ -9099,6 +9099,82 @@ int RGWRados::delete_obj_aio(const rgw_obj& obj,
 
 /* datacache */
 
+int RGWRados::Object::Read::read_from_local(int64_t ofs, int64_t end, RGWGetDataCB *cb, string bucket_name, string obj_name, optional_yield y){
+
+  RGWRados *store = source->get_store();
+  CephContext *cct = store->ctx();
+  RGWObjectCtx& obj_ctx = source->get_ctx();
+  const uint64_t chunk_size = cct->_conf->rgw_get_obj_max_req_size;
+  const uint64_t window_size = cct->_conf->rgw_get_obj_window_size;
+
+  ldout(cct, 0) << __func__ << dendl;
+  auto aio = rgw::make_throttle(window_size, y);
+  get_obj_data data(store, cb, &*aio, ofs, y);  
+
+  int r = store->iterate_local_obj(obj_ctx, bucket_name, obj_name, ofs, end, chunk_size, &data, y);
+  if (r < 0) {
+    ldout(cct, 0) << "iterate_local_obj() failed with " << r << dendl;
+    data.cancel(); // drain completions without writing back to client
+    return r;
+  }
+
+  return data.drain();
+
+}
+
+
+int RGWRados::get_local_obj_cb(string key, off_t obj_ofs, off_t read_ofs, off_t len,  void *arg){
+
+  ObjectReadOperation op;
+  struct get_obj_data *d = (struct get_obj_data *)arg;
+
+  //ldout(cct, 20) << "rados->get_obj_iterate_cb oid=" << read_obj.oid << " obj-ofs=" << obj_ofs << " read_ofs=" << read_ofs << " len=" << len << dendl;
+  op.read(read_ofs, len, nullptr, nullptr);
+  const uint64_t cost = len;
+  const uint64_t id = obj_ofs;
+
+//  auto completed = d->aio->get(obj, rgw::Aio::librados_op(std::move(op), d->yield), cost, id);
+//  return d->flush(std::move(completed));
+
+} 
+
+int RGWRados::iterate_local_obj(RGWObjectCtx& obj_ctx, string bucket_name, string obj_name, off_t ofs, off_t end, uint64_t max_chunk_size, void *arg, optional_yield y){
+
+  uint64_t len;
+  //uint64_t ofs;
+  //uint64_t end;
+  uint64_t chunk_id;
+  string key = bucket_name+"_"+obj_name+"_";    
+  //Calculate_chunk_id
+  chunk_id = 0;
+  if (end < 0)
+    len = 0;
+  else
+    len = end - ofs + 1;
+ 
+ 
+  dout(10) << __func__  << max_chunk_size << " key "<< key  << " ofs "<< ofs << " end " << end << dendl;
+  while (ofs <= end) {
+    uint64_t read_len = std::min(len, max_chunk_size);
+    //Calculate key
+    key = key + std::to_string(chunk_id);    
+    
+    dout(10) << __func__  << key  << " ofs "<< ofs << " end " << end << dendl;
+    int r = 1;
+//    r = read_obj(key, ofs, read_len, arg);
+    if ( r < 0 ) {
+      return r;
+    }
+
+    len -= read_len;
+    ofs += read_len;
+    chunk_id += 1;
+      
+  } 
+    return 0;
+
+}
+
 int RGWRados::Object::Read::fetch_from_backend(RGWGetDataCB *cb, string owner, string bucket_name, string obj_name, string location){
   RGWRados *store = source->get_store();
   CephContext *cct = store->ctx();
@@ -9449,6 +9525,7 @@ int RGWRados::copy_remote(RGWRados *store, string userid, string bucket_name, st
      }
 
 }
+
 
 
 int RGWRados::delete_cache_obj(RGWRados *store, string userid, string src_bucket_name, string src_obj_name){

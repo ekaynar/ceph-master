@@ -786,7 +786,10 @@ public:
       int read(int64_t ofs, int64_t end, bufferlist& bl, optional_yield y);
       int iterate(int64_t ofs, int64_t end, RGWGetDataCB *cb, optional_yield y);
       int get_attr(const char *name, bufferlist& dest, optional_yield y);
-      int fetch_from_backend(RGWGetDataCB *cb, string owner, string dest_bucket_name, string dest_obj_name, string location); // datacache
+       /* datacache */
+      int fetch_from_backend(RGWGetDataCB *cb, string owner, string dest_bucket_name, string dest_obj_name, string location); 
+      int read_from_local(int64_t ofs, int64_t end, RGWGetDataCB *cb, string dest_bucket_name, string dest_obj_name, optional_yield y); 
+       /* datacache */
     };
 
     struct Write {
@@ -1090,6 +1093,8 @@ public:
   int copy_remote(RGWRados *store, string tenant_id, string bucket_name, string obj_name, string location);
   int delete_cache_obj(RGWRados *store, string userid, string bucket_name, string obj_name);
   int fetch_remote(RGWRados *store, string userid, string dest_bucket_name, string dest_obj_name, string location, RGWGetDataCB *cb, RGWObjectCtx& ctx);
+  int iterate_local_obj(RGWObjectCtx& ctx, string bucket_name, string obj_name, off_t ofs, off_t end, uint64_t max_chunk_size, void *arg, optional_yield y);
+  int get_local_obj_cb(string key, off_t obj_ofs, off_t read_ofs, off_t len,  void *arg);
   // datacache
 
   int rewrite_obj(RGWBucketInfo& dest_bucket_info, const rgw_obj& obj, const DoutPrefixProvider *dpp, optional_yield y);

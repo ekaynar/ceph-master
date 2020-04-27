@@ -8256,6 +8256,7 @@ void RGWGetObj::directory_lookup()
   ldpp_dout(this, 10) << __func__ << this->dir_val.key  << dendl;
   //int ret = store->getRados()->get_key(this->dir_val);
   dir_val.location = "datalake";
+  dir_val.location = "readcache";
   dir_val.owner = "testuser";
   dir_val.obj_size = 20971520;
   s->obj_size = 20971520;
@@ -8266,26 +8267,28 @@ void RGWGetObj::directory_lookup()
   }*/
 }
 
-void RGWGetObj::local_read_execute()
+void RGWGetObj::read_local_execute()
 {
-  bufferlist bl;
-  gc_invalidate_time = ceph_clock_now();
-  gc_invalidate_time += (s->cct->_conf->rgw_gc_obj_min_wait / 2);
+//  bufferlist bl;
+//  gc_invalidate_time = ceph_clock_now();
+//  gc_invalidate_time += (s->cct->_conf->rgw_gc_obj_min_wait / 2);
 
-  bool need_decompress;
+//  bool need_decompress;
   int64_t ofs_x, end_x;
 
+  ofs_x = 0;
+  end_x = dir_val.obj_size;
   RGWGetObj_CB cb(this);
   RGWGetObj_Filter* filter = (RGWGetObj_Filter *)&cb;
-  boost::optional<RGWGetObj_Decompress> decompress;
-  std::unique_ptr<RGWGetObj_Filter> decrypt;
-  map<string, bufferlist>::iterator attr_iter;
+//  boost::optional<RGWGetObj_Decompress> decompress;
+//  std::unique_ptr<RGWGetObj_Filter> decrypt;
+//  map<string, bufferlist>::iterator attr_iter;
   
-  perfcounter->inc(l_rgw_get);
+//  perfcounter->inc(l_rgw_get);
   RGWBucketInfo dest_bucket_info;
   RGWRados::Object op_target(store->getRados(), dest_bucket_info, *static_cast<RGWObjectCtx *>(s->obj_ctx), obj);
   RGWRados::Object::Read read_op(&op_target);
-
+/*
   op_ret = get_params();
   if (op_ret < 0)
     goto done_err;
@@ -8293,8 +8296,13 @@ void RGWGetObj::local_read_execute()
   op_ret = init_common();
   if (op_ret < 0)
     goto done_err;
- 
-//  op_ret = read_op.read_from_local(filter, dir_val.owner, dir_val.bucket_name, dir_val.obj_name, dir_val.location); 
+ */
+  //check range
+  if(false){
+    goto done_err;
+  }
+  
+  op_ret = read_op.read_from_local(ofs_x, end_x, filter, dir_val.bucket_name, dir_val.obj_name, s->yield); 
   return;
 done_err:
   send_response_data_error();

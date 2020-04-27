@@ -96,7 +96,8 @@ int rgw_process_authenticated(RGWHandler_REST * const handler,
    */
   
   int ret;
-  if ( (strcmp("get_obj",op->name()) == 0) && (s->cct->_conf->rgw_datacache_enabled) ){
+
+   if ( (strcmp("get_obj",op->name()) == 0) && (s->cct->_conf->rgw_datacache_enabled) ){
     op->directory_lookup();
     if ( (op->dir_val.location == "datalake") && (OP_GET == s->op) ) {
       ldpp_dout(op, 2) << "executing" << dendl;
@@ -107,8 +108,9 @@ int rgw_process_authenticated(RGWHandler_REST * const handler,
     }
     else if ((op->dir_val.location == "readcache") && (OP_GET == s->op) ) {
       ldpp_dout(op, 2) << "executing" << dendl;
-//      ldpp_dout(op, 2) << "completing" << dendl;
-//      op->complete();
+      op->read_local_execute(); 
+      ldpp_dout(op, 2) << "completing" << dendl;
+      op->complete();
        
       return 0;
     }

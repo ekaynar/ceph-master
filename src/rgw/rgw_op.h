@@ -192,7 +192,7 @@ public:
   virtual void execute() = 0;
   /*datacache*/
   virtual void fetch_remote_execute() {} 
-  virtual void local_read_execute() {} 
+  virtual void read_local_execute() {} 
   virtual void directory_lookup() {} 
   RGWRados::directory_values dir_val;
   /*datacache*/
@@ -347,7 +347,7 @@ public:
   void pre_exec() override;
   void execute() override;
   void fetch_remote_execute(); // datacache
-  void local_read_execute(); // datacache
+  void read_local_execute(); // datacache
   void directory_lookup(); // datacache
   int parse_range();
   int read_user_manifest_part(

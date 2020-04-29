@@ -60,6 +60,7 @@
 using ceph::crypto::SHA1;
 
 struct req_state;
+struct directory_values; 
 class RGWOp;
 class RGWRados;
 
@@ -194,7 +195,7 @@ public:
   virtual void fetch_remote_execute() {} 
   virtual void read_local_execute() {} 
   virtual void directory_lookup() {} 
-  RGWRados::directory_values dir_val;
+  directory_values dir_val;
   /*datacache*/
   virtual void send_response() {}
   virtual void complete() {

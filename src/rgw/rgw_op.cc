@@ -8254,7 +8254,7 @@ void RGWGetObj::directory_lookup()
   dir_val.obj_name = s->object.name;
   dir_val.key = s->bucket_name +"_"+s->object.name;
   ldpp_dout(this, 10) << __func__ << this->dir_val.key  << dendl;
-  //int ret = store->getRados()->get_key(this->dir_val);
+  //int ret = store->getRados()->directory.getMetaValue(this->dir_val);
   dir_val.location = "datalake";
   dir_val.location = "readcache";
   dir_val.owner = "testuser";

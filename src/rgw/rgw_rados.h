@@ -164,6 +164,30 @@ struct RGWCloneRangeInfo {
   uint64_t len;
 };
 
+/* the metadata which is written to the directory
+ * you can add or remove some of the fields based on
+ * your required caching policy
+ */
+struct directory_values {
+    string key; //bucketID_ObjectID
+    string owner;
+    string time;
+    string bucket_name;
+    string obj_name;
+    string location;
+    uint64_t obj_size;
+    string etag;
+};
+
+class RGWDirectory{
+public:
+  RGWDirectory() {}
+  ~RGWDirectory() {}
+  int getMetaValue(directory_values &dir_val);
+  int setMetaValue(string key, string timeStr, string bucket_name, string obj_name, string location, string owner, uint64_t obj_size, string etag);
+  std::vector<std::pair<std::string, std::string>> get_aged_keys(string startTime, string endTime);
+};
+
 struct RGWObjState {
   rgw_obj obj;
   bool is_atomic{false};
@@ -1092,6 +1116,9 @@ public:
   };
 
   /* datacache */
+
+  RGWDirectory directory;
+
   int create_bucket(RGWRados *store, string userid, string dest_bucket_name, CephContext *cct, RGWBucketInfo& bucket_info, map<string, bufferlist>& bucket_attrs, RGWAccessKey& accesskey);
   int get_s3_credentials(RGWRados *store, string userid, RGWAccessKey& s3_key);
   int copy_remote(RGWRados *store, string tenant_id, string bucket_name, string obj_name, string location);
@@ -1287,20 +1314,6 @@ public:
   void get_obj_aio_completion_cb(librados::completion_t cb, void *arg);
 
   /* datacache */
-    struct directory_values {
-    string key;
-    string owner;
-    string time;
-    string bucket_name;
-    string obj_name;
-    string location;
-    uint64_t obj_size;
-    string etag;
-  };
-
-  int get_key(directory_values &dir_val);
-  int set_key(string key, string timeStr, string bucket_name, string obj_name, string location, string owner, uint64_t obj_size, string etag);
-  std::vector<std::pair<std::string, std::string>> get_aged_keys(string startTime, string endTime);
   int put_data(string key, bufferlist& bl, unsigned int len);
   
   using iterate_local_obj_cb = int (*)(const rgw_raw_obj&, std::string, off_t, off_t, off_t, void*); 

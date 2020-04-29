@@ -334,7 +334,7 @@ int AtomicObjectProcessor::complete(size_t accounted_size,
     time_t rawTime = time (NULL);
     string keyTime = asctime(gmtime(&rawTime));
     string key = s3_bucket_name+"_"+s3_object_name;
-    r = store->getRados()->set_key(key, keyTime, s3_bucket_name, s3_object_name, "writecache", s3_userid, manifest.get_obj_size(), etag);
+    r = store->getRados()->directory.setMetaValue(key, keyTime, s3_bucket_name, s3_object_name, "writecache", s3_userid, manifest.get_obj_size(), etag);
     /* datacache */
 
 

@@ -24,6 +24,7 @@
 #include "common/valgrind.h"
 #include "common/EventTrace.h"
 
+
 #define dout_subsys ceph_subsys_rados
 #undef dout_prefix
 #define dout_prefix *_dout << "librados: "
@@ -749,6 +750,24 @@ int librados::IoCtxImpl::aio_operate_read(const object_t &oid,
 
   return 0;
 }
+
+/* datacache */
+int librados::IoCtxImpl::cache_aio_operate_read(const object_t &oid, AioCompletionImpl *c, CacheRequest *cc) {
+
+   FUNCTRACE(client->cct);
+   Context *oncomplete = new C_aio_Complete(c);
+
+#if defined(WITH_LTTNG) && defined(WITH_EVENTTRACE)
+   ((C_aio_Complete *) oncomplete)->oid = oid;
+#endif
+   c->is_read = true;
+   c->io = this;
+   cc->onack = oncomplete;
+   return 0;
+}
+/* datacache */
+
+
 
 int librados::IoCtxImpl::aio_operate(const object_t& oid,
 				     ::ObjectOperation *o, AioCompletionImpl *c,

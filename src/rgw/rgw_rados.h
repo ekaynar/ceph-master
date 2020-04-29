@@ -30,7 +30,11 @@
 #include "services/svc_rados.h"
 #include "services/svc_bi_rados.h"
 
+/*datacache*/
+#include <fcntl.h>
+#include <aio.h>
 #include <cpp_redis/cpp_redis>
+/*datacache*/
 
 class RGWWatcher;
 class SafeTimer;
@@ -1087,15 +1091,14 @@ public:
     ATTRSMOD_MERGE   = 2
   };
 
-  // datacache
+  /* datacache */
   int create_bucket(RGWRados *store, string userid, string dest_bucket_name, CephContext *cct, RGWBucketInfo& bucket_info, map<string, bufferlist>& bucket_attrs, RGWAccessKey& accesskey);
   int get_s3_credentials(RGWRados *store, string userid, RGWAccessKey& s3_key);
   int copy_remote(RGWRados *store, string tenant_id, string bucket_name, string obj_name, string location);
   int delete_cache_obj(RGWRados *store, string userid, string bucket_name, string obj_name);
   int fetch_remote(RGWRados *store, string userid, string dest_bucket_name, string dest_obj_name, string location, RGWGetDataCB *cb, RGWObjectCtx& ctx);
-  int iterate_local_obj(RGWObjectCtx& ctx, string bucket_name, string obj_name, off_t ofs, off_t end, uint64_t max_chunk_size, void *arg, optional_yield y);
-  int get_local_obj_cb(string key, off_t obj_ofs, off_t read_ofs, off_t len,  void *arg);
-  // datacache
+  
+  /* datacache */
 
   int rewrite_obj(RGWBucketInfo& dest_bucket_info, const rgw_obj& obj, const DoutPrefixProvider *dpp, optional_yield y);
 
@@ -1299,6 +1302,13 @@ public:
   int set_key(string key, string timeStr, string bucket_name, string obj_name, string location, string owner, uint64_t obj_size, string etag);
   std::vector<std::pair<std::string, std::string>> get_aged_keys(string startTime, string endTime);
   int put_data(string key, bufferlist& bl, unsigned int len);
+  
+  using iterate_local_obj_cb = int (*)(const rgw_raw_obj&, std::string, off_t, off_t, off_t, void*); 
+
+  int iterate_local_obj(RGWObjectCtx& ctx,  const rgw_obj& obj, string bucket_name, string obj_name, off_t ofs, off_t end, uint64_t max_chunk_size, iterate_local_obj_cb cb, void *arg, optional_yield y);
+  
+  int get_local_obj_iterate_cb(const rgw_raw_obj& read_obj, string key, off_t obj_ofs, off_t read_ofs, off_t read_len,  void *arg);
+
   /* datacache */
 
 
@@ -1578,5 +1588,73 @@ public:
   static uint32_t calc_ordered_bucket_list_per_shard(uint32_t num_entries,
 						     uint32_t num_shards);
 };
+
+struct get_obj_data;
+class librados::CacheRequest {
+  public:
+    ceph::mutex lock = ceph::make_mutex("CacheRequest");
+    int sequence;
+    bufferlist *pbl;
+    struct get_obj_data *op_data;
+//    std::string oid;
+    off_t ofs;
+    off_t len;
+    librados::AioCompletion *lc;
+    std::string key;
+    off_t read_ofs;
+    Context *onack;
+    CephContext *cct;
+    CacheRequest(CephContext *_cct) : sequence(0), pbl(NULL), ofs(0),  read_ofs(0), cct(_cct) {};
+    virtual ~CacheRequest(){};
+    virtual void release()=0;
+    virtual void cancel_io()=0;
+    virtual int status()=0;
+    virtual void finish()=0;
+};
+
+struct librados::L1CacheRequest : public librados::CacheRequest{
+  int stat;
+  struct aiocb *paiocb;
+  L1CacheRequest(CephContext *_cct) :  CacheRequest(_cct), stat(-1), paiocb(NULL) {}
+  ~L1CacheRequest(){}
+  void release (){
+    lock.lock();
+    free((void *)paiocb->aio_buf);
+    paiocb->aio_buf = NULL;
+    ::close(paiocb->aio_fildes);
+    free(paiocb);
+    lock.unlock();
+    delete this;
+              }
+
+  void cancel_io(){
+    lock.lock();
+    stat = ECANCELED;
+    lock.unlock();
+  }
+
+  int status(){
+    lock.lock();
+    if (stat != EINPROGRESS) {
+      lock.unlock();
+      if (stat == ECANCELED){
+  release();
+  return ECANCELED;
+      }
+    }
+    stat = aio_error(paiocb);
+    lock.unlock();
+    return stat;
+  }
+
+  void finish(){
+    pbl->append((char*)paiocb->aio_buf, paiocb->aio_nbytes);
+    onack->complete(0);
+    release();
+  }
+};
+
+
+
 
 #endif

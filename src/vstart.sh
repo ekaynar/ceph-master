@@ -598,6 +598,8 @@ prepare_conf() {
         enable experimental unrecoverable data corrupting features = *
         osd_crush_chooseleaf_type = 0
         debug asok assert abort = true
+        debug ms = 1
+        debug rgw = 20
 $msgr_conf
 $extra_conf
 EOF
@@ -729,6 +731,8 @@ $BLUESTORE_OPTS
         osd objectstore = $objectstore
 $COSDSHORT
 $extra_conf
+
+
 [mon]
         mgr initial modules = $mgr_modules
 $DAEMONOPTS

@@ -31,6 +31,9 @@ struct ObjListCtx;
 class ObjectOperationImpl;
 struct PlacementGroupImpl;
 struct PoolAsyncCompletionImpl;
+class CacheRequest; //datacache
+struct L1CacheRequest; //datacache
+
 
 typedef struct rados_cluster_stat_t cluster_stat_t;
 typedef struct rados_pool_stat_t pool_stat_t;

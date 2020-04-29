@@ -95,6 +95,9 @@ class Aio {
                             optional_yield y);
   static OpFunc librados_op(librados::ObjectWriteOperation&& op,
                             optional_yield y);
+  /* datacache */
+  static OpFunc cache_op(librados::L1CacheRequest *op,
+                            optional_yield y);
 };
 
 } // namespace rgw

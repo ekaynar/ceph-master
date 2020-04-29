@@ -93,6 +93,9 @@ Aio::OpFunc aio_abstract(Op&& op, boost::asio::io_context& context,
                               bind_executor(ex, Handler{aio, r}));
     };
 }
+
+
+
 #endif // HAVE_BOOST_CONTEXT
 
 template <typename Op>
@@ -118,6 +121,15 @@ Aio::OpFunc Aio::librados_op(librados::ObjectReadOperation&& op,
 Aio::OpFunc Aio::librados_op(librados::ObjectWriteOperation&& op,
                              optional_yield y) {
   return aio_abstract(std::move(op), y);
+}
+
+/* datacache */
+
+
+Aio::OpFunc Aio::cache_op(librados::L1CacheRequest *op,
+                             optional_yield y) {
+
+//    return cache_aio_abstract(std::move(op), y);
 }
 
 } // namespace rgw

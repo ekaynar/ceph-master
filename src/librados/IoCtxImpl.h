@@ -27,7 +27,7 @@
 #include "include/xlist.h"
 #include "osd/osd_types.h"
 #include "osdc/Objecter.h"
-#include "rgw/rgw_rados.h" // datacache
+#include "rgw/rgw_cacherequest.h" // datacache
 
 class RadosClient;
 

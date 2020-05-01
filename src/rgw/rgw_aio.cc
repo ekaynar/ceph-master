@@ -95,26 +95,36 @@ Aio::OpFunc aio_abstract(Op&& op, boost::asio::io_context& context,
 }
 
 /* datacache */
-/*template <typename Op>
-Aio::OpFunc cache_aio_abstract(Op&& op, optional_yield yield) {
-  return [op = std::move(op),  yield] (Aio* aio, AioResult& r) mutable {
- // aio_read(cc->paiocb);
+template <typename Op>
+Aio::OpFunc cache_aio_abstract(Op&& op, librados::L1CacheRequest *cc) {
+  return [op = std::move(op), cc] (Aio* aio, AioResult& r) mutable{
+
+    int a =11;
+    string c="key";
+//    auto& ref = r.obj.get_ref();
+//    int a = librados::IoCtx::cache_aio_notifier("a", cc);
+  // aio_read(cc->paiocb);
       // arrange for the completion Handler to run on the yield_context's strand
       // executor so it can safely call back into Aio without locking
       //using namespace boost::asio;
    //   async_completion<spawn::yield_context, void()> init(yield);
       //auto ex = get_associated_executor(init.completion_handler);
    
-
+//      io_ctx.cache_aio_notifier(cc->oid, cc);
   //    auto& ref = r.obj.get_ref();
   //    librados::async_operate(context, ref.pool.ioctx(), ref.obj.oid, &op, 0,
   //                            bind_executor(ex, Handler{aio, r}));
   
-   };
+  };
 }
-*/
 
 #endif // HAVE_BOOST_CONTEXT
+template <typename Op>
+Aio::OpFunc cache_aio_abstract(Op&& op,  librados::L1CacheRequest *cc,  optional_yield y) {
+#ifdef HAVE_BOOST_CONTEXT
+//  return cache_aio_abstract(std::forward<Op>(op), cc);
+#endif
+}
 
 template <typename Op>
 Aio::OpFunc aio_abstract(Op&& op, optional_yield y) {
@@ -143,11 +153,10 @@ Aio::OpFunc Aio::librados_op(librados::ObjectWriteOperation&& op,
 
 /* datacache */
 
-
-Aio::OpFunc Aio::cache_op(librados::L1CacheRequest *op,
+Aio::OpFunc Aio::cache_op(librados::ObjectReadOperation&& op, librados::L1CacheRequest *cc,
                              optional_yield y) {
 
- //   return cache_aio_abstract(std::move(op), y);
+ //   return cache_aio_abstract(std::move(op), cc, y);
 }
 
 } // namespace rgw

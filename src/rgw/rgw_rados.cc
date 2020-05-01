@@ -9288,8 +9288,8 @@ int RGWRados::get_local_obj_iterate_cb(const rgw_raw_obj& read_obj, string key, 
   librados::AioCompletion *c; 
   
   d->add_cache_request(&cc, pbl, key, read_len, obj_ofs, read_ofs, c, cct);
-  RGWSI_RADOS::Obj obj;
-  auto completed = d->aio->get(obj, rgw::Aio::cache_op(std::move(cc), d->yield), cost, id);
+  auto obj = d->store->svc.rados->obj(read_obj);
+  auto completed = d->aio->get(obj, rgw::Aio::cache_op(std::move(op), cc, d->yield), cost, id);
 //  return d->flush(std::move(completed));
   return 0;
 } 

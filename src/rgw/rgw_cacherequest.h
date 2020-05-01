@@ -9,7 +9,7 @@ class librados::CacheRequest {
     int sequence;
     bufferlist *pbl;
     struct get_obj_data *op_data;
-//    std::string oid;
+    std::string oid;
     off_t ofs;
     off_t len;
     librados::AioCompletion *lc;

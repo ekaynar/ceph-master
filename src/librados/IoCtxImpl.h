@@ -161,7 +161,7 @@ struct librados::IoCtxImpl {
   int aio_operate_read(const object_t& oid, ::ObjectOperation *o,
 		       AioCompletionImpl *c, int flags, bufferlist *pbl, const blkin_trace_info *trace_info = nullptr);
   /*datacache*/
-  int cache_aio_operate_read(const object_t &oid, AioCompletionImpl *c, CacheRequest *cc);
+  int cache_aio_operate_read(const object_t &oid, librados::AioCompletionImpl *c, CacheRequest *cc);
 
   struct C_aio_stat_Ack : public Context {
     librados::AioCompletionImpl *c;

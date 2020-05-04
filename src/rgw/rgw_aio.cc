@@ -44,6 +44,7 @@ void cb(librados::completion_t, void* arg) {
   s->aio->put(r);
 }
 
+
 template <typename Op>
 Aio::OpFunc aio_abstract(Op&& op) {
   return [op = std::move(op)] (Aio* aio, AioResult& r) mutable {
@@ -98,32 +99,26 @@ Aio::OpFunc aio_abstract(Op&& op, boost::asio::io_context& context,
 template <typename Op>
 Aio::OpFunc cache_aio_abstract(Op&& op, librados::L1CacheRequest *cc) {
   return [op = std::move(op), cc] (Aio* aio, AioResult& r) mutable{
+    auto& ref = r.obj.get_ref();
+    auto s = new (&r.user_data) state(aio, r);
+    r.result = ref.pool.ioctx().cache_aio_notifier(ref.obj.oid, static_cast<librados::L1CacheRequest*>(cc));
+/*    if (r.result < 0) {
+        s->c->release();
+        aio->put(r);
+      }    */
 
-    int a =11;
-    string c="key";
-//    auto& ref = r.obj.get_ref();
-//    int a = librados::IoCtx::cache_aio_notifier("a", cc);
-  // aio_read(cc->paiocb);
-      // arrange for the completion Handler to run on the yield_context's strand
-      // executor so it can safely call back into Aio without locking
-      //using namespace boost::asio;
-   //   async_completion<spawn::yield_context, void()> init(yield);
-      //auto ex = get_associated_executor(init.completion_handler);
-   
-//      io_ctx.cache_aio_notifier(cc->oid, cc);
-  //    auto& ref = r.obj.get_ref();
-  //    librados::async_operate(context, ref.pool.ioctx(), ref.obj.oid, &op, 0,
-  //                            bind_executor(ex, Handler{aio, r}));
-  
   };
 }
 
 #endif // HAVE_BOOST_CONTEXT
 template <typename Op>
-Aio::OpFunc cache_aio_abstract(Op&& op,  librados::L1CacheRequest *cc,  optional_yield y) {
-#ifdef HAVE_BOOST_CONTEXT
-//  return cache_aio_abstract(std::forward<Op>(op), cc);
-#endif
+Aio::OpFunc cache_aio_abstract(Op&& op, librados::L1CacheRequest *cc, optional_yield y) {
+  static_assert(std::is_base_of_v<librados::ObjectOperation, std::decay_t<Op>>);
+  static_assert(!std::is_lvalue_reference_v<Op>);
+  static_assert(!std::is_const_v<Op>);
+  #ifdef HAVE_BOOST_CONTEXT
+  return cache_aio_abstract(std::forward<Op>(op), cc);
+  #endif
 }
 
 template <typename Op>
@@ -156,7 +151,7 @@ Aio::OpFunc Aio::librados_op(librados::ObjectWriteOperation&& op,
 Aio::OpFunc Aio::cache_op(librados::ObjectReadOperation&& op, librados::L1CacheRequest *cc,
                              optional_yield y) {
 
- //   return cache_aio_abstract(std::move(op), cc, y);
+    return cache_aio_abstract(std::move(op), cc, y);
 }
 
 } // namespace rgw

@@ -6378,6 +6378,7 @@ struct get_obj_data {
   ceph::mutex cache_lock = ceph::make_mutex("cache_lock");
   int add_cache_request(struct librados::L1CacheRequest **cc, bufferlist *pbl, string key,
       size_t len, off_t ofs, off_t read_ofs, librados::AioCompletion *lc, CephContext *cct);
+  int submit_l1_aio_read(librados::L1CacheRequest *cc);
   /* datacache */
 
 
@@ -9280,16 +9281,23 @@ int RGWRados::get_local_obj_iterate_cb(const rgw_raw_obj& read_obj, string key, 
   ObjectReadOperation op;
   struct get_obj_data *d = (struct get_obj_data *)arg;
 
-  op.read(read_ofs, read_len, nullptr, nullptr);
   const uint64_t cost = read_len;
   const uint64_t id = obj_ofs;
   bufferlist *pbl;
   librados::L1CacheRequest *cc;
   librados::AioCompletion *c; 
   
+  rgw_pool  pool("default.rgw.buckets.data");
+  rgw_raw_obj obj1(pool,key);
+  auto obj = d->store->svc.rados->obj(obj1);
+  int r = obj.open();
+  op.read(read_ofs, read_len, nullptr, nullptr);
+  //obj.ref.pool.state.ioctx = ioctx; 
+//  auto completed = d->aio->get(obj, rgw::Aio::cache_op(cc, d->yield), cost, id);
   d->add_cache_request(&cc, pbl, key, read_len, obj_ofs, read_ofs, c, cct);
-  auto obj = d->store->svc.rados->obj(read_obj);
-  auto completed = d->aio->get(obj, rgw::Aio::cache_op(std::move(op), cc, d->yield), cost, id);
+  auto completed = d->aio->get(obj, rgw::Aio::cache_op(std::move(op),  static_cast<librados::L1CacheRequest*>(cc), d->yield), cost, id);
+//  r = io_ctx.cache_aio_notifier(read_obj.oid, cc);
+  r = d->submit_l1_aio_read(cc);
 //  return d->flush(std::move(completed));
   return 0;
 } 
@@ -9333,8 +9341,19 @@ int RGWRados::iterate_local_obj(RGWObjectCtx& obj_ctx, const rgw_obj& obj, strin
 }
 
 void _cache_aio_completion_cb(sigval_t sigval){
-  //librados::CacheRequest *c = static_cast<librados::CacheRequest *>(sigval.sival_ptr);
-//  c->op_data->cache_aio_completion_cb(c);
+  librados::CacheRequest *c = static_cast<librados::CacheRequest *>(sigval.sival_ptr);
+  ldout(c->cct, 0) << "Error: add_cache_io:: read ::open the file has return error "  << dendl;
+ // c->op_data->cache_aio_completion_cb(c);
+}
+
+
+int get_obj_data::submit_l1_aio_read(librados::L1CacheRequest *cc) {
+
+  int r = 0;
+  if((r= ::aio_read(cc->paiocb)) != 0) {
+    ldout(cc->cct, 0) << "ERROR: aio_read ::aio_read"<< r << dendl;
+  }
+  return r;
 }
 
 int get_obj_data::add_cache_request(struct librados::L1CacheRequest **cc, bufferlist *pbl, string key,
@@ -9351,7 +9370,7 @@ int get_obj_data::add_cache_request(struct librados::L1CacheRequest **cc, buffer
   c->stat = EINPROGRESS;
   c->op_data = this;
 
-  std::string location = cct->_conf->rgw_datacache_path + "/"+ key;
+  std::string location = cct->_conf->rgw_datacache_path + key;
   struct aiocb *cb = new struct aiocb;
   memset(cb, 0, sizeof(struct aiocb));
   cb->aio_fildes = ::open(location.c_str(), O_RDONLY);
@@ -9376,76 +9395,6 @@ int get_obj_data::add_cache_request(struct librados::L1CacheRequest **cc, buffer
   *cc = c;
   return 0;
 }
-/*
-class librados::CacheRequest {
-  public:
-    ceph::mutex lock = ceph::make_mutex("CacheRequest");
-    int sequence;
-    bufferlist *pbl;
-    struct get_obj_data *op_data;
-    off_t ofs;
-    off_t len;
-    librados::AioCompletion *lc;
-    std::string key;
-    off_t read_ofs;
-    Context *onack;
-    CephContext *cct;
-    CacheRequest(CephContext *_cct) : sequence(0), pbl(NULL), ofs(0),  read_ofs(0), cct(_cct) {};
-    virtual ~CacheRequest(){};
-    virtual void release()=0;
-    virtual void cancel_io()=0;
-    virtual int status()=0;
-    virtual void finish()=0;
-};
-
-struct librados::L1CacheRequest : public librados::CacheRequest{
-  int stat;
-  struct aiocb *paiocb;
-  L1CacheRequest(CephContext *_cct) :  CacheRequest(_cct), stat(-1), paiocb(NULL) {}
-  ~L1CacheRequest(){}
-  void release (){
-    lock.lock();
-    free((void *)paiocb->aio_buf);
-    paiocb->aio_buf = NULL;
-    ::close(paiocb->aio_fildes);
-    free(paiocb);
-    lock.unlock();
-    delete this;
-              }
-
-  void cancel_io(){
-    lock.lock();
-    stat = ECANCELED;
-    lock.unlock();
-  }
-
-  int status(){
-    lock.lock();
-    if (stat != EINPROGRESS) {
-      lock.unlock();
-      if (stat == ECANCELED){
-  release();
-  return ECANCELED;
-      }
-    }
-    stat = aio_error(paiocb);
-    lock.unlock();
-    return stat;
-  }
-
-  void finish(){
-    pbl->append((char*)paiocb->aio_buf, paiocb->aio_nbytes);
-    onack->complete(0);
-    release();
-  }
-};
-*/
-
-
-
-
-
-
 
 
 

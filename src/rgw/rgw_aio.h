@@ -96,7 +96,7 @@ class Aio {
   static OpFunc librados_op(librados::ObjectWriteOperation&& op,
                             optional_yield y);
   /* datacache */
-  static OpFunc cache_op( librados::ObjectReadOperation&& op, librados::L1CacheRequest *cc,
+  static OpFunc cache_op(librados::ObjectReadOperation&& op, librados::L1CacheRequest *cc,
                             optional_yield y);
 };
 

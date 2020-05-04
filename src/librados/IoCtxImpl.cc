@@ -757,7 +757,7 @@ int librados::IoCtxImpl::cache_aio_operate_read(const object_t &oid, AioCompleti
    FUNCTRACE(client->cct);
    Context *oncomplete = new C_aio_Complete(c);
 
-#if defined(WITH_LTTNG) && defined(WITH_EVENTTRACE)
+#if defined(WITH_EVENTTRACE)
    ((C_aio_Complete *) oncomplete)->oid = oid;
 #endif
    c->is_read = true;

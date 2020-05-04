@@ -1,7 +1,6 @@
 #include "include/rados/librados.hpp"
 #include <aio.h>
 
-
 struct get_obj_data;
 class librados::CacheRequest {
   public:

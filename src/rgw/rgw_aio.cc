@@ -96,12 +96,16 @@ Aio::OpFunc aio_abstract(Op&& op, boost::asio::io_context& context,
 }
 
 /* datacache */
+
 template <typename Op>
 Aio::OpFunc cache_aio_abstract(Op&& op, librados::L1CacheRequest *cc) {
   return [op = std::move(op), cc] (Aio* aio, AioResult& r) mutable{
-    auto& ref = r.obj.get_ref();
-    auto s = new (&r.user_data) state(aio, r);
-    r.result = ref.pool.ioctx().cache_aio_notifier(ref.obj.oid, static_cast<librados::L1CacheRequest*>(cc));
+  auto& ref = r.obj.get_ref();
+//  librados::L1CacheRequest *c = static_cast<librados::L1CacheRequest *>(cc);
+  cc->op_data->submit_l1_aio_read(cc);
+//  static_cast<librados::L1CacheRequest*>(cc)->op_data->submit_l1_aio_read(static_cast<librados::L1CacheRequest*>(cc));
+//  auto s = new (&r.user_data) state(aio, r);
+//  r.result = ref.pool.ioctx().cache_aio_notifier(ref.obj.oid, static_cast<librados::L1CacheRequest*>(cc));
 /*    if (r.result < 0) {
         s->c->release();
         aio->put(r);
@@ -110,6 +114,7 @@ Aio::OpFunc cache_aio_abstract(Op&& op, librados::L1CacheRequest *cc) {
   };
 }
 
+/* datacache */
 #endif // HAVE_BOOST_CONTEXT
 template <typename Op>
 Aio::OpFunc cache_aio_abstract(Op&& op, librados::L1CacheRequest *cc, optional_yield y) {

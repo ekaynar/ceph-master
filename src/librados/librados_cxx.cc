@@ -1663,7 +1663,7 @@ int librados::IoCtx::aio_operate(const std::string& oid, AioCompletion *c,
 
 /* datacache */
 int librados::IoCtx::cache_aio_notifier(const std::string& oid, librados::L1CacheRequest *cc) {
-//  if (!cc) return -EINVAL;
+  if (!cc) return -EINVAL;
   object_t obj(oid);
   return io_ctx_impl->cache_aio_operate_read(obj, cc->lc->pc, cc);
 }

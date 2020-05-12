@@ -28,7 +28,8 @@
 #include "rgw_common.h"
 
 #include "include/function2.hpp"
-
+//#include "rgw_cacherequest.h"
+//class CacheRequest;
 namespace rgw {
 
 struct AioResult {
@@ -96,8 +97,7 @@ class Aio {
   static OpFunc librados_op(librados::ObjectWriteOperation&& op,
                             optional_yield y);
   /* datacache */
-  static OpFunc cache_op(librados::ObjectReadOperation&& op, librados::L1CacheRequest *cc,
-                            optional_yield y);
+  static OpFunc cache_op(librados::ObjectReadOperation&& op, optional_yield y, off_t obj_ofs, off_t read_ofs, uint64_t read_len);
 };
 
 } // namespace rgw

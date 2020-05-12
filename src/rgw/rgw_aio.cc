@@ -18,10 +18,41 @@
 #include "librados/librados_asio.h"
 
 #include "rgw_aio.h"
+#include "rgw_cacherequest.h"
+#include <aio.h>
 
 namespace rgw {
-
 namespace {
+
+void cache_aio_cb(sigval_t sigval){
+  CacheRequest *c = static_cast<CacheRequest *>(sigval.sival_ptr);
+  int status = c->status();
+  if (status == ECANCELED) {
+  c->r->result = -1;
+  c->aio->put(*(c->r));
+  return;
+  } else if (status == 0) {
+  c->finish();
+  c->r->result = 0;
+  c->aio->put(*(c->r));
+//  c->aio = nullptr;
+  }
+}
+
+struct cache_state {
+  Aio* aio;
+  CacheRequest *c;
+  cache_state(Aio* aio, AioResult& r)
+    : aio(aio) {}
+
+  int submit_op(CacheRequest *cc){
+    int ret = 0;
+    if((ret = ::aio_read(cc->paiocb)) != 0) {
+    return ret; }
+    return ret;
+  }
+};
+
 
 void cb(librados::completion_t, void* arg);
 
@@ -43,6 +74,8 @@ void cb(librados::completion_t, void* arg) {
   s->c->release();
   s->aio->put(r);
 }
+
+
 
 
 template <typename Op>
@@ -96,20 +129,20 @@ Aio::OpFunc aio_abstract(Op&& op, boost::asio::io_context& context,
 }
 
 /* datacache */
-
 template <typename Op>
-Aio::OpFunc cache_aio_abstract(Op&& op, librados::L1CacheRequest *cc) {
-  return [op = std::move(op), cc] (Aio* aio, AioResult& r) mutable{
+Aio::OpFunc cache_aio_abstract(Op&& op, off_t obj_ofs, off_t read_ofs, uint64_t  read_len) {
+  return [op = std::move(op), obj_ofs, read_ofs, read_len] (Aio* aio, AioResult& r) mutable{
   auto& ref = r.obj.get_ref();
-//  librados::L1CacheRequest *c = static_cast<librados::L1CacheRequest *>(cc);
-  cc->op_data->submit_l1_aio_read(cc);
-//  static_cast<librados::L1CacheRequest*>(cc)->op_data->submit_l1_aio_read(static_cast<librados::L1CacheRequest*>(cc));
-//  auto s = new (&r.user_data) state(aio, r);
-//  r.result = ref.pool.ioctx().cache_aio_notifier(ref.obj.oid, static_cast<librados::L1CacheRequest*>(cc));
-/*    if (r.result < 0) {
-        s->c->release();
-        aio->put(r);
-      }    */
+  auto cs = new (&r.user_data) cache_state(aio, r);
+  cs->c = new CacheRequest();
+//  cs->c->prepare_op(ref.obj.oid, &r.data, read_len, read_ofs, obj_ofs, &cache_state::ccb);
+  cs->c->prepare_op(ref.obj.oid, &r.data, read_len, read_ofs, obj_ofs, cache_aio_cb, aio, &r);
+  int ret = cs->submit_op(cs->c);
+  if ( ret < 0 ) {
+      r.result = -1;
+      cs->aio->put(r);
+  }
+  
 
   };
 }
@@ -117,12 +150,13 @@ Aio::OpFunc cache_aio_abstract(Op&& op, librados::L1CacheRequest *cc) {
 /* datacache */
 #endif // HAVE_BOOST_CONTEXT
 template <typename Op>
-Aio::OpFunc cache_aio_abstract(Op&& op, librados::L1CacheRequest *cc, optional_yield y) {
+Aio::OpFunc cache_aio_abstract(Op&& op, optional_yield y, off_t obj_ofs, off_t read_ofs, uint64_t read_len) {
   static_assert(std::is_base_of_v<librados::ObjectOperation, std::decay_t<Op>>);
   static_assert(!std::is_lvalue_reference_v<Op>);
   static_assert(!std::is_const_v<Op>);
+
   #ifdef HAVE_BOOST_CONTEXT
-  return cache_aio_abstract(std::forward<Op>(op), cc);
+  return cache_aio_abstract(std::forward<Op>(op),obj_ofs, read_ofs, read_len);
   #endif
 }
 
@@ -153,10 +187,9 @@ Aio::OpFunc Aio::librados_op(librados::ObjectWriteOperation&& op,
 
 /* datacache */
 
-Aio::OpFunc Aio::cache_op(librados::ObjectReadOperation&& op, librados::L1CacheRequest *cc,
-                             optional_yield y) {
+Aio::OpFunc Aio::cache_op(librados::ObjectReadOperation&& op, optional_yield y, off_t obj_ofs, off_t read_ofs, uint64_t read_len) {
 
-    return cache_aio_abstract(std::move(op), cc, y);
+    return cache_aio_abstract(std::move(op), y, obj_ofs, read_ofs, read_len);
 }
 
 } // namespace rgw

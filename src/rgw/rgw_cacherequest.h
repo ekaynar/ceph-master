@@ -1,43 +1,66 @@
-#include "include/rados/librados.hpp"
 #include <aio.h>
+#include "rgw_aio.h"
+//struct get_obj_data;
 
-struct get_obj_data;
-class librados::CacheRequest {
+struct AioResult;
+class Aio;
+
+struct CacheRequest {
   public:
     ceph::mutex lock = ceph::make_mutex("CacheRequest");
+    int stat;
+    struct aiocb *paiocb;
     int sequence;
-    bufferlist *pbl;
-    struct get_obj_data *op_data;
-    std::string oid;
-    off_t ofs;
-    off_t len;
-    librados::AioCompletion *lc;
+    bufferlist *bl;
+    int ofs;
+    int read_ofs;
+    int read_len;   
+    rgw::AioResult* r= nullptr;
+  //  struct get_obj_data *op_data;
     std::string key;
-    off_t read_ofs;
-    Context *onack;
-    CephContext *cct;
-    CacheRequest(CephContext *_cct) : sequence(0), pbl(NULL), ofs(0),  read_ofs(0), cct(_cct) {};
-    virtual ~CacheRequest(){};
-    virtual void release()=0;
-    virtual void cancel_io()=0;
-    virtual int status()=0;
-    virtual void finish()=0;
-};
+    rgw::Aio* aio = nullptr;
+    CacheRequest() :  stat(-1), paiocb(NULL), sequence(0), bl(NULL), ofs(0),  read_ofs(0), read_len(0){};
+    ~CacheRequest(){};
 
-struct librados::L1CacheRequest : public librados::CacheRequest{
-  int stat;
-  struct aiocb *paiocb;
-  L1CacheRequest(CephContext *_cct) :  CacheRequest(_cct), stat(-1), paiocb(NULL) {}
-  ~L1CacheRequest(){}
-  void release (){
-    lock.lock();
-    free((void *)paiocb->aio_buf);
-    paiocb->aio_buf = NULL;
-    ::close(paiocb->aio_fildes);
-    free(paiocb);
-    lock.unlock();
-    delete this;
-              }
+    
+    int prepare_op(std::string key,  bufferlist *bl, int read_len, int ofs, int read_ofs, void (*f)(sigval_t), rgw::Aio* aio, rgw::AioResult* r) {
+//	this->sequence = sequence++;
+	this->r = r;	
+	this->aio = aio;
+	this->bl = bl;
+	this->ofs = ofs;
+	this->key = key;
+	this->read_len = read_len;
+	this->stat = EINPROGRESS;	
+	std::string loc = "/tmp/" + key;
+	struct aiocb *cb = new struct aiocb;
+  	memset(cb, 0, sizeof(struct aiocb));
+  	cb->aio_fildes = ::open(loc.c_str(), O_RDONLY);
+ 	if (cb->aio_fildes < 0) {
+    		return -1;
+	}
+	
+	cb->aio_buf = malloc(read_len);
+  	cb->aio_nbytes = read_len;
+	cb->aio_offset = read_ofs;
+  	cb->aio_sigevent.sigev_notify = SIGEV_THREAD;
+  	cb->aio_sigevent.sigev_notify_function = f ;
+  	cb->aio_sigevent.sigev_notify_attributes = NULL;
+  	cb->aio_sigevent.sigev_value.sival_ptr = (void*)this;
+  	this->paiocb = cb;
+	//*cc = c;
+  	return 0;
+
+   }    
+    void release (){
+    	lock.lock();
+   	free((void *)paiocb->aio_buf);
+    	paiocb->aio_buf = NULL;
+	::close(paiocb->aio_fildes);
+    	free(paiocb);
+    	lock.unlock();
+    	delete this;
+    }  
 
   void cancel_io(){
     lock.lock();
@@ -48,20 +71,18 @@ struct librados::L1CacheRequest : public librados::CacheRequest{
   int status(){
     lock.lock();
     if (stat != EINPROGRESS) {
-      lock.unlock();
-      if (stat == ECANCELED){
-  release();
-  return ECANCELED;
-      }
-    }
+    	lock.unlock();
+    	if (stat == ECANCELED){
+  		release();
+  		return ECANCELED;
+    }}
     stat = aio_error(paiocb);
     lock.unlock();
     return stat;
   }
 
   void finish(){
-    pbl->append((char*)paiocb->aio_buf, paiocb->aio_nbytes);
-    onack->complete(0);
+    bl->append((char*)paiocb->aio_buf, paiocb->aio_nbytes);
     release();
   }
 };

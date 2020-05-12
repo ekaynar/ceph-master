@@ -6376,9 +6376,6 @@ struct get_obj_data {
   int sequence;
   std::list<string> pending_oid_list;
   ceph::mutex cache_lock = ceph::make_mutex("cache_lock");
-  int add_cache_request(struct librados::L1CacheRequest **cc, bufferlist *pbl, string key,
-      size_t len, off_t ofs, off_t read_ofs, librados::AioCompletion *lc, CephContext *cct);
-  int submit_l1_aio_read(librados::L1CacheRequest *cc);
   /* datacache */
 
 
@@ -9283,23 +9280,20 @@ int RGWRados::get_local_obj_iterate_cb(const rgw_raw_obj& read_obj, string key, 
 
   const uint64_t cost = read_len;
   const uint64_t id = obj_ofs;
-  bufferlist *pbl;
-  librados::L1CacheRequest *cc;
-  librados::AioCompletion *c; 
+  ////bufferlist *pbl;
+  //CacheRequest *cc;
+  //librados::AioCompletion *c; 
   
   rgw_pool  pool("default.rgw.buckets.data");
   rgw_raw_obj obj1(pool,key);
   auto obj = d->store->svc.rados->obj(obj1);
   int r = obj.open();
   op.read(read_ofs, read_len, nullptr, nullptr);
-  //obj.ref.pool.state.ioctx = ioctx; 
 //  auto completed = d->aio->get(obj, rgw::Aio::cache_op(cc, d->yield), cost, id);
-  d->add_cache_request(&cc, pbl, key, read_len, obj_ofs, read_ofs, c, cct);
-  auto completed = d->aio->get(obj, rgw::Aio::cache_op(std::move(op),  static_cast<librados::L1CacheRequest*>(cc), d->yield), cost, id);
-//  r = io_ctx.cache_aio_notifier(read_obj.oid, cc);
-  r = d->submit_l1_aio_read(cc);
-//  return d->flush(std::move(completed));
-  return 0;
+  auto completed = d->aio->get(obj, rgw::Aio::cache_op(std::move(op) , d->yield, obj_ofs, read_ofs, read_len), cost, id);
+//  r = d->submit_l1_aio_read(cc);
+  return d->flush(std::move(completed));
+//  return 0;
 } 
 
 int RGWRados::iterate_local_obj(RGWObjectCtx& obj_ctx, const rgw_obj& obj, string bucket_name, string obj_name, off_t ofs, off_t end, uint64_t max_chunk_size, iterate_local_obj_cb cb, void *arg, optional_yield y){
@@ -9319,14 +9313,14 @@ int RGWRados::iterate_local_obj(RGWObjectCtx& obj_ctx, const rgw_obj& obj, strin
  
  
 //  dout(10) << __func__  << max_chunk_size << " key "<< key  << " ofs "<< ofs << " end " << end << dendl;
-  while (ofs <= end) {
+  while (ofs < end) {
     uint64_t read_len = std::min(len, max_chunk_size);
     //Calculate key
-    key = key + std::to_string(chunk_id);    
+    string oid = key + std::to_string(chunk_id);    
     
-    dout(10) << __func__  << " key " << key  << " ofs "<< ofs  << " read_len " << read_len << " end " << end << dendl;
+    dout(10) << __func__  << " key " << oid  << " ofs "<< ofs  << " read_len " << read_len << " end " << end << dendl;
     int r = 1;
-    r = cb(read_obj, key, ofs, read_ofs, read_len, arg);
+    r = cb(read_obj, oid, ofs, read_ofs, read_len, arg);
     if ( r < 0 ) {
       return r;
     }
@@ -9339,64 +9333,6 @@ int RGWRados::iterate_local_obj(RGWObjectCtx& obj_ctx, const rgw_obj& obj, strin
     return 0;
 
 }
-
-void _cache_aio_completion_cb(sigval_t sigval){
-  librados::CacheRequest *c = static_cast<librados::CacheRequest *>(sigval.sival_ptr);
-  ldout(c->cct, 0) << "Error: add_cache_io:: read ::open the file has return error "  << dendl;
- // c->op_data->cache_aio_completion_cb(c);
-}
-
-
-int get_obj_data::submit_l1_aio_read(librados::L1CacheRequest *cc) {
-
-  int r = 0;
-  if((r= ::aio_read(cc->paiocb)) != 0) {
-    ldout(cc->cct, 0) << "ERROR: aio_read ::aio_read"<< r << dendl;
-  }
-  return r;
-}
-
-int get_obj_data::add_cache_request(struct librados::L1CacheRequest **cc, bufferlist *pbl, string key,
-    size_t len, off_t ofs, off_t read_ofs, librados::AioCompletion *lc, CephContext *cct)
-{
-  librados::L1CacheRequest *c = new librados::L1CacheRequest(cct);
-  c->sequence = sequence++;
-  c->pbl = pbl;
-  c->ofs = ofs;
-  c->key = key;
-  c->lc = lc;
-  c->len = len;
-  c->read_ofs = read_ofs;
-  c->stat = EINPROGRESS;
-  c->op_data = this;
-
-  std::string location = cct->_conf->rgw_datacache_path + key;
-  struct aiocb *cb = new struct aiocb;
-  memset(cb, 0, sizeof(struct aiocb));
-  cb->aio_fildes = ::open(location.c_str(), O_RDONLY);
-  if (cb->aio_fildes < 0)  {
-    ldout(cct, 0) << "Error: add_cache_io:: read ::open the file has return error "  << dendl;
-    return -1;
-  }
-
-  cb->aio_buf = malloc(len);
-  cb->aio_nbytes = len;
-  cb->aio_offset = read_ofs;
-  cb->aio_sigevent.sigev_notify = SIGEV_THREAD;
-  cb->aio_sigevent.sigev_notify_function = _cache_aio_completion_cb;
-  cb->aio_sigevent.sigev_notify_attributes = NULL;
-  cb->aio_sigevent.sigev_value.sival_ptr = (void*)c;
-  c->paiocb = cb;
-/*
-  cache_lock.Lock();
-  cache_aio_map[ofs] = c;
-  cache_lock.Unlock();
-*/
-  *cc = c;
-  return 0;
-}
-
-
 
 
 int RGWRados::Object::Read::fetch_from_backend(RGWGetDataCB *cb, string owner, string bucket_name, string obj_name, string location){

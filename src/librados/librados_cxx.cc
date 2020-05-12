@@ -1661,8 +1661,8 @@ int librados::IoCtx::aio_operate(const std::string& oid, AioCompletion *c,
                translate_flags(flags), pbl, trace_info);
 }
 
-/* datacache */
-int librados::IoCtx::cache_aio_notifier(const std::string& oid, librados::L1CacheRequest *cc) {
+/* datacache 
+int librados::IoCtx::cache_aio_notifier(const std::string& oid, librados::CacheRequest *cc) {
   if (!cc) return -EINVAL;
   object_t obj(oid);
   return io_ctx_impl->cache_aio_operate_read(obj, cc->lc->pc, cc);

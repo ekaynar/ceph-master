@@ -751,7 +751,7 @@ int librados::IoCtxImpl::aio_operate_read(const object_t &oid,
   return 0;
 }
 
-/* datacache */
+/* datacache 
 int librados::IoCtxImpl::cache_aio_operate_read(const object_t &oid, AioCompletionImpl *c, librados::CacheRequest *cc) {
 
    FUNCTRACE(client->cct);

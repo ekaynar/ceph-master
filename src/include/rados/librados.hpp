@@ -31,8 +31,7 @@ struct ObjListCtx;
 class ObjectOperationImpl;
 struct PlacementGroupImpl;
 struct PoolAsyncCompletionImpl;
-class CacheRequest; //datacache
-struct L1CacheRequest; //datacache
+//class CacheRequest; //datacache
 
 
 typedef struct rados_cluster_stat_t cluster_stat_t;
@@ -1139,7 +1138,7 @@ inline namespace v14_2_0 {
     int operate(const std::string& oid, ObjectReadOperation *op, bufferlist *pbl, int flags);
     int aio_operate(const std::string& oid, AioCompletion *c, ObjectWriteOperation *op);
     int aio_operate(const std::string& oid, AioCompletion *c, ObjectWriteOperation *op, int flags);
-    int cache_aio_notifier(const std::string& oid, L1CacheRequest *cc); //datacache
+//    int cache_aio_notifier(const std::string& oid, CacheRequest *cc); //datacache
 
     /**
      * Schedule an async write operation with explicit snapshot parameters

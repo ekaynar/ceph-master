@@ -8270,24 +8270,26 @@ void RGWGetObj::directory_lookup()
 void RGWGetObj::read_local_execute()
 {
 //  bufferlist bl;
-//  gc_invalidate_time = ceph_clock_now();
-//  gc_invalidate_time += (s->cct->_conf->rgw_gc_obj_min_wait / 2);
+  ldpp_dout(this, 10) << __func__  << dendl;
+  this->total_len = s->obj_size;
+  
+  gc_invalidate_time = ceph_clock_now();
+  gc_invalidate_time += (s->cct->_conf->rgw_gc_obj_min_wait / 2);
 
 //  bool need_decompress;
   int64_t ofs_x, end_x;
-
   ofs_x = 0;
-  end_x = dir_val.obj_size;
+  end_x = dir_val.obj_size - 1;
   RGWGetObj_CB cb(this);
   RGWGetObj_Filter* filter = (RGWGetObj_Filter *)&cb;
-//  boost::optional<RGWGetObj_Decompress> decompress;
-//  std::unique_ptr<RGWGetObj_Filter> decrypt;
-//  map<string, bufferlist>::iterator attr_iter;
   
-//  perfcounter->inc(l_rgw_get);
   RGWBucketInfo dest_bucket_info;
   RGWRados::Object op_target(store->getRados(), dest_bucket_info, *static_cast<RGWObjectCtx *>(s->obj_ctx), obj);
   RGWRados::Object::Read read_op(&op_target);
+
+  //read_op.params.obj_size = &s->obj_size;
+  //op_ret = read_op.prepare(s->yield);
+
 /*
   op_ret = get_params();
   if (op_ret < 0)
@@ -8298,12 +8300,18 @@ void RGWGetObj::read_local_execute()
     goto done_err;
  */
   //check range
-  if(false){
-    goto done_err;
-  }
   
   op_ret = read_op.read_from_local(ofs_x, end_x, filter, dir_val.bucket_name, dir_val.obj_name, s->yield); 
+  if (op_ret >= 0)
+    op_ret = filter->flush();
+/*  
+  op_ret = send_response_data(bl, 0, 0);
+  if (op_ret < 0) {
+    goto done_err;
+  }
+*/
   return;
+  
 done_err:
   send_response_data_error();
 

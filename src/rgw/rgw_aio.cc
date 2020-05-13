@@ -136,7 +136,7 @@ Aio::OpFunc cache_aio_abstract(Op&& op, off_t obj_ofs, off_t read_ofs, uint64_t 
   auto cs = new (&r.user_data) cache_state(aio, r);
   cs->c = new CacheRequest();
 //  cs->c->prepare_op(ref.obj.oid, &r.data, read_len, read_ofs, obj_ofs, &cache_state::ccb);
-  cs->c->prepare_op(ref.obj.oid, &r.data, read_len, read_ofs, obj_ofs, cache_aio_cb, aio, &r);
+  cs->c->prepare_op(ref.obj.oid, &r.data, read_len, obj_ofs, read_ofs, cache_aio_cb, aio, &r);
   int ret = cs->submit_op(cs->c);
   if ( ret < 0 ) {
       r.result = -1;

@@ -9280,27 +9280,20 @@ int RGWRados::get_local_obj_iterate_cb(const rgw_raw_obj& read_obj, string key, 
 
   const uint64_t cost = read_len;
   const uint64_t id = obj_ofs;
-  ////bufferlist *pbl;
-  //CacheRequest *cc;
-  //librados::AioCompletion *c; 
   
   rgw_pool  pool("default.rgw.buckets.data");
   rgw_raw_obj obj1(pool,key);
   auto obj = d->store->svc.rados->obj(obj1);
   int r = obj.open();
   op.read(read_ofs, read_len, nullptr, nullptr);
-//  auto completed = d->aio->get(obj, rgw::Aio::cache_op(cc, d->yield), cost, id);
   auto completed = d->aio->get(obj, rgw::Aio::cache_op(std::move(op) , d->yield, obj_ofs, read_ofs, read_len), cost, id);
-//  r = d->submit_l1_aio_read(cc);
   return d->flush(std::move(completed));
-//  return 0;
 } 
 
 int RGWRados::iterate_local_obj(RGWObjectCtx& obj_ctx, const rgw_obj& obj, string bucket_name, string obj_name, off_t ofs, off_t end, uint64_t max_chunk_size, iterate_local_obj_cb cb, void *arg, optional_yield y){
 
   uint64_t len;
-  uint64_t read_ofs;
-  //uint64_t end;
+  uint64_t read_ofs = 0;
   uint64_t chunk_id;
   string key = bucket_name+"_"+obj_name+"_";    
   rgw_raw_obj read_obj;
@@ -9311,9 +9304,8 @@ int RGWRados::iterate_local_obj(RGWObjectCtx& obj_ctx, const rgw_obj& obj, strin
   else
     len = end - ofs + 1;
  
- 
 //  dout(10) << __func__  << max_chunk_size << " key "<< key  << " ofs "<< ofs << " end " << end << dendl;
-  while (ofs < end) {
+  while (ofs <= end) {
     uint64_t read_len = std::min(len, max_chunk_size);
     //Calculate key
     string oid = key + std::to_string(chunk_id);    
@@ -9330,7 +9322,7 @@ int RGWRados::iterate_local_obj(RGWObjectCtx& obj_ctx, const rgw_obj& obj, strin
     chunk_id += 1;
       
   } 
-    return 0;
+  return 0;
 
 }
 

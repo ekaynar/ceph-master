@@ -8256,7 +8256,8 @@ void RGWGetObj::directory_lookup()
   ldpp_dout(this, 10) << __func__ << this->dir_val.key  << dendl;
   //int ret = store->getRados()->directory.getMetaValue(this->dir_val);
   dir_val.location = "datalake";
-  dir_val.location = "readcache";
+//  dir_val.location = "readcache";
+
   dir_val.owner = "testuser";
   dir_val.obj_size = 20971520;
   s->obj_size = 20971520;

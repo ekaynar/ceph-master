@@ -1317,11 +1317,11 @@ public:
   /* datacache */
   int put_data(string key, bufferlist& bl, unsigned int len);
   
-  using iterate_local_obj_cb = int (*)(const rgw_raw_obj&, std::string, off_t, off_t, off_t, void*); 
+  using iterate_local_obj_cb = int (*)(const rgw_raw_obj&, std::string, off_t, off_t, off_t, void*, RGWRados *store); 
 
-  int iterate_local_obj(RGWObjectCtx& ctx,  const rgw_obj& obj, string bucket_name, string obj_name, off_t ofs, off_t end, uint64_t max_chunk_size, iterate_local_obj_cb cb, void *arg, optional_yield y);
+  int iterate_local_obj(RGWObjectCtx& ctx,  const rgw_obj& obj, string bucket_name, string obj_name, off_t ofs, off_t end, uint64_t max_chunk_size, iterate_local_obj_cb cb, void *arg, optional_yield y, RGWRados *store);
   
-  int get_local_obj_iterate_cb(const rgw_raw_obj& read_obj, string key, off_t obj_ofs, off_t read_ofs, off_t read_len,  void *arg);
+  int get_local_obj_iterate_cb(const rgw_raw_obj& read_obj, string key, off_t obj_ofs, off_t read_ofs, off_t read_len,  void *arg, RGWRados *store);
 
   /* datacache */
 

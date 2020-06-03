@@ -25,8 +25,14 @@
 #include <iostream>
 #include "include/Context.h"
 #include <aio.h>
+#include "rgw_threadpool.h"
+#include "rgw_cacherequest.h"
+
 struct DataCache;
-//class DataCache;
+class CacheThreadPool;
+//struct RemoteRequest;
+class RemoteS3Request;
+/*datacache*/
 
 
 enum {
@@ -232,6 +238,59 @@ public:
 
 /* datacache */
 
+class CacheThreadPool {
+  public:
+    CacheThreadPool(int n) {
+      for (int i=0; i<n; ++i) {
+        threads.push_back(new PoolWorkerThread(workQueue));
+        threads.back()->start();
+      }
+    }
+    ~CacheThreadPool() {
+      finish();
+    }
+
+    void addTask(Task *nt) {
+      workQueue.addTask(nt);
+    }
+
+    void finish() {
+      for (size_t i=0,e=threads.size(); i<e; ++i)
+        workQueue.addTask(NULL);
+      for (size_t i=0,e=threads.size(); i<e; ++i) {
+        threads[i]->join();
+        delete threads[i];
+      }
+      threads.clear();
+    }
+
+  private:
+    std::vector<PoolWorkerThread*> threads;
+    WorkQueue workQueue;
+};
+
+
+class RemoteS3Request : public Task {
+public:
+  RemoteS3Request(RemoteRequest *_req, CephContext *_cct) : Task(), req(_req), cct(_cct) {
+    pthread_mutex_init(&qmtx,0);
+    pthread_cond_init(&wcond, 0);
+        }
+  ~RemoteS3Request() {
+    pthread_mutex_destroy(&qmtx);
+    pthread_cond_destroy(&wcond);
+  }
+  virtual void run();
+private:
+  int submit_op();
+ private:
+  pthread_mutex_t qmtx;
+  pthread_cond_t wcond;
+  RemoteRequest *req;
+  CephContext *cct;
+
+};
+
 struct cacheAioWriteRequest{
   std::string key;
   void *data;
@@ -254,17 +313,18 @@ struct cacheAioWriteRequest{
   }
 };
 
-
 struct DataCache {
 private:
   std::list<string> outstanding_write_list;
   uint64_t capacity ;
   CephContext *cct;
   std::string path;
+  CacheThreadPool *tp;
   //ceph::mutex lock = ceph::make_mutex("DataCache::lock");
 public:
   DataCache();
   ~DataCache() {}
+  void submit_remote_req(struct RemoteRequest *c);
   void put(bufferlist& bl, uint64_t len, string key);
   int create_aio_write_request(bufferlist& bl, uint64_t len, std::string key);
   void cache_aio_write_completion_cb(cacheAioWriteRequest *c);
@@ -272,7 +332,7 @@ public:
     cct = _cct;
     capacity = 1000;
     path = cct->_conf->rgw_datacache_path;
-
+    tp = new CacheThreadPool(32);
   }
 };
 

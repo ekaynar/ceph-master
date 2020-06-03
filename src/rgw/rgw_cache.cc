@@ -2,6 +2,7 @@
 // vim: ts=8 sw=2 smarttab ft=cpp
 
 #include "rgw_cache.h"
+  uint64_t expected_size = 0;
 #include "rgw_perf_counters.h"
 
 #include <errno.h>
@@ -17,6 +18,8 @@
 #include <signal.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include "rgw_rest_conn.h"
+//#include "rgw_cacherequest.h"
 
 int ObjectCache::get(const string& name, ObjectCacheInfo& info, uint32_t mask, rgw_cache_entry_info *cache_info)
 {
@@ -35,7 +38,7 @@ int ObjectCache::get(const string& name, ObjectCacheInfo& info, uint32_t mask, r
   }
 
   if (expiry.count() &&
-       (ceph::coarse_mono_clock::now() - iter->second.info.time_added) > expiry) {
+      (ceph::coarse_mono_clock::now() - iter->second.info.time_added) > expiry) {
     ldout(cct, 10) << "cache get: name=" << name << " : expiry miss" << dendl;
     rl.unlock();
     std::unique_lock wl{lock};  // write lock for insertion
@@ -43,7 +46,7 @@ int ObjectCache::get(const string& name, ObjectCacheInfo& info, uint32_t mask, r
     iter = cache_map.find(name);
     if (iter != cache_map.end()) {
       for (auto &kv : iter->second.chained_entries)
-        kv.first->invalidate(kv.second);
+	kv.first->invalidate(kv.second);
       remove_lru(name, iter->second.lru_iter);
       cache_map.erase(iter);
     }
@@ -57,7 +60,7 @@ int ObjectCache::get(const string& name, ObjectCacheInfo& info, uint32_t mask, r
 
   if (lru_counter - entry->lru_promotion_ts > lru_window) {
     ldout(cct, 20) << "cache get: touching lru, lru_counter=" << lru_counter
-                   << " promotion_ts=" << entry->lru_promotion_ts << dendl;
+      << " promotion_ts=" << entry->lru_promotion_ts << dendl;
     rl.unlock();
     std::unique_lock wl{lock};  // write lock for insertion
     /* need to redo this because entry might have dropped off the cache */
@@ -78,14 +81,14 @@ int ObjectCache::get(const string& name, ObjectCacheInfo& info, uint32_t mask, r
   ObjectCacheInfo& src = iter->second.info;
   if ((src.flags & mask) != mask) {
     ldout(cct, 10) << "cache get: name=" << name << " : type miss (requested=0x"
-                   << std::hex << mask << ", cached=0x" << src.flags
-                   << std::dec << ")" << dendl;
+      << std::hex << mask << ", cached=0x" << src.flags
+      << std::dec << ")" << dendl;
     if(perfcounter) perfcounter->inc(l_rgw_cache_miss);
     return -ENOENT;
   }
   ldout(cct, 10) << "cache get: name=" << name << " : hit (requested=0x"
-                 << std::hex << mask << ", cached=0x" << src.flags
-                 << std::dec << ")" << dendl;
+    << std::hex << mask << ", cached=0x" << src.flags
+    << std::dec << ")" << dendl;
 
   info = src;
   if (cache_info) {
@@ -98,7 +101,7 @@ int ObjectCache::get(const string& name, ObjectCacheInfo& info, uint32_t mask, r
 }
 
 bool ObjectCache::chain_cache_entry(std::initializer_list<rgw_cache_entry_info*> cache_info_entries,
-				    RGWChainedCache::Entry *chained_entry)
+    RGWChainedCache::Entry *chained_entry)
 {
   std::unique_lock l{lock};
 
@@ -111,7 +114,7 @@ bool ObjectCache::chain_cache_entry(std::initializer_list<rgw_cache_entry_info*>
   /* first verify that all entries are still valid */
   for (auto cache_info : cache_info_entries) {
     ldout(cct, 10) << "chain_cache_entry: cache_locator="
-		   << cache_info->cache_locator << dendl;
+      << cache_info->cache_locator << dendl;
     auto iter = cache_map.find(cache_info->cache_locator);
     if (iter == cache_map.end()) {
       ldout(cct, 20) << "chain_cache_entry: couldn't find cache locator" << dendl;
@@ -122,8 +125,8 @@ bool ObjectCache::chain_cache_entry(std::initializer_list<rgw_cache_entry_info*>
 
     if (entry->gen != cache_info->gen) {
       ldout(cct, 20) << "chain_cache_entry: entry.gen (" << entry->gen
-		     << ") != cache_info.gen (" << cache_info->gen << ")"
-		     << dendl;
+	<< ") != cache_info.gen (" << cache_info->gen << ")"
+	<< dendl;
       return false;
     }
     entries.push_back(entry);
@@ -134,7 +137,7 @@ bool ObjectCache::chain_cache_entry(std::initializer_list<rgw_cache_entry_info*>
 
   for (auto entry : entries) {
     entry->chained_entries.push_back(make_pair(chained_entry->cache,
-					       chained_entry->key));
+	  chained_entry->key));
   }
 
   return true;
@@ -149,7 +152,7 @@ void ObjectCache::put(const string& name, ObjectCacheInfo& info, rgw_cache_entry
   }
 
   ldout(cct, 10) << "cache put: name=" << name << " info.flags=0x"
-                 << std::hex << info.flags << std::dec << dendl;
+    << std::hex << info.flags << std::dec << dendl;
 
   auto [iter, inserted] = cache_map.emplace(name, ObjectCacheEntry{});
   ObjectCacheEntry& entry = iter->second;
@@ -237,7 +240,7 @@ bool ObjectCache::remove(const string& name)
 }
 
 void ObjectCache::touch_lru(const string& name, ObjectCacheEntry& entry,
-			    std::list<string>::iterator& lru_iter)
+    std::list<string>::iterator& lru_iter)
 {
   while (lru_size > (size_t)cct->_conf->rgw_cache_lru_size) {
     auto iter = lru.begin();
@@ -277,7 +280,7 @@ void ObjectCache::touch_lru(const string& name, ObjectCacheEntry& entry,
 }
 
 void ObjectCache::remove_lru(const string& name,
-			     std::list<string>::iterator& lru_iter)
+    std::list<string>::iterator& lru_iter)
 {
   if (lru_iter == lru.end())
     return;
@@ -290,7 +293,7 @@ void ObjectCache::remove_lru(const string& name,
 void ObjectCache::invalidate_lru(ObjectCacheEntry& entry)
 {
   for (auto iter = entry.chained_entries.begin();
-       iter != entry.chained_entries.end(); ++iter) {
+      iter != entry.chained_entries.end(); ++iter) {
     RGWChainedCache *chained_cache = iter->first;
     chained_cache->invalidate(iter->second);
   }
@@ -356,8 +359,12 @@ ObjectCache::~ObjectCache()
 
 /* datacache */
 
-DataCache::DataCache ()
-  : cct(NULL), capacity(0)  {}
+DataCache::DataCache () : cct(NULL), capacity(0)  {}
+
+void DataCache::submit_remote_req(struct RemoteRequest *c){
+    ldout(cct, 0) << "submit_remote_req" <<dendl;
+    tp->addTask(new RemoteS3Request(c, cct));
+}
 
 int cacheAioWriteRequest::create_io(bufferlist& bl, uint64_t len, string key) {
   //std::string location =  "/tmp/"+ key;
@@ -387,7 +394,7 @@ int cacheAioWriteRequest::create_io(bufferlist& bl, uint64_t len, string key) {
 close_file:
   ::close(fd);
 done:
-   ldout(cct, 0) << "done" << dendl;
+  ldout(cct, 0) << "done" << dendl;
   return ret;
 }
 
@@ -423,7 +430,7 @@ int DataCache::create_aio_write_request(bufferlist& bl, uint64_t len, std::strin
     ldout(cct, 0) << "Error: aio_write failed "<< ret << dendl;
     goto error;
   }
-//  ldout(cct, 10) << "after error1" << dendl;
+  //  ldout(cct, 10) << "after error1" << dendl;
   return 0;
 
 error:
@@ -436,27 +443,67 @@ done:
 void DataCache::put(bufferlist& bl, uint64_t len, string key){
   ldout(cct, 10) << __func__  << key <<dendl;
   int ret = 0;
- // cache_lock.lock();  
+  // cache_lock.lock();  
   std::list<std::string>::iterator it = std::find(outstanding_write_list.begin(), outstanding_write_list.end(),key);
-    if (it != outstanding_write_list.end()) {
- //       cache_lock.unlock();
-        ldout(cct, 5) << "re-write: write already issued, key "<< key << dendl;
-        return;
-    }
+  if (it != outstanding_write_list.end()) {
+    //       cache_lock.unlock();
+    ldout(cct, 5) << "re-write: write already issued, key "<< key << dendl;
+    return;
+  }
   outstanding_write_list.push_back(key);
   //cache_lock.unlock();
 
   ret = create_aio_write_request(bl, len, key);
   if (ret < 0) {
-  //  cache_lock.lock();
+    //  cache_lock.lock();
     outstanding_write_list.remove(key);
-//    cache_lock.unlock();
+    //    cache_lock.unlock();
     ldout(cct, 1) << "Error: create_aio_write_request failed "  << ret << dendl;
     return;
   }
+}
 
- 
+/*Remote S3 Request datacacahe*/
+int RemoteS3Request::submit_op() {
+  ldout(cct, 10) << __func__  << " for block" <<  req->key << dendl;
+//  ldout(cct, 10) << req->key  <<dendl;
+  string etag;
+  real_time set_mtime;
+  uint64_t expected_size = 0;
+  bool prepend_metadata = false; 
+  bool rgwx_stat = false;
+  bool skip_decrypt =false;
+  bool get_op = true;
+  bool sync_manifest =false;
+  bool send = true;
+  string user="testuser";
+  int ret = req->conn->get_obj(user, req->ofs, req->read_len, req->obj, prepend_metadata,
+		    get_op, rgwx_stat, sync_manifest, skip_decrypt, send, req->cb, &req->in_stream_req);
+  ldout(cct, 10) << __func__  <<"after submit_op get_obj" << dendl;
+  if (ret < 0 )
+    return ret;
+  ret = req->conn->complete_request(req->in_stream_req, &etag, &set_mtime, &expected_size, nullptr, nullptr);
+  if (ret < 0 )
+    return ret;
+  ldout(cct, 10) << __func__  << etag << dendl;
+  return 0;
+}
+
+void RemoteS3Request::run() {
+
+  ldout(cct, 10) << __func__  <<dendl;
+  //int retries =  cct->_conf->rgw_l2_request_thread_num;   
+  int retries = 10;
+  int r = 0;
+  for (int i=0; i<retries; i++ ){
+    if(!(r = submit_op())){
+      req->r->result = 0;
+      req->aio->put(*req->r);
+      req->finish();
+      return;
+    }}
 
 
 }
+
 

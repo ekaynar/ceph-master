@@ -35,6 +35,7 @@
 #include <aio.h>
 #include <cpp_redis/cpp_redis>
 #include "rgw_cacherequest.h"
+#include "rgw_directory.h"
 /*datacache*/
 
 class RGWWatcher;
@@ -55,6 +56,7 @@ class RGWReshard;
 class RGWReshardWait;
 
 class RGWSysObjectCtx;
+class RGWDirectory;
 
 /* flags for put_obj_meta() */
 #define PUT_OBJ_CREATE      0x01
@@ -163,30 +165,6 @@ struct RGWCloneRangeInfo {
   off_t src_ofs;
   off_t dst_ofs;
   uint64_t len;
-};
-
-/* the metadata which is written to the directory
- * you can add or remove some of the fields based on
- * your required caching policy
- */
-struct directory_values {
-    string key; //bucketID_ObjectID
-    string owner;
-    string time;
-    string bucket_name;
-    string obj_name;
-    string location;
-    uint64_t obj_size;
-    string etag;
-};
-
-class RGWDirectory{
-public:
-  RGWDirectory() {}
-  ~RGWDirectory() {}
-  int getMetaValue(directory_values &dir_val);
-  int setMetaValue(string key, string timeStr, string bucket_name, string obj_name, string location, string owner, uint64_t obj_size, string etag);
-  std::vector<std::pair<std::string, std::string>> get_aged_keys(string startTime, string endTime);
 };
 
 struct RGWObjState {

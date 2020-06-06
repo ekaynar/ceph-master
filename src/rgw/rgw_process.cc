@@ -96,7 +96,7 @@ int rgw_process_authenticated(RGWHandler_REST * const handler,
    */
   
   int ret;
-
+  ldpp_dout(op, 2) << "rgw_process_authenticated" << dendl;
    if ( (strcmp("get_obj",op->name()) == 0) && (s->cct->_conf->rgw_datacache_enabled) ){
     op->directory_lookup();
     if ( (op->dir_val.location == "datalake") && (OP_GET == s->op) ) {

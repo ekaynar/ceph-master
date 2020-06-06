@@ -12,7 +12,6 @@ struct AioResult;
 class Aio;
 class RGWRESTConn;
 class RGWRESTStreamRWRequest;
-//class RGWHTTPStreamRWRequest;
 class RGWRadosGetObj;
 
 class CacheRequest {
@@ -108,13 +107,18 @@ struct RemoteRequest : public CacheRequest{
   void *tp;
   RGWRESTConn *conn;
   RGWRESTStreamRWRequest *in_stream_req;
-//  RGWHTTPStreamRWRequest::ReceiveCB cb;
+//  RGWHTTPStreamRWRequest::ReceiveCB *cb;
+ // RGWRadosGetObj cb;
   RGWHTTPStreamRWRequest::ReceiveCB *cb{nullptr};
-//  RGWRadosGetObj *cb{nullptr};
-//  RGWRadosGetObj *cb;
+  //RGWRadosGetObj *cb{nullptr};
+  //RGWRadosGetObj *cb;
   rgw_obj obj;
   //RemoteRequest(rgw_obj& _obj, RGWRadosGetObj& _cb2) :  CacheRequest() , stat(-1),  obj(_obj), cb2(_cb2){}
-  RemoteRequest(rgw_obj& _obj) :  CacheRequest() , stat(-1), obj(_obj) {}
+  //RemoteRequest(rgw_obj& _obj, class RGWRadosGetObj* _cb) :  CacheRequest() , stat(-1), obj(_obj), cb(_cb){
+  RemoteRequest(rgw_obj& _obj, class RGWHTTPStreamRWRequest::ReceiveCB* _cb) :  CacheRequest() , stat(-1), obj(_obj), cb(_cb){
+    }
+  //RemoteRequest(rgw_obj& _obj, RGWHTTPStreamRWRequest::ReceiveCB *cb) :  CacheRequest() , stat(-1), obj(_obj), cb(cb) {}
+
   //RemoteRequest() :  CacheRequest() , stat(-1) {}
   ~RemoteRequest(){}
   int prepare_op(std::string key,  bufferlist *bl, int read_len, int ofs, int read_ofs, string dest, rgw::Aio* aio, rgw::AioResult* r) {

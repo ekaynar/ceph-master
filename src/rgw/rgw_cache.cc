@@ -467,10 +467,10 @@ void DataCache::put(bufferlist& bl, uint64_t len, string key){
 int RemoteS3Request::submit_op() {
   ldout(cct, 10) << __func__  << " for block" <<  req->key << dendl;
 //  ldout(cct, 10) << req->key  <<dendl;
-  string etag;
+//  string etag;
   real_time set_mtime;
   uint64_t expected_size = 0;
-  bool prepend_metadata = false; 
+  bool prepend_metadata = true; 
   bool rgwx_stat = false;
   bool skip_decrypt =false;
   bool get_op = true;
@@ -479,13 +479,14 @@ int RemoteS3Request::submit_op() {
   string user="testuser";
   int ret = req->conn->get_obj(user, req->ofs, req->read_len, req->obj, prepend_metadata,
 		    get_op, rgwx_stat, sync_manifest, skip_decrypt, send, req->cb, &req->in_stream_req);
-  ldout(cct, 10) << __func__  <<"after submit_op get_obj" << dendl;
+  ldout(cct, 10) << __func__  <<"after submit_op get_obj" << ret << " " << req->ofs << dendl;
   if (ret < 0 )
     return ret;
-  ret = req->conn->complete_request(req->in_stream_req, &etag, &set_mtime, &expected_size, nullptr, nullptr);
+  ret = req->conn->complete_request(req->in_stream_req, nullptr, &set_mtime, &expected_size, nullptr, nullptr);
   if (ret < 0 )
     return ret;
-  ldout(cct, 10) << __func__  << etag << dendl;
+  ldout(cct, 10) << __func__  <<"completed" << dendl;
+  //ldout(cct, 10) << __func__  << etag << dendl;
   return 0;
 }
 
@@ -497,11 +498,16 @@ void RemoteS3Request::run() {
   int r = 0;
   for (int i=0; i<retries; i++ ){
     if(!(r = submit_op())){
+
+    ldout(cct, 10) <<" after run func"  <<dendl;
+      //req->cb->bl = std::move(req->cb->pbl);
       req->r->result = 0;
-      req->aio->put(*req->r);
+      req->aio->put(*(req->r));
       req->finish();
       return;
-    }}
+    }
+    ldout(cct, 10) <<"failed"<< req->key  <<dendl;
+    }
 
 
 }

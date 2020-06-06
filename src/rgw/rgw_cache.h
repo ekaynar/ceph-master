@@ -332,7 +332,7 @@ public:
     cct = _cct;
     capacity = 1000;
     path = cct->_conf->rgw_datacache_path;
-    tp = new CacheThreadPool(32);
+    tp = new CacheThreadPool(31);
   }
 };
 

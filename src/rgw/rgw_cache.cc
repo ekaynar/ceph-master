@@ -486,6 +486,9 @@ int RemoteS3Request::submit_op() {
   if (ret < 0 )
     return ret;
   ldout(cct, 10) << __func__  <<"completed" << dendl;
+  ldout(cct, 10) << __func__  <<req->ofs << dendl;
+  req->r->result = 0;
+  req->aio->put(*(req->r));
   //ldout(cct, 10) << __func__  << etag << dendl;
   return 0;
 }
@@ -501,8 +504,8 @@ void RemoteS3Request::run() {
 
     ldout(cct, 10) <<" after run func"  <<dendl;
       //req->cb->bl = std::move(req->cb->pbl);
-      req->r->result = 0;
-      req->aio->put(*(req->r));
+  //    req->r->result = 0;
+ //     req->aio->put(*(req->r));
       req->finish();
       return;
     }

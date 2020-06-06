@@ -6299,10 +6299,12 @@ struct get_obj_data {
     results.sort(cmp); // merge() requires results to be sorted first
     completed.merge(results, cmp); // merge results in sorted order
 
+    CephContext *cct = store->ctx();
+    ldout(cct, 4) << "ugur flush " << offset << dendl;
     while (!completed.empty() && completed.front().id == offset) {
       auto bl = std::move(completed.front().data);
       completed.pop_front_and_dispose(std::default_delete<rgw::AioResultEntry>{});
-
+      ldout(cct, 4) << "ugur flush2 " << offset << dendl;
       offset += bl.length();
       string key = get_pending_key();
       int r = client_cb->handle_data(bl, 0, bl.length());
@@ -9278,6 +9280,7 @@ int RGWRados::get_local_obj_iterate_cb(const rgw_raw_obj& read_obj, string key, 
     cb->pbl = c->bl;
     dout(10) << __func__  << c->key <<" aio ugur "  << c->read_len << dendl;
     svc.cache->get_datacache().submit_remote_req(c);
+    sleep(2);
     return d->flush(std::move(completed));
   }
   else if(loc=="dd"){

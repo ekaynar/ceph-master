@@ -2422,15 +2422,22 @@ int decode_bl(bufferlist& bl, T& t)
 }
 
 /* datacache */
+enum CacheLocation {
+     READ_CACHE = 0,
+     WRITE_BACK = 1,
+     BACK_END = 2,
+};
+
 struct cache_obj{
-  string user;
-  string bucket_name;
+  string user; // s3 username
+  string bucket_name; 
   string obj_name;
   RGWAccessKey accesskey;
   rgw_user user_id;
   string destination;
   int loc;
-  uint64_t size;
+  CacheLocation cache_location;
+  uint64_t size_in_bytes;
 };
 /* datacache */
 

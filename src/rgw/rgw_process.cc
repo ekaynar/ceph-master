@@ -98,20 +98,12 @@ int rgw_process_authenticated(RGWHandler_REST * const handler,
   int ret;
   ldpp_dout(op, 2) << "rgw_process_authenticated" << dendl;
    if ( (strcmp("get_obj",op->name()) == 0) && (s->cct->_conf->rgw_datacache_enabled) ){
-    op->directory_lookup();
-  /*  if ( (op->dir_val.location == "datalake") && (OP_GET == s->op) ) {
-      ldpp_dout(op, 2) << "executing" << dendl;
-      op->fetch_remote_execute();
-      ldpp_dout(op, 2) << "completing" << dendl;
-      op->complete();
-      return 0;
-    }*/
+    //op->directory_lookup();
     if ( (OP_GET == s->op) ) {
       ldpp_dout(op, 2) << "executing" << dendl;
       op->cache_execute(); 
       ldpp_dout(op, 2) << "completing" << dendl;
       op->complete();
-       
       return 0;
     }
 

@@ -366,6 +366,13 @@ void DataCache::submit_remote_req(struct RemoteRequest *c){
     tp->addTask(new RemoteS3Request(c, cct));
 }
 
+void DataCache::retrieve_obj_info(cache_obj& c_obj){
+    ldout(cct, 0) << __func__ <<dendl;
+    ldout(cct, 0) << c_obj.bucket_name <<dendl;
+    c_obj.loc = 2;
+
+}
+
 int cacheAioWriteRequest::create_io(bufferlist& bl, uint64_t len, string key) {
   //std::string location =  "/tmp/"+ key;
   std::string location = cct->_conf->rgw_datacache_path + "/"+ key;

@@ -1104,7 +1104,8 @@ public:
   int copy_remote(RGWRados *store, string tenant_id, string bucket_name, string obj_name, string location);
   int delete_cache_obj(RGWRados *store, string userid, string bucket_name, string obj_name);
   int fetch_remote(RGWRados *store, string userid, string dest_bucket_name, string dest_obj_name, string location, RGWGetDataCB *cb, RGWObjectCtx& ctx);
-  
+  int retrieve_oid(cache_obj& c_obj, rgw_raw_obj& read_obj, uint64_t obj_ofs, optional_yield y);
+
   /* datacache */
 
   int rewrite_obj(RGWBucketInfo& dest_bucket_info, const rgw_obj& obj, const DoutPrefixProvider *dpp, optional_yield y);

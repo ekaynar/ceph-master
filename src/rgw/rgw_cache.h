@@ -324,6 +324,7 @@ private:
 public:
   DataCache();
   ~DataCache() {}
+  void retrieve_obj_info(cache_obj& c_obj);
   void submit_remote_req(struct RemoteRequest *c);
   void put(bufferlist& bl, uint64_t len, string key);
   int create_aio_write_request(bufferlist& bl, uint64_t len, std::string key);

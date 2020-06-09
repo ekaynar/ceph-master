@@ -3272,7 +3272,7 @@ class RGWRadosGetObj : public RGWHTTPStreamRWRequest::ReceiveCB
       ldout(cct, 0) << "RGWRadosGetObj length()" <<pbl->length()  <<dendl;
       //int ret = store->put_data(key, tmp , tmp.length());
     }
-     return 0;
+    return 0;
   }
   bufferlist& get_extra_data() { return extra_data_bl; }
   void set_extra_data_len(uint64_t len) override {
@@ -9168,41 +9168,6 @@ int RGWRados::delete_obj_aio(const rgw_obj& obj,
   return ret;
 }
 
-/* datacache */
-/*
-   void RGWRados::prepare_remote_s3_req(string userid, string bucket_name, string obj_name, int read_len, int range_ofs, string dest, RGWRESTConn *conn,  RGWRESTConn::get_obj_params& req_params){
-// Get S3 Credentials of the user
-rgw_user user_id(userid);
-RGWAccessKey accesskey;
-int ret = get_s3_credentials(store, userid, accesskey);
-//  init op
-rgw_bucket bucket;
-bucket.tenant = "";
-bucket.name = bucket_name;
-rgw_obj src_obj(bucket, obj_name);
-const string tenant_id="";
-list<string> endpoints;
-//endpoints.push_back(dest);
-endpoints.push_back("http://128.31.25.83:8000");
-conn = new RGWRESTConn(cct, this->store->svc()->zone, tenant_id, endpoints, accesskey);
-
-req_params.uid = user_id;
-req_params.info =  NULL;
-req_params.mod_ptr = NULL;
-req_params.mod_pg_ver = NULL;
-req_params.get_op = true;
-req_params.prepend_metadata = false;
-req_params.rgwx_stat = false;
-req_params.sync_manifest = false;
-req_params.skip_decrypt = true;
-
-req_params.range_is_set = true;
-req_params.range_start = read_ofs;
-req_params.range_end = read_ofs + read_len -1;
-req_params.cb = &cb;
-
-}
-*/
 
 static int _get_local_obj_iterate_cb(const rgw_raw_obj& read_obj, std::string key, cache_obj& c_obj, off_t obj_ofs, off_t read_ofs, off_t len, void *arg, RGWRados *store)
 {
@@ -9211,18 +9176,20 @@ static int _get_local_obj_iterate_cb(const rgw_raw_obj& read_obj, std::string ke
 }
 
 
+
 int RGWRados::Object::Read::read(int64_t ofs, int64_t end, RGWGetDataCB *cb, cache_obj& c_obj, optional_yield y){
   RGWRados *store = source->get_store();
   CephContext *cct = store->ctx();
   RGWObjectCtx& obj_ctx = source->get_ctx();
   const uint64_t chunk_size = cct->_conf->rgw_get_obj_max_req_size;
   const uint64_t window_size = cct->_conf->rgw_get_obj_window_size;
+  int r = store->get_s3_credentials(store, c_obj.user, c_obj.accesskey);
   ldout(cct, 0) << __func__ << dendl;
 
   auto aio = rgw::make_throttle(window_size, y);
   get_obj_data data(store, cb, &*aio, ofs, y);  
   rgw_obj obj;
-  int r = store->iterate_local_obj(obj_ctx, obj, c_obj, ofs, end, chunk_size, _get_local_obj_iterate_cb,  &data, y, store);
+  r = store->iterate_local_obj(obj_ctx, obj, c_obj, ofs, end, chunk_size, _get_local_obj_iterate_cb,  &data, y, store);
   if (r < 0) {
     ldout(cct, 0) << "iterate_local_obj() failed with " << r << dendl;
     data.cancel(); // drain completions without writing back to client
@@ -9230,6 +9197,8 @@ int RGWRados::Object::Read::read(int64_t ofs, int64_t end, RGWGetDataCB *cb, cac
   }
   return data.drain();
 }
+
+
 
 int RGWRados::get_local_obj_iterate_cb(const rgw_raw_obj& read_obj, string key, cache_obj& c_obj, off_t obj_ofs, off_t read_ofs, off_t read_len,  void *arg, RGWRados *store){
 
@@ -9245,19 +9214,17 @@ int RGWRados::get_local_obj_iterate_cb(const rgw_raw_obj& read_obj, string key, 
   auto obj = d->store->svc.rados->obj(read_obj);
   int ret = obj.open();
   op.read(read_ofs, read_len, nullptr, nullptr);
-
+  svc.cache->get_datacache().retrieve_obj_info(c_obj); 
+  
   // local read
   if (c_obj.loc == 0){
     auto completed = d->aio->get(obj, rgw::Aio::cache_op(std::move(op) , d->yield, obj_ofs, read_ofs, read_len), cost, id);
     return d->flush(std::move(completed));
   }
-  
+
   // remote read
   else if (c_obj.loc == 1){
-    // Get S3 Credentials of the user
     rgw_user user_id(c_obj.user);
-    RGWAccessKey accesskey;
-    ret = get_s3_credentials(store, c_obj.user, accesskey);
     rgw_bucket bucket;
     //bucket.tenant = "";
     bucket.name = c_obj.bucket_name;
@@ -9266,11 +9233,10 @@ int RGWRados::get_local_obj_iterate_cb(const rgw_raw_obj& read_obj, string key, 
     const string tenant_id="";
     list<string> endpoints;
     endpoints.push_back(c_obj.destination);
-    RGWRESTConn *conn = new RGWRESTConn(cct, this->store->svc()->zone, tenant_id, endpoints, accesskey);
+    RGWRESTConn *conn = new RGWRESTConn(cct, this->store->svc()->zone, tenant_id, endpoints, c_obj.accesskey);
     RGWRESTConn::get_obj_params req_params;
     RGWRadosGetObj *cb = new RGWRadosGetObj(cct, store);
 
-    dout(10) << __func__  <<  "iin true loop "<< key  << " obj_ofs "<< obj_ofs << "range "<< read_ofs + read_len -1<< dendl;
     RGWRESTStreamRWRequest *in_stream_req;
     RemoteRequest *c =  new RemoteRequest(src_obj,cb);
     auto completed = d->aio->get(obj, rgw::Aio::remote_op(std::move(op) , d->yield, obj_ofs, obj_ofs, read_len, c_obj.destination, c), cost, id);
@@ -9281,30 +9247,12 @@ int RGWRados::get_local_obj_iterate_cb(const rgw_raw_obj& read_obj, string key, 
     sleep(2);
     return d->flush(std::move(completed));
   }
-  // osd read
+// osd read
   else if(c_obj.loc == 2){
-    RGWBucketInfo bucket_info;
-    map<string, bufferlist> bucket_attrs;
-    ret = get_bucket_info(&svc, "", c_obj.bucket_name, bucket_info, NULL, null_yield, &bucket_attrs);
-    rgw_raw_obj head_obj;
     rgw_raw_obj read_obj;
-    rgw_obj obj2(bucket_info.bucket,c_obj.obj_name);
-    RGWObjectCtx obj_ctx(this->store);
-    RGWObjState *astate = NULL;
-    obj_to_raw(bucket_info.placement_rule, obj2, &head_obj);
-    int r = get_obj_state(&obj_ctx, bucket_info, obj2, &astate, false, d->yield);
-/*    int t = 1024*1024*4;
-    RGWObjManifest::obj_iterator iter = astate->manifest->obj_find(t);
-    read_obj = iter.get_location().get_raw_obj(this);
-    dout(10) << __func__  <<" ugur read_obj.oid  "  << read_obj.oid << dendl;
-
-    t = 1024*1024*8;
-  */  RGWObjManifest::obj_iterator iter2 = astate->manifest->obj_find(obj_ofs);
-    read_obj = iter2.get_location().get_raw_obj(this);
-    dout(10) << __func__  <<" ugur  read_obj.oid"  << read_obj.oid << dendl;
-     auto obj = d->store->svc.rados->obj(read_obj);
+    int r = retrieve_oid(c_obj, read_obj, obj_ofs, d->yield);
+    auto obj = d->store->svc.rados->obj(read_obj);
     r = obj.open();
-    
     auto completed = d->aio->get(obj, rgw::Aio::librados_op(std::move(op), d->yield), cost, id);
     return d->flush(std::move(completed));
   }
@@ -9318,7 +9266,7 @@ int RGWRados::iterate_local_obj(RGWObjectCtx& obj_ctx, const rgw_obj& obj, cache
   string key = c_obj.bucket_name+"_"+c_obj.obj_name+"_";    
   rgw_pool pool("default.rgw.buckets.data");
   rgw_raw_obj read_obj(pool,c_obj.obj_name);
-  
+
   //Calculate_chunk_id
   chunk_id = 0;
   if (end < 0)
@@ -9354,6 +9302,24 @@ int RGWRados::Object::Read::fetch_from_backend(RGWGetDataCB *cb, string owner, s
   RGWObjectCtx& obj_ctx = source->get_ctx();
   int r = store->fetch_remote(store, owner, bucket_name, obj_name, location, cb, obj_ctx );
   ldout(cct, 0) << " fetch_from_backend " << r << dendl;
+  return r;
+}
+
+int RGWRados::retrieve_oid(cache_obj& c_obj, rgw_raw_obj& read_obj, uint64_t obj_ofs, optional_yield y){
+  dout(10) << __func__  << " " << c_obj.bucket_name << " " << c_obj.obj_name<< " " << obj_ofs << dendl;
+  RGWBucketInfo bucket_info;
+  map<string, bufferlist> bucket_attrs;
+  int r = get_bucket_info(&svc, "", c_obj.bucket_name, bucket_info, NULL, null_yield, &bucket_attrs);
+  rgw_raw_obj head_obj;
+  
+  rgw_obj obj(bucket_info.bucket,c_obj.obj_name);
+  RGWObjectCtx obj_ctx(this->store);
+  RGWObjState *astate = NULL;
+  obj_to_raw(bucket_info.placement_rule, obj, &head_obj);
+
+  r = get_obj_state(&obj_ctx, bucket_info, obj, &astate, false, y);
+  RGWObjManifest::obj_iterator iter = astate->manifest->obj_find(obj_ofs);
+  read_obj = iter.get_location().get_raw_obj(this);
   return r;
 }
 

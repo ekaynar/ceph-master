@@ -795,6 +795,7 @@ public:
       int get_attr(const char *name, bufferlist& dest, optional_yield y);
        /* datacache */
       int fetch_from_backend(RGWGetDataCB *cb, string owner, string dest_bucket_name, string dest_obj_name, string location); 
+      int read(int64_t ofs, int64_t end, RGWGetDataCB *cb, cache_obj& c_obj, optional_yield y); 
       int read_from_local(int64_t ofs, int64_t end, RGWGetDataCB *cb, string dest_bucket_name, string dest_obj_name, optional_yield y); 
        /* datacache */
     };
@@ -1295,11 +1296,11 @@ public:
   /* datacache */
   int put_data(string key, bufferlist& bl, unsigned int len);
   
-  using iterate_local_obj_cb = int (*)(const rgw_raw_obj&, std::string, off_t, off_t, off_t, void*, RGWRados *store); 
+  using iterate_local_obj_cb = int (*)(const rgw_raw_obj&, std::string,cache_obj& c_obj, off_t, off_t, off_t, void*, RGWRados *store); 
 
-  int iterate_local_obj(RGWObjectCtx& ctx,  const rgw_obj& obj, string bucket_name, string obj_name, off_t ofs, off_t end, uint64_t max_chunk_size, iterate_local_obj_cb cb, void *arg, optional_yield y, RGWRados *store);
+  int iterate_local_obj(RGWObjectCtx& ctx,  const rgw_obj& obj, cache_obj& c_obj, off_t ofs, off_t end, uint64_t max_chunk_size, iterate_local_obj_cb cb, void *arg, optional_yield y, RGWRados *store);
   
-  int get_local_obj_iterate_cb(const rgw_raw_obj& read_obj, string key, off_t obj_ofs, off_t read_ofs, off_t read_len,  void *arg, RGWRados *store);
+  int get_local_obj_iterate_cb(const rgw_raw_obj& read_obj, string key, cache_obj& c_obj, off_t obj_ofs, off_t read_ofs, off_t read_len,  void *arg, RGWRados *store);
 
   /* datacache */
 

@@ -60,7 +60,7 @@
 using ceph::crypto::SHA1;
 
 struct req_state;
-struct directory_values; 
+struct directory_values; //datacache
 class RGWOp;
 class RGWRados;
 
@@ -193,8 +193,9 @@ public:
   virtual void execute() = 0;
   /*datacache*/
   virtual void fetch_remote_execute() {} 
-  virtual void read_local_execute() {} 
+  virtual void cache_execute() {} 
   virtual void directory_lookup() {} 
+  cache_obj c_obj;
   directory_values dir_val;
   /*datacache*/
   virtual void send_response() {}
@@ -348,7 +349,7 @@ public:
   void pre_exec() override;
   void execute() override;
   void fetch_remote_execute(); // datacache
-  void read_local_execute(); // datacache
+  void cache_execute(); // datacache
   void directory_lookup(); // datacache
   int parse_range();
   int read_user_manifest_part(

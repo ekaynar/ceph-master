@@ -8250,17 +8250,24 @@ void RGWGetObj::fetch_remote_execute()
 
 void RGWGetObj::directory_lookup()
 {
+  c_obj.bucket_name = s->bucket_name;
+  c_obj.obj_name = s->object.name;
+  c_obj.user = s->user->get_info().user_id.id;
+  c_obj.size = 20971520;
+  c_obj.destination="http://128.31.25.83:8000"; 
+  c_obj.loc = 2;
+  s->obj_size = 20971520;
+
   dir_val.bucket_name = s->bucket_name;
   dir_val.obj_name = s->object.name;
   dir_val.key = s->bucket_name +"_"+s->object.name;
   ldpp_dout(this, 10) << __func__ << this->dir_val.key  << dendl;
+  ldpp_dout(this, 10) << __func__ << this->c_obj.user  << dendl;
   //int ret = store->getRados()->directory.getMetaValue(this->dir_val);
-  dir_val.location = "datalake";
   dir_val.location = "readcache";
 
   dir_val.owner = "testuser";
   dir_val.obj_size = 20971520;
-  s->obj_size = 20971520;
  /* if (this->dir_val.location == "cache") {
     ldpp_dout(this, 10) << "data in cache" << dendl;
   } else if (this->dir_val.location == "datalake") {
@@ -8268,9 +8275,8 @@ void RGWGetObj::directory_lookup()
   }*/
 }
 
-void RGWGetObj::read_local_execute()
+void RGWGetObj::cache_execute()
 {
-//  bufferlist bl;
   ldpp_dout(this, 10) << __func__  << dendl;
   this->total_len = s->obj_size;
   int64_t ofs_x, end_x;
@@ -8283,7 +8289,8 @@ void RGWGetObj::read_local_execute()
   RGWRados::Object op_target(store->getRados(), dest_bucket_info, *static_cast<RGWObjectCtx *>(s->obj_ctx), obj);
   RGWRados::Object::Read read_op(&op_target);
   
-  op_ret = read_op.read_from_local(ofs_x, end_x, filter, dir_val.bucket_name, dir_val.obj_name, s->yield); 
+  //op_ret = read_op.read_from_local(ofs_x, end_x, filter, dir_val.bucket_name, dir_val.obj_name, s->yield); 
+  op_ret = read_op.read(ofs_x, end_x, filter, c_obj, s->yield); 
   if (op_ret >= 0)
     op_ret = filter->flush();
   

@@ -466,8 +466,6 @@ void DataCache::put(bufferlist& bl, uint64_t len, string key){
 /*Remote S3 Request datacacahe*/
 int RemoteS3Request::submit_op() {
   ldout(cct, 10) << __func__  << " for block" <<  req->key << dendl;
-//  ldout(cct, 10) << req->key  <<dendl;
-//  string etag;
   real_time set_mtime;
   uint64_t expected_size = 0;
   bool prepend_metadata = true; 
@@ -483,13 +481,17 @@ int RemoteS3Request::submit_op() {
   if (ret < 0 )
     return ret;
   ret = req->conn->complete_request(req->in_stream_req, nullptr, &set_mtime, &expected_size, nullptr, nullptr);
-  if (ret < 0 )
+  if (ret < 0 ){
+     ldout(cct, 10) << __func__  <<"not complete_reque ugur" << dendl;
+  req->r->result = -1;
+  req->aio->put(*(req->r));
     return ret;
+  }
+  //ldout(cct, 10) << __func__  << etag << dendl;
   ldout(cct, 10) << __func__  <<"completed" << dendl;
   ldout(cct, 10) << __func__  <<req->ofs << dendl;
   req->r->result = 0;
   req->aio->put(*(req->r));
-  //ldout(cct, 10) << __func__  << etag << dendl;
   return 0;
 }
 
@@ -501,11 +503,10 @@ void RemoteS3Request::run() {
   int r = 0;
   for (int i=0; i<retries; i++ ){
     if(!(r = submit_op())){
-
-    ldout(cct, 10) <<" after run func"  <<dendl;
+	ldout(cct, 10) <<" after run func"  <<dendl;
       //req->cb->bl = std::move(req->cb->pbl);
-  //    req->r->result = 0;
- //     req->aio->put(*(req->r));
+      //req->r->result = 0;
+      //req->aio->put(*(req->r));
       req->finish();
       return;
     }

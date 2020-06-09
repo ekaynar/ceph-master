@@ -14,6 +14,17 @@ class RGWRESTConn;
 class RGWRESTStreamRWRequest;
 class RGWRadosGetObj;
 
+/*
+struct cache_obj{
+  string user;
+  string bucket_name;
+  string obj_name;
+  RGWAccessKey accesskey;
+  rgw_user user_id;
+  string destination;
+  uint64_t size;
+  };
+*/
 class CacheRequest {
   public:
     ceph::mutex lock = ceph::make_mutex("CacheRequest");

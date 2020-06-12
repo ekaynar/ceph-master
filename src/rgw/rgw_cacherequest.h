@@ -1,34 +1,25 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// // vim: ts=8 sw=2 smarttab ft=cpp
+//
 #ifndef RGW_CACHEREQUEST_H
 #define RGW_CACHEREQUEST_H
 
+#include "rgw_rest_conn.h"
 #include <aio.h>
 #include "rgw_aio.h"
-#include "rgw_rest_conn.h"
 #include "rgw_rest_client.h"
-//#include "rgw_threadpool.h"
-struct get_obj_data;
 
+class RGWRESTConn;
+struct get_obj_data;
 struct AioResult;
 class Aio;
-class RGWRESTConn;
 class RGWRESTStreamRWRequest;
-class RGWRadosGetObj;
+//class RGWRadosGetObj;
 
-/*
-struct cache_obj{
-  string user;
-  string bucket_name;
-  string obj_name;
-  RGWAccessKey accesskey;
-  rgw_user user_id;
-  string destination;
-  uint64_t size;
-  };
-*/
 class CacheRequest {
   public:
     ceph::mutex lock = ceph::make_mutex("CacheRequest");
-    struct get_obj_data *op_data;
+//    struct get_obj_data *op_data;
     int sequence;
     int stat;
     bufferlist *bl;
@@ -118,50 +109,17 @@ struct RemoteRequest : public CacheRequest{
   void *tp;
   RGWRESTConn *conn;
   RGWRESTStreamRWRequest *in_stream_req;
-//  RGWHTTPStreamRWRequest::ReceiveCB *cb;
- // RGWRadosGetObj cb;
-  RGWHTTPStreamRWRequest::ReceiveCB *cb{nullptr};
-  //RGWRadosGetObj *cb{nullptr};
-  //RGWRadosGetObj *cb;
+  cache_obj *c_obj;
+  RGWRados *store;
+  CephContext *cct;
   rgw_obj obj;
-  //RemoteRequest(rgw_obj& _obj, RGWRadosGetObj& _cb2) :  CacheRequest() , stat(-1),  obj(_obj), cb2(_cb2){}
-  //RemoteRequest(rgw_obj& _obj, class RGWRadosGetObj* _cb) :  CacheRequest() , stat(-1), obj(_obj), cb(_cb){
-  RemoteRequest(rgw_obj& _obj, class RGWHTTPStreamRWRequest::ReceiveCB* _cb) :  CacheRequest() , stat(-1), obj(_obj), cb(_cb){
+  RemoteRequest(rgw_obj& _obj, cache_obj* _c_obj, RGWRados* _store, CephContext* _cct) :  CacheRequest() , stat(-1), obj(_obj), c_obj(_c_obj), store(_store), cct(_cct){
     }
-  //RemoteRequest(rgw_obj& _obj, RGWHTTPStreamRWRequest::ReceiveCB *cb) :  CacheRequest() , stat(-1), obj(_obj), cb(cb) {}
 
-  //RemoteRequest() :  CacheRequest() , stat(-1) {}
   ~RemoteRequest(){}
-  int prepare_op(std::string key,  bufferlist *bl, int read_len, int ofs, int read_ofs, string dest, rgw::Aio* aio, rgw::AioResult* r) {
-    this->r = r;
-    this->aio = aio;
-    this->bl = bl;
-    this->ofs = ofs;
-    this->key = key;
-    this->read_len = read_len;
-    this->dest = dest;
-    return 0;
-  }
-/*
-  int submit_op(){
-    string etag;
-    real_time set_mtime;
-    uint64_t expected_size = 0;
-    bool prepend_metadata = false;
-    bool rgwx_stat = false;
-    bool skip_decrypt =true;
-    bool get_op = true;
-    bool sync_manifest =false;
-    bool send = true;
-    std::string user = "testuser";
-    int ret = this->conn->get_obj(user, ofs, read_len, obj, prepend_metadata,
-	                    get_op, rgwx_stat, sync_manifest, skip_decrypt, send);
-   // static_cast<RGWRadosGetObj *>(cb), &in_stream_req);
-    return 0;
-
-  }
-*/
-
+  int prepare_op(std::string key,  bufferlist *bl, int read_len, int ofs, int read_ofs, string dest, rgw::Aio* aio, rgw::AioResult* r);
+  int submit_op();
+  
   void release (){
     lock.lock();
     lock.unlock();
@@ -182,61 +140,4 @@ struct RemoteRequest : public CacheRequest{
 
 };  
 
-/*
-   class CacheThreadPool {
-   public:
-   CacheThreadPool(int n) {
-   for (int i=0; i<n; ++i) {
-   threads.push_back(new PoolWorkerThread(workQueue));
-   threads.back()->start();
-   }
-   }
-   ~CacheThreadPool() {
-   finish();
-   }
-
-   void addTask(Task *nt) {
-   workQueue.addTask(nt);
-   }
-
-   void finish() {
-   for (size_t i=0,e=threads.size(); i<e; ++i)
-   workQueue.addTask(NULL);
-   for (size_t i=0,e=threads.size(); i<e; ++i) {
-   threads[i]->join();
-   delete threads[i];
-   }
-   threads.clear();
-   }
-
-   private:
-   std::vector<PoolWorkerThread*> threads;
-   WorkQueue workQueue;
-   };
-
-
-
-
-   class RemoteS3Request : public Task {
-   public:
-   RemoteS3Request(CacheRequest *_req, CephContext *_cct) : Task(), req(_req), cct(_cct) {
-   pthread_mutex_init(&qmtx,0);
-   pthread_cond_init(&wcond, 0);
-   }
-   ~RemoteS3Request() {
-   pthread_mutex_destroy(&qmtx);
-   pthread_cond_destroy(&wcond);
-   }
-   virtual void run();
-   private:
-   int submit_op();
-   private:
-   pthread_mutex_t qmtx;
-   pthread_cond_t wcond;
-   CacheRequest *req;
-   CephContext *cct;
-
-   };
-
-*/
 #endif 

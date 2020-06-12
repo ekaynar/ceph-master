@@ -6300,7 +6300,7 @@ struct get_obj_data {
     completed.merge(results, cmp); // merge results in sorted order
 
     CephContext *cct = store->ctx();
-    ldout(cct, 4) << "ugur flush " << offset << dendl;
+    ldout(cct, 4) << "ugur flush1 " << offset << dendl;
     while (!completed.empty() && completed.front().id == offset) {
       auto bl = std::move(completed.front().data);
       completed.pop_front_and_dispose(std::default_delete<rgw::AioResultEntry>{});
@@ -9215,7 +9215,6 @@ int RGWRados::get_local_obj_iterate_cb(const rgw_raw_obj& read_obj, string key, 
   int ret = obj.open();
   op.read(read_ofs, read_len, nullptr, nullptr);
   svc.cache->get_datacache().retrieve_obj_info(c_obj); 
-  
   // local read
   if (c_obj.loc == 0){
     auto completed = d->aio->get(obj, rgw::Aio::cache_op(std::move(op) , d->yield, obj_ofs, read_ofs, read_len), cost, id);
@@ -9226,25 +9225,15 @@ int RGWRados::get_local_obj_iterate_cb(const rgw_raw_obj& read_obj, string key, 
   else if (c_obj.loc == 1){
     rgw_user user_id(c_obj.user);
     rgw_bucket bucket;
-    //bucket.tenant = "";
     bucket.name = c_obj.bucket_name;
     rgw_obj src_obj(bucket, c_obj.obj_name); 
-
-    const string tenant_id="";
-    list<string> endpoints;
-    endpoints.push_back(c_obj.destination);
-    RGWRESTConn *conn = new RGWRESTConn(cct, this->store->svc()->zone, tenant_id, endpoints, c_obj.accesskey);
-    RGWRESTConn::get_obj_params req_params;
-    RGWRadosGetObj *cb = new RGWRadosGetObj(cct, store);
-
-    RGWRESTStreamRWRequest *in_stream_req;
-    RemoteRequest *c =  new RemoteRequest(src_obj,cb);
+    RemoteRequest *c =  new RemoteRequest(src_obj, &c_obj, store, cct);
     auto completed = d->aio->get(obj, rgw::Aio::remote_op(std::move(op) , d->yield, obj_ofs, obj_ofs, read_len, c_obj.destination, c), cost, id);
-    c->conn = conn;
-    cb->pbl = c->bl;
+//    c->conn = conn;
     dout(10) << __func__  << c->key <<" aio ugur "  << c->read_len << dendl;
+//    int aa = c->submit_op();
     svc.cache->get_datacache().submit_remote_req(c);
-    sleep(2);
+    //sleep(5);
     return d->flush(std::move(completed));
   }
 // osd read
@@ -9259,7 +9248,7 @@ int RGWRados::get_local_obj_iterate_cb(const rgw_raw_obj& read_obj, string key, 
 } 
 
 int RGWRados::iterate_local_obj(RGWObjectCtx& obj_ctx, const rgw_obj& obj, cache_obj& c_obj, off_t ofs, off_t end, uint64_t max_chunk_size, iterate_local_obj_cb cb, void *arg, optional_yield y, RGWRados *store){
-
+  dout(10) << __func__  <<dendl;
   uint64_t len;
   uint64_t read_ofs = 0;
   uint64_t chunk_id;
@@ -9305,6 +9294,23 @@ int RGWRados::Object::Read::fetch_from_backend(RGWGetDataCB *cb, string owner, s
   return r;
 }
 
+/*
+int RGWRados::remote_request(cache_obj& c_obj){
+  rgw_user user_id(c_obj.user);
+  rgw_bucket bucket;
+  bucket.name = c_obj.bucket_name;
+  rgw_obj src_obj(bucket, c_obj.obj_name);
+  const string tenant_id="";
+  list<string> endpoints;
+  endpoints.push_back(c_obj.destination);
+  RGWRESTConn *conn = new RGWRESTConn(cct, this->store->svc()->zone, tenant_id, endpoints, c_obj.accesskey);
+  RGWRadosGetObj *cb = new RGWRadosGetObj(cct, store);
+  RGWRESTStreamRWRequest *in_stream_req;
+  RemoteRequest *c =  new RemoteRequest(src_obj,cb);
+
+
+}
+*/
 int RGWRados::retrieve_oid(cache_obj& c_obj, rgw_raw_obj& read_obj, uint64_t obj_ofs, optional_yield y){
   dout(10) << __func__  << " " << c_obj.bucket_name << " " << c_obj.obj_name<< " " << obj_ofs << dendl;
   RGWBucketInfo bucket_info;

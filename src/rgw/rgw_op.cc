@@ -8250,12 +8250,11 @@ void RGWGetObj::fetch_remote_execute()
 
 void RGWGetObj::directory_lookup()
 {
-  c_obj.bucket_name = s->bucket_name;
+  /*c_obj.bucket_name = s->bucket_name;
   c_obj.obj_name = s->object.name;
   c_obj.user = s->user->get_info().user_id.id;
   c_obj.size_in_bytes = 20971520;
   c_obj.destination="http://128.31.25.83:8000"; 
-  c_obj.loc = 2;
   s->obj_size = 20971520;
 
   dir_val.bucket_name = s->bucket_name;
@@ -8278,16 +8277,17 @@ void RGWGetObj::directory_lookup()
 void RGWGetObj::cache_execute()
 {
   ldpp_dout(this, 10) << __func__  << dendl;
-  this->total_len = s->obj_size;
+  c_obj.size_in_bytes = 20971520;
+  s->obj_size = 20971520;
   this->total_len = 20971520;
-  
+  c_obj.destination="http://128.31.25.83:8000";
   c_obj.bucket_name = s->bucket_name;
   c_obj.obj_name = s->object.name;
   c_obj.user = s->user->get_info().user_id.id;
     
   int64_t ofs_x, end_x;
   ofs_x = 0;
-  end_x = dir_val.obj_size - 1;
+  end_x = c_obj.size_in_bytes - 1;
   RGWGetObj_CB cb(this);
   RGWGetObj_Filter* filter = (RGWGetObj_Filter *)&cb;
   
@@ -8295,7 +8295,6 @@ void RGWGetObj::cache_execute()
   RGWRados::Object op_target(store->getRados(), dest_bucket_info, *static_cast<RGWObjectCtx *>(s->obj_ctx), obj);
   RGWRados::Object::Read read_op(&op_target);
   
-  //op_ret = read_op.read_from_local(ofs_x, end_x, filter, dir_val.bucket_name, dir_val.obj_name, s->yield); 
   op_ret = read_op.read(ofs_x, end_x, filter, c_obj, s->yield); 
   if (op_ret >= 0)
     op_ret = filter->flush();

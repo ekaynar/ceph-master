@@ -147,6 +147,7 @@ Aio::OpFunc remote_aio_abstract(Op&& op, off_t obj_ofs, off_t read_ofs, uint64_t
   return [op = std::move(op), obj_ofs, read_ofs, read_len, dest, c] (Aio* aio, AioResult& r) mutable{
   auto& ref = r.obj.get_ref();
   c->prepare_op(ref.obj.oid, &r.data, read_len, obj_ofs, read_ofs, dest, aio, &r);
+  //c->submit_op();
   };
 }
 

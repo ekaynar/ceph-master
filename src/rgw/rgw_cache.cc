@@ -369,7 +369,7 @@ void DataCache::submit_remote_req(struct RemoteRequest *c){
 void DataCache::retrieve_obj_info(cache_obj& c_obj){
     ldout(cct, 0) << __func__ <<dendl;
     ldout(cct, 0) << c_obj.bucket_name <<dendl;
-    c_obj.loc = 2;
+    c_obj.loc = 1;
 
 }
 
@@ -473,7 +473,7 @@ void DataCache::put(bufferlist& bl, uint64_t len, string key){
 /*Remote S3 Request datacacahe*/
 int RemoteS3Request::submit_op() {
   ldout(cct, 10) << __func__  << " for block" <<  req->key << dendl;
-  real_time set_mtime;
+  /*real_time set_mtime;
   uint64_t expected_size = 0;
   bool prepend_metadata = true; 
   bool rgwx_stat = false;
@@ -490,7 +490,7 @@ int RemoteS3Request::submit_op() {
   ret = req->conn->complete_request(req->in_stream_req, nullptr, &set_mtime, &expected_size, nullptr, nullptr);
   if (ret < 0 ){
      ldout(cct, 10) << __func__  <<"not complete_reque ugur" << dendl;
-  req->r->result = -1;
+  req->r->result = 0;
   req->aio->put(*(req->r));
     return ret;
   }
@@ -499,7 +499,8 @@ int RemoteS3Request::submit_op() {
   ldout(cct, 10) << __func__  <<req->ofs << dendl;
   req->r->result = 0;
   req->aio->put(*(req->r));
-  return 0;
+  return 0;*/
+  return req->submit_op();
 }
 
 void RemoteS3Request::run() {
@@ -509,12 +510,12 @@ void RemoteS3Request::run() {
   int retries = 10;
   int r = 0;
   for (int i=0; i<retries; i++ ){
-    if(!(r = submit_op())){
+    if(!(r = req->submit_op())){
 	ldout(cct, 10) <<" after run func"  <<dendl;
       //req->cb->bl = std::move(req->cb->pbl);
-      //req->r->result = 0;
-      //req->aio->put(*(req->r));
-      req->finish();
+//      req->r->result = 0;
+ //    req->aio->put(*(req->r));
+	req->finish();
       return;
     }
     ldout(cct, 10) <<"failed"<< req->key  <<dendl;

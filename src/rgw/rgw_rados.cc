@@ -6300,7 +6300,7 @@ struct get_obj_data {
     completed.merge(results, cmp); // merge results in sorted order
 
     CephContext *cct = store->ctx();
-    ldout(cct, 4) << "ugur flush1 " << offset << dendl;
+    ldout(cct, 4) << "ugur flush1 " << offset << " " <<completed.front().id <<dendl;
     while (!completed.empty() && completed.front().id == offset) {
       auto bl = std::move(completed.front().data);
       completed.pop_front_and_dispose(std::default_delete<rgw::AioResultEntry>{});
@@ -9216,8 +9216,14 @@ int RGWRados::get_local_obj_iterate_cb(const rgw_raw_obj& read_obj, string key, 
   op.read(read_ofs, read_len, nullptr, nullptr);
   svc.cache->get_datacache().retrieve_obj_info(c_obj); 
   // local read
+  c_obj.loc =1;
   if (c_obj.loc == 0){
-    auto completed = d->aio->get(obj, rgw::Aio::cache_op(std::move(op) , d->yield, obj_ofs, read_ofs, read_len), cost, id);
+     rgw_pool pool("default.rgw.buckets.data");
+     rgw_raw_obj read_obj1(pool,key);
+     auto obj1 = d->store->svc.rados->obj(read_obj1);
+     int ret = obj1.open();
+
+    auto completed = d->aio->get(obj1, rgw::Aio::cache_op(std::move(op) , d->yield, obj_ofs, read_ofs, read_len), cost, id);
     return d->flush(std::move(completed));
   }
 
@@ -9228,12 +9234,16 @@ int RGWRados::get_local_obj_iterate_cb(const rgw_raw_obj& read_obj, string key, 
     bucket.name = c_obj.bucket_name;
     rgw_obj src_obj(bucket, c_obj.obj_name); 
     RemoteRequest *c =  new RemoteRequest(src_obj, &c_obj, store, cct);
-    auto completed = d->aio->get(obj, rgw::Aio::remote_op(std::move(op) , d->yield, obj_ofs, obj_ofs, read_len, c_obj.destination, c), cost, id);
+     rgw_pool pool("default.rgw.buckets.data");
+     rgw_raw_obj read_obj1(pool,key);
+     auto obj1 = d->store->svc.rados->obj(read_obj1);
+     int ret = obj1.open();
+    auto completed = d->aio->get(obj1, rgw::Aio::remote_op(std::move(op) , d->yield, obj_ofs, read_ofs, read_len, c_obj.destination, c), cost, id);
 //    c->conn = conn;
-    dout(10) << __func__  << c->key <<" aio ugur "  << c->read_len << dendl;
+    dout(10) << __func__  << c->key <<" aio ugur "  << c->read_len << " id "<< id << dendl;
 //    int aa = c->submit_op();
     svc.cache->get_datacache().submit_remote_req(c);
-    //sleep(5);
+ //   sleep(2);
     return d->flush(std::move(completed));
   }
 // osd read

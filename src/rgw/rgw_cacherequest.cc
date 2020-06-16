@@ -24,7 +24,7 @@ class RGWRadosGetObj2 : public RGWHTTPStreamRWRequest::ReceiveCB
   int handle_data(bufferlist& bl, bool *pause) override {
     uint64_t size = bl.length();
     chunk_buffer.append(bl);
-    ldout(cct, 0) << "RGWRadosGetObj1 length()" << bl.length()  <<dendl;
+    ldout(cct, 0) << "RGWRadosGetObj1 length()" << bl.length() <<"id "<< r->id <<dendl;
     if (chunk_buffer.length() >= chunk_size){
       bufferlist tmp;
       //chunk_buffer.splice(0, chunk_size, &tmp);
@@ -35,7 +35,7 @@ class RGWRadosGetObj2 : public RGWHTTPStreamRWRequest::ReceiveCB
       aio->put(*(r));
   //req->aio->put(*(req->r));
       ldout(cct, 0) << "RGWRadosGetObj2 length()" << pbl->length()  <<dendl;
-      ldout(cct, 0) << "RGWRadosGetObj2 length()" << r->data.length()  <<dendl;
+      ldout(cct, 0) << "RGWRadosGetObj2 length()" << r->data.length() << "id "<< r->id <<dendl;
       //int ret = store->put_data(key, tmp , tmp.length());
     }
     return 0;

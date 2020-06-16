@@ -27,7 +27,7 @@
 #include <aio.h>
 #include "rgw_threadpool.h"
 #include "rgw_cacherequest.h"
-
+#include <curl/curl.h>
 struct DataCache;
 class CacheThreadPool;
 //struct RemoteRequest;
@@ -283,6 +283,9 @@ public:
   virtual void run();
 private:
   int submit_op();
+  string sign_s3_request(string HTTP_Verb, string uri, string date, string YourSecretAccessKeyID, string AWSAccessKeyId);
+  int submit_http_get_request_s3();
+  string get_date();
  private:
   pthread_mutex_t qmtx;
   pthread_cond_t wcond;

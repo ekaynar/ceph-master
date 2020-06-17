@@ -6300,11 +6300,9 @@ struct get_obj_data {
     completed.merge(results, cmp); // merge results in sorted order
 
     CephContext *cct = store->ctx();
-    ldout(cct, 4) << "ugur flush1 " << offset << " " <<completed.front().id <<dendl;
     while (!completed.empty() && completed.front().id == offset) {
       auto bl = std::move(completed.front().data);
       completed.pop_front_and_dispose(std::default_delete<rgw::AioResultEntry>{});
-      ldout(cct, 4) << "ugur flush2 " << offset << dendl;
       offset += bl.length();
       string key = get_pending_key();
       int r = client_cb->handle_data(bl, 0, bl.length());
@@ -9216,13 +9214,13 @@ int RGWRados::get_local_obj_iterate_cb(const rgw_raw_obj& read_obj, string key, 
   op.read(read_ofs, read_len, nullptr, nullptr);
   svc.cache->get_datacache().retrieve_obj_info(c_obj); 
   // local read
+  //retrieve_obj_acls(c_obj);
   c_obj.loc =1;
   if (c_obj.loc == 0){
-     rgw_pool pool("default.rgw.buckets.data");
-     rgw_raw_obj read_obj1(pool,key);
-     auto obj1 = d->store->svc.rados->obj(read_obj1);
-     int ret = obj1.open();
-
+    rgw_pool pool("default.rgw.buckets.data");
+    rgw_raw_obj read_obj1(pool,key);
+    auto obj1 = d->store->svc.rados->obj(read_obj1);
+    int ret = obj1.open();
     auto completed = d->aio->get(obj1, rgw::Aio::cache_op(std::move(op) , d->yield, obj_ofs, read_ofs, read_len), cost, id);
     return d->flush(std::move(completed));
   }
@@ -9234,19 +9232,15 @@ int RGWRados::get_local_obj_iterate_cb(const rgw_raw_obj& read_obj, string key, 
     bucket.name = c_obj.bucket_name;
     rgw_obj src_obj(bucket, c_obj.obj_name); 
     RemoteRequest *c =  new RemoteRequest(src_obj, &c_obj, store, cct);
-     rgw_pool pool("default.rgw.buckets.data");
-     rgw_raw_obj read_obj1(pool,key);
-     auto obj1 = d->store->svc.rados->obj(read_obj1);
-     int ret = obj1.open();
+    rgw_pool pool("default.rgw.buckets.data");
+    rgw_raw_obj read_obj1(pool,key);
+    auto obj1 = d->store->svc.rados->obj(read_obj1);
+    int ret = obj1.open();
     auto completed = d->aio->get(obj1, rgw::Aio::remote_op(std::move(op) , d->yield, obj_ofs, read_ofs, read_len, c_obj.destination, c), cost, id);
-//    c->conn = conn;
-    dout(10) << __func__  << c->key <<" aio ugur "  << c->read_len << " id "<< id << dendl;
-//    int aa = c->submit_op();
     svc.cache->get_datacache().submit_remote_req(c);
- //   sleep(2);
     return d->flush(std::move(completed));
   }
-// osd read
+  // osd read
   else if(c_obj.loc == 2){
     rgw_raw_obj read_obj;
     int r = retrieve_oid(c_obj, read_obj, obj_ofs, d->yield);
@@ -9255,7 +9249,83 @@ int RGWRados::get_local_obj_iterate_cb(const rgw_raw_obj& read_obj, string key, 
     auto completed = d->aio->get(obj, rgw::Aio::librados_op(std::move(op), d->yield), cost, id);
     return d->flush(std::move(completed));
   }
+
+  // read from backend
 } 
+
+
+int RGWRados::retrieve_obj_acls(cache_obj& c_obj){
+  RGWRESTStreamRWRequest *in_stream_req;
+  list<string> endpoints;
+  endpoints.push_back(c_obj.destination);
+
+  rgw_user user_id(c_obj.user);
+  rgw_bucket bucket;
+  bucket.name = c_obj.bucket_name;
+  rgw_obj src_obj(bucket, c_obj.obj_name);
+  map<string, bufferlist> src_attrs;
+
+  RGWRESTConn *conn = new RGWRESTConn(this->cct, nullptr, "", endpoints, c_obj.accesskey);
+  RGWGetExtraDataCB cb;
+  real_time set_mtime;
+  uint64_t *psize;
+  map<string, string> *pheaders;
+  map<string, bufferlist> *pattrs;
+  string *petag;
+
+  bool prepend_metadata = true;
+  bool rgwx_stat = true;
+  bool skip_decrypt =true;
+  bool get_op = true;
+  bool sync_manifest =true;
+
+  int ret = conn->get_obj(user_id, NULL, src_obj, NULL, NULL,
+      NULL, NULL, prepend_metadata, get_op, rgwx_stat,
+      sync_manifest, skip_decrypt,
+      true, &cb, &in_stream_req);
+
+  if (ret < 0 )
+    return ret;
+  ret = conn->complete_request(in_stream_req, nullptr, &set_mtime, nullptr, nullptr, pheaders);
+  if (ret < 0 )
+    return ret;
+
+  bufferlist& extra_data_bl = cb.get_extra_data();
+  if (extra_data_bl.length()) {
+    JSONParser jp;
+    if (!jp.parse(extra_data_bl.c_str(), extra_data_bl.length())) {
+      ldout(cct, 0) << "failed to parse response extra data. len=" << extra_data_bl.length() << " data=" << extra_data_bl.c_str() << dendl;
+      return -EIO;
+    }
+
+    JSONDecoder::decode_json("attrs", src_attrs, &jp);
+
+    src_attrs.erase(RGW_ATTR_MANIFEST); // not interested in original object layout
+  }
+
+
+  if (petag) {
+    map<string, bufferlist>::iterator iter = src_attrs.find(RGW_ATTR_ETAG);
+    if (iter != src_attrs.end()) {
+      bufferlist& etagbl = iter->second;
+      *petag = etagbl.to_str();
+      while (petag->size() > 0 && (*petag)[petag->size() - 1] == '\0') {
+	*petag = petag->substr(0, petag->size() - 1);
+      }
+    }
+  }
+  
+
+  if (pattrs) {
+    *pattrs = std::move(src_attrs);
+  }
+
+  return 0;
+
+
+
+}
+
 
 int RGWRados::iterate_local_obj(RGWObjectCtx& obj_ctx, const rgw_obj& obj, cache_obj& c_obj, off_t ofs, off_t end, uint64_t max_chunk_size, iterate_local_obj_cb cb, void *arg, optional_yield y, RGWRados *store){
   dout(10) << __func__  <<dendl;
@@ -9265,6 +9335,9 @@ int RGWRados::iterate_local_obj(RGWObjectCtx& obj_ctx, const rgw_obj& obj, cache
   string key = c_obj.bucket_name+"_"+c_obj.obj_name+"_";    
   rgw_pool pool("default.rgw.buckets.data");
   rgw_raw_obj read_obj(pool,c_obj.obj_name);
+
+
+
 
   //Calculate_chunk_id
   chunk_id = 0;
@@ -9304,30 +9377,13 @@ int RGWRados::Object::Read::fetch_from_backend(RGWGetDataCB *cb, string owner, s
   return r;
 }
 
-/*
-int RGWRados::remote_request(cache_obj& c_obj){
-  rgw_user user_id(c_obj.user);
-  rgw_bucket bucket;
-  bucket.name = c_obj.bucket_name;
-  rgw_obj src_obj(bucket, c_obj.obj_name);
-  const string tenant_id="";
-  list<string> endpoints;
-  endpoints.push_back(c_obj.destination);
-  RGWRESTConn *conn = new RGWRESTConn(cct, this->store->svc()->zone, tenant_id, endpoints, c_obj.accesskey);
-  RGWRadosGetObj *cb = new RGWRadosGetObj(cct, store);
-  RGWRESTStreamRWRequest *in_stream_req;
-  RemoteRequest *c =  new RemoteRequest(src_obj,cb);
-
-
-}
-*/
 int RGWRados::retrieve_oid(cache_obj& c_obj, rgw_raw_obj& read_obj, uint64_t obj_ofs, optional_yield y){
   dout(10) << __func__  << " " << c_obj.bucket_name << " " << c_obj.obj_name<< " " << obj_ofs << dendl;
   RGWBucketInfo bucket_info;
   map<string, bufferlist> bucket_attrs;
   int r = get_bucket_info(&svc, "", c_obj.bucket_name, bucket_info, NULL, null_yield, &bucket_attrs);
   rgw_raw_obj head_obj;
-  
+
   rgw_obj obj(bucket_info.bucket,c_obj.obj_name);
   RGWObjectCtx obj_ctx(this->store);
   RGWObjState *astate = NULL;
@@ -9340,385 +9396,378 @@ int RGWRados::retrieve_oid(cache_obj& c_obj, rgw_raw_obj& read_obj, uint64_t obj
 }
 
 int RGWRados::create_bucket(RGWRados *store, string userid, string dest_bucket_name, CephContext *cct, RGWBucketInfo& bucket_info, map<string, bufferlist>& bucket_attrs, RGWAccessKey& accesskey){
-  ldout(cct, 0) << "Bucket creation ugur " << dest_bucket_name << " " << dendl;
+  ldout(cct, 0) <<__func__ << dest_bucket_name << " " << dendl;
   RGWObjectCtx obj_ctx2(this->store);
-  //  int r = store->get_bucket_info(obj_ctx2, "", dest_bucket_name, bucket_info, NULL, &bucket_attrs);
-  int r =-1;
-  if (r < 0) {
-    //    if (r == -ENOENT) {
-    if (true){
-      RGWObjectCtx obj_ctx(this->store);
-      ldout(cct, 0) << "Bucket does not exist " << dest_bucket_name << " " << r << dendl;
-      string url ="http://localhost:8000";
-      string etag;
-      HostStyle host_style = PathStyle;
-      param_vec_t bucket_headers;
-      //      bucket_headers.push_back(pair<string, string>("Content-Length", "0"));
-      RGWRESTStreamS3PutObj *bucket_wr = new RGWRESTStreamS3PutObj(cct, "PUT", url, &bucket_headers, NULL, host_style);
-
-      map<string, bufferlist> bucket_attrs2;
-      const string d_bucket_name = "";
-      rgw_bucket dest_bucket;
-      dest_bucket.tenant = userid;
-      dest_bucket.name = dest_bucket_name;
-      rgw_obj dest_bucket_obj(dest_bucket, d_bucket_name);
-      int ret = bucket_wr->put_obj_init(accesskey, dest_bucket_obj, 0, bucket_attrs2, true);
-      if (ret < 0) {
-	delete bucket_wr;
-      }
-      ret = bucket_wr->complete_request(&etag, nullptr);
-      if (ret < 0)
-	return r;
-      else {
-	ret = get_bucket_info(&svc, "", dest_bucket_name, bucket_info, NULL, null_yield, &bucket_attrs);
-	ldout(cct, 0) << "store get ugur " << ret << dendl;
-	return ret;}
-    }
-  }
-  return 0;
-  }
-
-  // Returns user's S3 Access and Secret Key
-  int RGWRados::get_s3_credentials(RGWRados *store, string userid, RGWAccessKey& s3_key){
-    RGWObjVersionTracker objv_tracker;
-    RGWObjectCtx obj_ctx(this->store);
-    RGWUserInfo info;
-    rgw_user user_id(userid);
-    int ret = rgw_get_user_info_by_uid(this->store->ctl()->user, user_id , info, &objv_tracker, NULL, NULL, NULL);
-    if (ret < 0)
-      return ret;
-    map<string, RGWAccessKey>::iterator kiter;
-    for (kiter = info.access_keys.begin(); kiter != info.access_keys.end(); ++kiter) {
-      RGWAccessKey& k = kiter->second;
-      s3_key.id=k.id;
-      s3_key.key = k.key;
-    }
-    dout(10) << __func__ << " s3 key ="  << s3_key.key << dendl;
-    return 0;
-  }
-
-  int RGWRados::fetch_remote(RGWRados *store, string userid, string dest_bucket_name, string dest_obj_name, string backend, RGWGetDataCB *client_cb, RGWObjectCtx& obj_ctx ){
-    ldout(cct, 0) <<  __func__ << " userid " << userid
-      << " bucket name " << dest_bucket_name
-      << " object name "  << dest_obj_name
-      << " backend "  << backend << dendl;
-
-    bool copy_if_newer =true;
-
-    // Get S3 Credentials of the user
-    rgw_user user_id(userid);
-    RGWAccessKey accesskey;
-    int ret = get_s3_credentials(store, userid, accesskey);
-
-    // init op
-    RGWBucketInfo dest_bucket_info;
-    RGWObjState * dest_state = nullptr;
-    map<string, bufferlist> dest_attrs;
-    ret = create_bucket(store, userid, dest_bucket_name, cct, dest_bucket_info, dest_attrs, accesskey);
-    rgw_obj dest_obj(dest_bucket_info.bucket, dest_obj_name);
-    rgw_obj src_obj(dest_bucket_info.bucket, dest_obj_name);
-    ret = get_obj_state(&obj_ctx, dest_bucket_info, dest_obj, &dest_state, false, null_yield);
-
-    rgw_obj shadow_obj = dest_obj;
-    string shadow_oid;
-    append_rand_alpha(cct, dest_obj.get_oid(), shadow_oid, 32);
-    shadow_obj.init_ns(dest_obj.bucket, shadow_oid, shadow_ns);
-
-    string tag;
-    append_rand_alpha(cct, tag, tag, 32);
-    obj_time_weight set_mtime_weight;
-    set_mtime_weight.high_precision = false;
-
-    rgw::BlockingAioThrottle aio(cct->_conf->rgw_put_obj_min_window_size);
-    using namespace rgw::putobj;
-    const DoutPrefixProvider * dpp;
-    AtomicObjectProcessor processor(&aio, this->store, dest_bucket_info, nullptr, user_id,
-	obj_ctx, dest_obj, 0, tag, dpp, null_yield);
-
-    boost::optional<RGWPutObj_Compress> compressor;
-    CompressorRef plugin;
-
-    RGWFetchObjFilter *filter = nullptr;
-    RGWFetchObjFilter_Default source_filter;
-    if (!filter) {
-      filter = &source_filter;
-    }
-
-    obj_ctx.set_atomic(dest_obj);
-    const string tenant_id="";
-    list<string> endpoints;
-    endpoints.push_back("http://128.31.25.83:8000");
-    RGWRESTConn *conn = new RGWRESTConn(cct, this->store->svc()->zone, tenant_id, endpoints, accesskey);
-    RGWRESTStreamRWRequest *in_stream_req;
-
-
-    std::optional<rgw_placement_rule> dest_placement_rule;
-    std::optional<rgw_user> override_owner;
-    void *progress_data = NULL ;
-    void (*progress_cb)(off_t, void *) = NULL;
-    RGWRadosPutObj cb(cct, plugin, compressor, &processor, progress_cb, progress_data, client_cb, this->store->getRados(), 
-	[&](map<string, bufferlist>& obj_attrs){
-
-	const rgw_placement_rule *ptail_rule;
-
-	int ret = filter->filter(cct,
-	    src_obj.key,
-	    dest_bucket_info,
-	    dest_bucket_info.placement_rule,
-	    obj_attrs,
-	    &override_owner,
-	    &ptail_rule);
-	if (ret < 0) {
-	ldout(cct, 5) << "Aborting fetch: source object filter returned ret=" << ret << dendl;
-	return ret;
-	}
-
-	processor.set_tail_placement(*ptail_rule);
-
-	const auto& compression_type = svc.zone->get_zone_params().get_compression_type(*ptail_rule);
-	if (compression_type != "none") {
-	  plugin = Compressor::create(cct, compression_type);
-	  if (!plugin) {
-	    ldout(cct, 1) << "Cannot load plugin for compression type "
-	      << compression_type << dendl;
-	  }
-	}
-
-	ret = processor.prepare(null_yield);
-	if (ret < 0) {
-	  return ret;
-	}
-	return 0;
-	});
-    string name = dest_bucket_name + "_" + dest_obj_name;
-    cb.set_name(name);
+  //    if (r == -ENOENT) {
+  if (true){
+    string url ="http://localhost:8000";
     string etag;
-    real_time set_mtime;
-    const real_time *pmod = NULL;
-    uint64_t expected_size = 0;
-
-    obj_time_weight dest_mtime_weight;
-
-    if (copy_if_newer) {
-      /* need to get mtime for destination */
-      ret = get_obj_state(&obj_ctx, dest_bucket_info, dest_obj, &dest_state, false, null_yield);
-      ldout(cct, 5) << "copy_if_newer "<< ret << dendl;
-      if (ret < 0)
-	return ret;
-
-      if (!real_clock::is_zero(dest_state->mtime)) {
-	dest_mtime_weight.init(dest_state);
-	pmod = &dest_mtime_weight.mtime;
-      }
-    } 
-    static constexpr bool prepend_meta = true;
-    static constexpr bool get_op = true;
-    static constexpr bool rgwx_stat = false;
-    static constexpr bool sync_manifest = true;
-    static constexpr bool skip_decrypt = true;
-    ret = conn->get_obj(user_id, NULL, src_obj, pmod, NULL,
-	dest_mtime_weight.zone_short_id, dest_mtime_weight.pg_ver,
-	prepend_meta, get_op, rgwx_stat,
-	sync_manifest, skip_decrypt,
-	true,
-	&cb, &in_stream_req);
-
-    if (ret < 0 )
-      return ret;
-
-    ret = conn->complete_request(in_stream_req, &etag, &set_mtime, &expected_size, nullptr, nullptr);
-
-    dout(10)  << "after get_obj  ugur etag " << etag << dendl;
-    if (ret < 0)
-      return ret;
-    ret = cb.flush();
-    if (ret < 0)
-      return ret;
-
-
-    cb.get_attrs().erase(RGW_ATTR_APPEND_PART_NUM);
-    map<string, bufferlist> dest_obj_attrs = cb.get_attrs();
-    if (copy_if_newer) {
-      uint64_t pg_ver = 0;
-      auto i = dest_obj_attrs.find(RGW_ATTR_PG_VER);
-      if (i != dest_obj_attrs.end() && i->second.length() > 0) {
-	auto iter = i->second.cbegin();
-	try {
-	  decode(pg_ver, iter);
-	} catch (buffer::error& err) {
-	  ldout(ctx(), 0) << "ERROR: failed to decode pg ver attribute, ignoring" << dendl;
-	  /* non critical error */
-	}
-      }
-      set_mtime_weight.init(set_mtime, svc.zone->get_zone_short_id(), pg_ver);
-    }
-#define MAX_COMPLETE_RETRY 100
-    int i;
-    for (i = 0; i < MAX_COMPLETE_RETRY; i++) {
-      bool canceled = false;
-      ret = processor.complete(cb.get_data_len(), etag, NULL, set_mtime,
-	  dest_obj_attrs, real_time(), nullptr, nullptr, nullptr,
-	  nullptr, &canceled, null_yield);
-      ldout(ctx(), 0) << "processor complete"<< ret << dendl;
-      if (ret < 0)
-	return ret;
-      //return 0;
-
-      if (copy_if_newer && canceled) {
-	ldout(cct, 20) << "raced with another write of obj: " << dest_obj << dendl;
-	obj_ctx.invalidate(dest_obj); /* object was overwritten */
-	ret = get_obj_state(&obj_ctx, dest_bucket_info, dest_obj, &dest_state, false, null_yield);
-	if (ret < 0) {
-	  ldout(cct, 0) << "ERROR: " << __func__ << ": get_err_state() returned ret=" << ret << dendl;
-	  return ret;
-	}
-	dest_mtime_weight.init(dest_state);
-	dest_mtime_weight.high_precision = false;
-	if (!dest_state->exists ||
-	    dest_mtime_weight < set_mtime_weight) {
-	  ldout(cct, 20) << "retrying writing object mtime=" << set_mtime << " dest_state->mtime=" << dest_state->mtime << " dest_state->exists=" << dest_state->exists << dendl;
-	  continue;
-	} else {
-	  ldout(cct, 20) << "not retrying writing object mtime=" << set_mtime << " dest_state->mtime=" << dest_state->mtime << " dest_state->exists=" << dest_state->exists << dendl;
-	}
-      }
-      break;
-
-    }
-    if (i == MAX_COMPLETE_RETRY) {
-      ldout(cct, 0) << "ERROR: retried object completion too many times, something is wrong!" << dendl;
-      ret = -EIO;
-      goto set_err_state;
-    }
-
-    return 0;
-set_err_state:
-    if (copy_if_newer && ret == -ERR_NOT_MODIFIED) {
-      ldout(cct, 0) << "ERROR: fecth error state" <<dendl;
-      // we may have already fetched during sync of OP_ADD, but were waiting
-      // for OP_LINK_OLH to call set_olh() with a real olh_epoch
-      // we already have the latest copy
-    } else {
-      ret = 0;
-    }
-
-    return ret;
-
-  }
-
-  int RGWRados::copy_remote(RGWRados *store, string userid, string bucket_name, string obj_name, string location){
-
-    // Get S3 Credentials of the user
-    RGWAccessKey accesskey;
-    int ret = get_s3_credentials(store, userid, accesskey);
-    RGWBucketInfo src_bucket_info;
-    RGWBucketInfo dest_bucket_info;
-    RGWObjectCtx obj_ctx(this->store);
-    map<string, bufferlist> dest_attrs;
-    map<string, bufferlist> src_attrs;
-    const string src_tenant_name = "";
-    const string src_bucket_name = bucket_name;
-    const string src_obj_name = obj_name;
-    string url ="http://" + location;
-    string etag;
-
     HostStyle host_style = PathStyle;
-    ret = get_bucket_info(&svc, src_tenant_name, src_bucket_name, src_bucket_info, NULL, null_yield, &src_attrs);
-    rgw_obj src_obj(src_bucket_info.bucket, src_obj_name);
-    dest_bucket_info = src_bucket_info;
-    dest_attrs = src_attrs;
-    rgw_bucket dest_bucket = dest_bucket_info.bucket;
-    rgw_obj dest_obj(dest_bucket, src_obj_name);
-    uint64_t obj_size;
-
-    /*Create Bucket*/
-    ldout(cct, 20) << "ugur flush create bucket: " << url << " " << bucket_name <<obj_name << " " << src_bucket_name << dendl;
     param_vec_t bucket_headers;
-    //  bucket_headers.push_back(pair<string, string>("Content-Length", "0"));
+    //      bucket_headers.push_back(pair<string, string>("Content-Length", "0"));
     RGWRESTStreamS3PutObj *bucket_wr = new RGWRESTStreamS3PutObj(cct, "PUT", url, &bucket_headers, NULL, host_style);
-    const string s_bucket_name = "";
-    map<string, bufferlist> bucket_attrs;
-    rgw_obj dest_bucket_obj(dest_bucket, s_bucket_name);
-    ret = bucket_wr->put_obj_init(accesskey, dest_bucket_obj, 0, bucket_attrs, true);
+
+    map<string, bufferlist> bucket_attrs2;
+    const string d_bucket_name = "";
+    rgw_bucket dest_bucket;
+    dest_bucket.tenant = userid;
+    dest_bucket.name = dest_bucket_name;
+    rgw_obj dest_bucket_obj(dest_bucket, d_bucket_name);
+    int ret = bucket_wr->put_obj_init(accesskey, dest_bucket_obj, 0, bucket_attrs2, true);
     if (ret < 0) {
       delete bucket_wr;
     }
     ret = bucket_wr->complete_request(&etag, nullptr);
-
-    /*Create Object*/
-    ldout(cct, 20) << "ugur flush object: " << src_obj_name << dendl;
-    RGWRados::Object src_op_target(store, src_bucket_info, obj_ctx, src_obj);
-    RGWRados::Object::Read read_op(&src_op_target);
-    read_op.params.attrs = &src_attrs;
-    read_op.params.obj_size = &obj_size;
-    ret = read_op.prepare(null_yield);
-    if (ret < 0) { return -1;}
-
-    RGWObjState *astate = NULL;
-    //  ret = store->get_obj_state(&obj_ctx, src_bucket_info, src_obj, &astate, NULL);
-    ret =  get_obj_state(&obj_ctx, src_bucket_info, src_obj, &astate, false, null_yield);
-    param_vec_t headers;
-    headers.push_back(pair<string, string>("Content-Length", std::to_string(astate->size)));
-    RGWRESTStreamS3PutObj *wr = new RGWRESTStreamS3PutObj(cct, "PUT", url, &headers, NULL, host_style);
-    ret = wr->put_obj_init(accesskey, dest_obj, astate->size, src_attrs, true);
-    if (ret < 0) {
-      delete wr;
-    }
-
-    ret = read_op.iterate(0, astate->size - 1, wr->get_out_cb(), null_yield);
-    if (ret < 0) {
-      delete wr;
-    }
-    ret = wr->complete_request(&etag, nullptr);
-    if (ret < 0 ){
-      return -1;
-    }
+    if (ret < 0)
+      return ret;
     else {
-      // DeleteObjWB(store, userid, src_bucket_name, src_obj_name, cct);
-      // fetch_remote(store, userid, "kaynar", "file.txt", cct);
-      return 0;
+      ret = get_bucket_info(&svc, "", dest_bucket_name, bucket_info, NULL, null_yield, &bucket_attrs);
+      return ret;
     }
+  }
+  return 0;
+}
 
+// Returns user's S3 Access and Secret Key
+int RGWRados::get_s3_credentials(RGWRados *store, string userid, RGWAccessKey& s3_key){
+  RGWObjVersionTracker objv_tracker;
+  RGWObjectCtx obj_ctx(this->store);
+  RGWUserInfo info;
+  rgw_user user_id(userid);
+  int ret = rgw_get_user_info_by_uid(this->store->ctl()->user, user_id , info, &objv_tracker, NULL, NULL, NULL);
+  if (ret < 0)
+    return ret;
+  map<string, RGWAccessKey>::iterator kiter;
+  for (kiter = info.access_keys.begin(); kiter != info.access_keys.end(); ++kiter) {
+    RGWAccessKey& k = kiter->second;
+    s3_key.id=k.id;
+    s3_key.key = k.key;
+  }
+  dout(10) << __func__ << " s3 key ="  << s3_key.key << dendl;
+  return 0;
+}
+
+int RGWRados::fetch_remote(RGWRados *store, string userid, string dest_bucket_name, string dest_obj_name, string backend, RGWGetDataCB *client_cb, RGWObjectCtx& obj_ctx ){
+  ldout(cct, 0) <<  __func__ << " userid " << userid
+    << " bucket name " << dest_bucket_name
+    << " object name "  << dest_obj_name
+    << " backend "  << backend << dendl;
+
+  bool copy_if_newer =true;
+
+  // Get S3 Credentials of the user
+  rgw_user user_id(userid);
+  RGWAccessKey accesskey;
+  int ret = get_s3_credentials(store, userid, accesskey);
+
+  // init op
+  RGWBucketInfo dest_bucket_info;
+  RGWObjState * dest_state = nullptr;
+  map<string, bufferlist> dest_attrs;
+  ret = create_bucket(store, userid, dest_bucket_name, cct, dest_bucket_info, dest_attrs, accesskey);
+  rgw_obj dest_obj(dest_bucket_info.bucket, dest_obj_name);
+  rgw_obj src_obj(dest_bucket_info.bucket, dest_obj_name);
+  ret = get_obj_state(&obj_ctx, dest_bucket_info, dest_obj, &dest_state, false, null_yield);
+
+  rgw_obj shadow_obj = dest_obj;
+  string shadow_oid;
+  append_rand_alpha(cct, dest_obj.get_oid(), shadow_oid, 32);
+  shadow_obj.init_ns(dest_obj.bucket, shadow_oid, shadow_ns);
+
+  string tag;
+  append_rand_alpha(cct, tag, tag, 32);
+  obj_time_weight set_mtime_weight;
+  set_mtime_weight.high_precision = false;
+
+  rgw::BlockingAioThrottle aio(cct->_conf->rgw_put_obj_min_window_size);
+  using namespace rgw::putobj;
+  const DoutPrefixProvider * dpp;
+  AtomicObjectProcessor processor(&aio, this->store, dest_bucket_info, nullptr, user_id,
+      obj_ctx, dest_obj, 0, tag, dpp, null_yield);
+
+  boost::optional<RGWPutObj_Compress> compressor;
+  CompressorRef plugin;
+
+  RGWFetchObjFilter *filter = nullptr;
+  RGWFetchObjFilter_Default source_filter;
+  if (!filter) {
+    filter = &source_filter;
   }
 
+  obj_ctx.set_atomic(dest_obj);
+  const string tenant_id="";
+  list<string> endpoints;
+  endpoints.push_back("http://128.31.25.83:8000");
+  RGWRESTConn *conn = new RGWRESTConn(cct, this->store->svc()->zone, tenant_id, endpoints, accesskey);
+  RGWRESTStreamRWRequest *in_stream_req;
 
 
-  int RGWRados::delete_cache_obj(RGWRados *store, string userid, string src_bucket_name, string src_obj_name){
-    dout(10) << __func__ << " bucket_name " << src_bucket_name << " ,object_name "<< src_obj_name <<dendl;
-    RGWObjectCtx obj_ctx(this->store);
-    RGWBucketInfo src_bucket_info;
-    const string src_tenant_name = "";
-    map<string, bufferlist> src_attrs;
-    rgw_user user_id(userid);
-    int ret = store->get_bucket_info(&svc, src_tenant_name, src_bucket_name, src_bucket_info, NULL, null_yield, &src_attrs);
-    rgw_obj src_obj(src_bucket_info.bucket, src_obj_name);
-    //Check here whether object exists or not
-    ///* check if obj exists, read orig attrs */
-    RGWRados::Object src_op_target(store, src_bucket_info, obj_ctx, src_obj);
-    RGWRados::Object::Read read_op(&src_op_target);
-    read_op.params.attrs = &src_attrs;
-    ret = read_op.prepare(null_yield);
-    if (ret < 0) { return -1;}
+  std::optional<rgw_placement_rule> dest_placement_rule;
+  std::optional<rgw_user> override_owner;
+  void *progress_data = NULL ;
+  void (*progress_cb)(off_t, void *) = NULL;
+  RGWRadosPutObj cb(cct, plugin, compressor, &processor, progress_cb, progress_data, client_cb, this->store->getRados(), 
+      [&](map<string, bufferlist>& obj_attrs){
 
-    obj_ctx.set_atomic(src_obj);
-    RGWRados::Object del_target(store, src_bucket_info, obj_ctx, src_obj);
-    RGWRados::Object::Delete del_op(&del_target);
-    del_op.params.versioning_status = src_bucket_info.versioning_status();
-    del_op.params.bucket_owner = src_bucket_info.owner;
+      const rgw_placement_rule *ptail_rule;
 
-    return  del_op.delete_obj(null_yield);
+      int ret = filter->filter(cct,
+	  src_obj.key,
+	  dest_bucket_info,
+	  dest_bucket_info.placement_rule,
+	  obj_attrs,
+	  &override_owner,
+	  &ptail_rule);
+      if (ret < 0) {
+      ldout(cct, 5) << "Aborting fetch: source object filter returned ret=" << ret << dendl;
+      return ret;
+      }
+
+      processor.set_tail_placement(*ptail_rule);
+
+      const auto& compression_type = svc.zone->get_zone_params().get_compression_type(*ptail_rule);
+      if (compression_type != "none") {
+	plugin = Compressor::create(cct, compression_type);
+	if (!plugin) {
+	  ldout(cct, 1) << "Cannot load plugin for compression type "
+	    << compression_type << dendl;
+	}
+      }
+
+      ret = processor.prepare(null_yield);
+      if (ret < 0) {
+	return ret;
+      }
+      return 0;
+      });
+  string name = dest_bucket_name + "_" + dest_obj_name;
+  cb.set_name(name);
+  string etag;
+  real_time set_mtime;
+  const real_time *pmod = NULL;
+  uint64_t expected_size = 0;
+
+  obj_time_weight dest_mtime_weight;
+
+  if (copy_if_newer) {
+    /* need to get mtime for destination */
+    ret = get_obj_state(&obj_ctx, dest_bucket_info, dest_obj, &dest_state, false, null_yield);
+    ldout(cct, 5) << "copy_if_newer "<< ret << dendl;
+    if (ret < 0)
+      return ret;
+
+    if (!real_clock::is_zero(dest_state->mtime)) {
+      dest_mtime_weight.init(dest_state);
+      pmod = &dest_mtime_weight.mtime;
+    }
+  } 
+  static constexpr bool prepend_meta = true;
+  static constexpr bool get_op = true;
+  static constexpr bool rgwx_stat = false;
+  static constexpr bool sync_manifest = true;
+  static constexpr bool skip_decrypt = true;
+  ret = conn->get_obj(user_id, NULL, src_obj, pmod, NULL,
+      dest_mtime_weight.zone_short_id, dest_mtime_weight.pg_ver,
+      prepend_meta, get_op, rgwx_stat,
+      sync_manifest, skip_decrypt,
+      true,
+      &cb, &in_stream_req);
+
+  if (ret < 0 )
+    return ret;
+
+  ret = conn->complete_request(in_stream_req, &etag, &set_mtime, &expected_size, nullptr, nullptr);
+
+  dout(10)  << "after get_obj  ugur etag " << etag << dendl;
+  if (ret < 0)
+    return ret;
+  ret = cb.flush();
+  if (ret < 0)
+    return ret;
+
+
+  cb.get_attrs().erase(RGW_ATTR_APPEND_PART_NUM);
+  map<string, bufferlist> dest_obj_attrs = cb.get_attrs();
+  if (copy_if_newer) {
+    uint64_t pg_ver = 0;
+    auto i = dest_obj_attrs.find(RGW_ATTR_PG_VER);
+    if (i != dest_obj_attrs.end() && i->second.length() > 0) {
+      auto iter = i->second.cbegin();
+      try {
+	decode(pg_ver, iter);
+      } catch (buffer::error& err) {
+	ldout(ctx(), 0) << "ERROR: failed to decode pg ver attribute, ignoring" << dendl;
+	/* non critical error */
+      }
+    }
+    set_mtime_weight.init(set_mtime, svc.zone->get_zone_short_id(), pg_ver);
+  }
+#define MAX_COMPLETE_RETRY 100
+  int i;
+  for (i = 0; i < MAX_COMPLETE_RETRY; i++) {
+    bool canceled = false;
+    ret = processor.complete(cb.get_data_len(), etag, NULL, set_mtime,
+	dest_obj_attrs, real_time(), nullptr, nullptr, nullptr,
+	nullptr, &canceled, null_yield);
+    ldout(ctx(), 0) << "processor complete"<< ret << dendl;
+    if (ret < 0)
+      return ret;
+    //return 0;
+
+    if (copy_if_newer && canceled) {
+      ldout(cct, 20) << "raced with another write of obj: " << dest_obj << dendl;
+      obj_ctx.invalidate(dest_obj); /* object was overwritten */
+      ret = get_obj_state(&obj_ctx, dest_bucket_info, dest_obj, &dest_state, false, null_yield);
+      if (ret < 0) {
+	ldout(cct, 0) << "ERROR: " << __func__ << ": get_err_state() returned ret=" << ret << dendl;
+	return ret;
+      }
+      dest_mtime_weight.init(dest_state);
+      dest_mtime_weight.high_precision = false;
+      if (!dest_state->exists ||
+	  dest_mtime_weight < set_mtime_weight) {
+	ldout(cct, 20) << "retrying writing object mtime=" << set_mtime << " dest_state->mtime=" << dest_state->mtime << " dest_state->exists=" << dest_state->exists << dendl;
+	continue;
+      } else {
+	ldout(cct, 20) << "not retrying writing object mtime=" << set_mtime << " dest_state->mtime=" << dest_state->mtime << " dest_state->exists=" << dest_state->exists << dendl;
+      }
+    }
+    break;
+
+  }
+  if (i == MAX_COMPLETE_RETRY) {
+    ldout(cct, 0) << "ERROR: retried object completion too many times, something is wrong!" << dendl;
+    ret = -EIO;
+    goto set_err_state;
   }
 
+  return 0;
+set_err_state:
+  if (copy_if_newer && ret == -ERR_NOT_MODIFIED) {
+    ldout(cct, 0) << "ERROR: fecth error state" <<dendl;
+    // we may have already fetched during sync of OP_ADD, but were waiting
+    // for OP_LINK_OLH to call set_olh() with a real olh_epoch
+    // we already have the latest copy
+  } else {
+    ret = 0;
+  }
 
-  // Cache operation
+  return ret;
 
-  int RGWRados::put_data(string key, bufferlist& bl, unsigned int len){
-    // store.svc.cache.datacache.name:q
-    dout(10) << __func__ << " local cache write "  << key << dendl;
-    svc.cache->get_datacache().put(bl,len,key); 
+}
 
+int RGWRados::copy_remote(RGWRados *store, cache_obj& c_obj){
+
+  // Get S3 Credentials of the user
+  RGWAccessKey accesskey;
+  int ret = get_s3_credentials(store, c_obj.user, c_obj.accesskey);
+  RGWBucketInfo src_bucket_info;
+  RGWBucketInfo dest_bucket_info;
+  RGWObjectCtx obj_ctx(this->store);
+  map<string, bufferlist> dest_attrs;
+  map<string, bufferlist> src_attrs;
+  const string src_tenant_name = "";
+  const string src_bucket_name = c_obj.bucket_name;
+  const string src_obj_name = c_obj.obj_name;
+  string url ="http://" + c_obj.destination;
+  string etag;
+
+  HostStyle host_style = PathStyle;
+  ret = get_bucket_info(&svc, src_tenant_name, src_bucket_name, src_bucket_info, NULL, null_yield, &src_attrs);
+  rgw_obj src_obj(src_bucket_info.bucket, src_obj_name);
+  dest_bucket_info = src_bucket_info;
+  dest_attrs = src_attrs;
+  rgw_bucket dest_bucket = dest_bucket_info.bucket;
+  rgw_obj dest_obj(dest_bucket, src_obj_name);
+  uint64_t obj_size;
+
+  /*Create Bucket*/
+  //ldout(cct, 20) << "ugur flush create bucket: " << url << " " << bucket_name <<obj_name << " " << src_bucket_name << dendl;
+  param_vec_t bucket_headers;
+  //  bucket_headers.push_back(pair<string, string>("Content-Length", "0"));
+  RGWRESTStreamS3PutObj *bucket_wr = new RGWRESTStreamS3PutObj(cct, "PUT", url, &bucket_headers, NULL, host_style);
+  const string s_bucket_name = "";
+  map<string, bufferlist> bucket_attrs;
+  rgw_obj dest_bucket_obj(dest_bucket, s_bucket_name);
+  ret = bucket_wr->put_obj_init(accesskey, dest_bucket_obj, 0, bucket_attrs, true);
+  if (ret < 0) {
+    delete bucket_wr;
+  }
+  ret = bucket_wr->complete_request(&etag, nullptr);
+
+  /*Create Object*/
+  ldout(cct, 20) << "ugur flush object: " << src_obj_name << dendl;
+  RGWRados::Object src_op_target(store, src_bucket_info, obj_ctx, src_obj);
+  RGWRados::Object::Read read_op(&src_op_target);
+  read_op.params.attrs = &src_attrs;
+  read_op.params.obj_size = &obj_size;
+  ret = read_op.prepare(null_yield);
+  if (ret < 0) { return -1;}
+
+  RGWObjState *astate = NULL;
+  //  ret = store->get_obj_state(&obj_ctx, src_bucket_info, src_obj, &astate, NULL);
+  ret =  get_obj_state(&obj_ctx, src_bucket_info, src_obj, &astate, false, null_yield);
+  param_vec_t headers;
+  headers.push_back(pair<string, string>("Content-Length", std::to_string(astate->size)));
+  RGWRESTStreamS3PutObj *wr = new RGWRESTStreamS3PutObj(cct, "PUT", url, &headers, NULL, host_style);
+  ret = wr->put_obj_init(accesskey, dest_obj, astate->size, src_attrs, true);
+  if (ret < 0) {
+    delete wr;
+  }
+
+  ret = read_op.iterate(0, astate->size - 1, wr->get_out_cb(), null_yield);
+  if (ret < 0) {
+    delete wr;
+  }
+  ret = wr->complete_request(&etag, nullptr);
+  if (ret < 0 ){
+    return -1;
+  }
+  else {
+    // DeleteObjWB(store, userid, src_bucket_name, src_obj_name, cct);
+    // fetch_remote(store, userid, "kaynar", "file.txt", cct);
     return 0;
   }
+
+}
+
+
+
+int RGWRados::delete_cache_obj(RGWRados *store, string userid, string src_bucket_name, string src_obj_name){
+  dout(10) << __func__ << " bucket_name " << src_bucket_name << " ,object_name "<< src_obj_name <<dendl;
+  RGWObjectCtx obj_ctx(this->store);
+  RGWBucketInfo src_bucket_info;
+  const string src_tenant_name = "";
+  map<string, bufferlist> src_attrs;
+  rgw_user user_id(userid);
+  int ret = store->get_bucket_info(&svc, src_tenant_name, src_bucket_name, src_bucket_info, NULL, null_yield, &src_attrs);
+  rgw_obj src_obj(src_bucket_info.bucket, src_obj_name);
+  //Check here whether object exists or not
+  ///* check if obj exists, read orig attrs */
+  RGWRados::Object src_op_target(store, src_bucket_info, obj_ctx, src_obj);
+  RGWRados::Object::Read read_op(&src_op_target);
+  read_op.params.attrs = &src_attrs;
+  ret = read_op.prepare(null_yield);
+  if (ret < 0) { return -1;}
+
+  obj_ctx.set_atomic(src_obj);
+  RGWRados::Object del_target(store, src_bucket_info, obj_ctx, src_obj);
+  RGWRados::Object::Delete del_op(&del_target);
+  del_op.params.versioning_status = src_bucket_info.versioning_status();
+  del_op.params.bucket_owner = src_bucket_info.owner;
+
+  return  del_op.delete_obj(null_yield);
+}
+
+
+// Cache operation
+
+int RGWRados::put_data(string key, bufferlist& bl, unsigned int len){
+  dout(10) << __func__ << " local cache write "  << key << dendl;
+  svc.cache->get_datacache().put(bl,len,key); 
+
+  return 0;
+}
 
 
 

@@ -2430,15 +2430,19 @@ enum CacheLocation {
 
 struct cache_obj{
   string user; // s3 username
-  string bucket_name; 
-  string obj_name;
+  string bucket_name; // s3 bucket name
+  string obj_name; //s3 
   RGWAccessKey accesskey;
   rgw_user user_id;
-  string destination;
+  string destination; // s3 operation location
   int loc;
-  CacheLocation cache_location;
-  uint64_t size_in_bytes;
+  CacheLocation cache_location; // 
+  uint64_t size_in_bytes; // s3 object size in bytes
+  uint64_t offset; // rados obj offset
+
 };
+
+
 /* datacache */
 
 

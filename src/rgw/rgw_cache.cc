@@ -615,7 +615,7 @@ void RemoteS3Request::run() {
   int r = 0;
   for (int i=0; i<retries; i++ ){
     if(!(r = submit_http_get_request_s3())){
-      //if(!(r = req->submit_op())){
+//      if(!(r = req->submit_op())){
       req->finish();
       return;
     }

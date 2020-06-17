@@ -8244,7 +8244,7 @@ void RGWGetObj::fetch_remote_execute()
 //  map<string, bufferlist> dest_attrs;
   RGWRados::Object op_target(store->getRados(), dest_bucket_info, *static_cast<RGWObjectCtx *>(s->obj_ctx), obj);
   RGWRados::Object::Read read_op(&op_target);
-  op_ret = read_op.fetch_from_backend(filter, dir_val.owner, dir_val.bucket_name, dir_val.obj_name, dir_val.location);
+  op_ret = read_op.fetch_from_backend(filter, objDir.owner, objDir.bucket_name, objDir.obj_name, objDir.location);
 }
 
 
@@ -8257,19 +8257,19 @@ void RGWGetObj::directory_lookup()
   c_obj.destination="http://128.31.25.83:8000"; 
   s->obj_size = 20971520;
 
-  dir_val.bucket_name = s->bucket_name;
-  dir_val.obj_name = s->object.name;
-  dir_val.key = s->bucket_name +"_"+s->object.name;
-  ldpp_dout(this, 10) << __func__ << this->dir_val.key  << dendl;
+  objDir.bucket_name = s->bucket_name;
+  objDir.obj_name = s->object.name;
+  objDir.key = s->bucket_name +"_"+s->object.name;
+  ldpp_dout(this, 10) << __func__ << this->objDir.key  << dendl;
   ldpp_dout(this, 10) << __func__ << this->c_obj.user  << dendl;
-  //int ret = store->getRados()->directory.getMetaValue(this->dir_val);
-  dir_val.location = "readcache";
+  //int ret = store->getRados()->objDirectory.getValue(this->objDir);
+  objDir.location = "readcache";
 
-  dir_val.owner = "testuser";
-  dir_val.obj_size = 20971520;
- /* if (this->dir_val.location == "cache") {
+  objDir.owner = "testuser";
+  objDir.obj_size = 20971520;
+ /* if (this->objDir.location == "cache") {
     ldpp_dout(this, 10) << "data in cache" << dendl;
-  } else if (this->dir_val.location == "datalake") {
+  } else if (this->objDir.location == "datalake") {
     ldpp_dout(this, 10) << "data in datalake" << dendl;
   }*/
 }

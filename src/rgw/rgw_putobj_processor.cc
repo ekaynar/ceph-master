@@ -327,14 +327,23 @@ int AtomicObjectProcessor::complete(size_t accounted_size,
     writer.clear_written();
     
     /* datacache */
-    string s3_bucket_name = op_target.get_obj().bucket.name;
-    string s3_object_name = op_target.get_obj().key.name;
-    string s3_userid =  op_target.get_bucket_info().owner.id;
+    objectDirectory_t objDir;
+
+    objDir->bucket_name = op_target.get_obj().bucket.name;
+    objDir->obj_name = op_target.get_obj().key.name;
+    objDir->owner =  op_target.get_bucket_info().owner.id;
+    objDir->backendProtocol =  "s3";
 
     time_t rawTime = time (NULL);
-    string keyTime = asctime(gmtime(&rawTime));
-    string key = s3_bucket_name+"_"+s3_object_name;
-    r = store->getRados()->directory.setMetaValue(key, keyTime, s3_bucket_name, s3_object_name, "writecache", s3_userid, manifest.get_obj_size(), etag);
+    objDir.createTime = asctime(gmtime(&rawTime));
+    objDir.lastAccessTime = asctime(gmtime(&rawTime));
+    objDir.key = s3_bucket_name+"_"+s3_object_name;
+    objDir.location = "writecache";
+    objDir.size = manifest.get_obj_size();
+    objDir.dirty = 0;
+    objDir.etag = etag;
+    //r = store->getRados()->directory.setMetaValue(key, keyTime, s3_bucket_name, s3_object_name, "writecache", s3_userid, manifest.get_obj_size(), etag);
+    r = store->getRados()->objDirectory.setValue(&objDir);
     /* datacache */
 
 

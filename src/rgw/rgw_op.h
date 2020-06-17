@@ -60,7 +60,7 @@
 using ceph::crypto::SHA1;
 
 struct req_state;
-struct directory_values; //datacache
+//struct objectDirectory_t; //datacache
 class RGWOp;
 class RGWRados;
 
@@ -196,7 +196,8 @@ public:
   virtual void cache_execute() {} 
   virtual void directory_lookup() {} 
   cache_obj c_obj;
-  directory_values dir_val;
+  objectDirectoryStruct_t objDir;
+  RGWObjectDirectory objectDirectory;
   /*datacache*/
   virtual void send_response() {}
   virtual void complete() {

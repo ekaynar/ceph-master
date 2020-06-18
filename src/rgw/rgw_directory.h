@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <sys/types.h>
 #include <sstream>
-
+#include "rgw_common.h"
 
 #include <string>
 #include <iostream>
@@ -18,6 +18,7 @@ using namespace std;
  * you can add or remove some of the fields based on
  * your required caching policy
  */
+/*
 typedef struct objDirectoryStruct {
     string key; //bucketID_ObjectID
     string owner;
@@ -49,22 +50,29 @@ typedef struct cacheStatDirectoryStruct {
     uint64_t capacity;
     string ID;
 }cacheStatDirectoryStruct_t;
-
+*/
 class RGWDirectory{
 public:
   RGWDirectory() {}
-  ~RGWDirectory() {}
-  virtual int getValue(void *ptr);
-  virtual int setValue(void *ptr);
+  virtual ~RGWDirectory(){ cout << "RGW Directory is destroyed!";}
+  virtual int getValue(cache_obj *ptr);
+  virtual int setValue(cache_obj *ptr);
 };
 
 class RGWObjectDirectory: RGWDirectory {
 public:
+
+  RGWObjectDirectory() {}
+  virtual ~RGWObjectDirectory() { cout << "RGWObject Directory is destroyed!";}
   //int getValue(objectDirectory_t &dir_val);
-  int getValue(void *ptr);
+  int getValue(cache_obj *ptr);
   //int setValue(string key, string timeStr, string bucket_name, string obj_name, string location, string owner, uint64_t obj_size, string etag);
-  int setValue(void *ptr);
+  int setValue(cache_obj *ptr);
+  int updateValue(cache_obj *ptr, string field, string value);
   //std::vector<std::pair<std::string, std::string>> get_aged_keys(string startTime, string endTime);
+
+private:
+	string buildIndex(cache_obj *ptr);
 	
 };
 

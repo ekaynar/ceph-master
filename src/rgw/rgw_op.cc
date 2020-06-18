@@ -8244,7 +8244,8 @@ void RGWGetObj::fetch_remote_execute()
 //  map<string, bufferlist> dest_attrs;
   RGWRados::Object op_target(store->getRados(), dest_bucket_info, *static_cast<RGWObjectCtx *>(s->obj_ctx), obj);
   RGWRados::Object::Read read_op(&op_target);
-  op_ret = read_op.fetch_from_backend(filter, objDir.owner, objDir.bucket_name, objDir.obj_name, objDir.location);
+  // FIXME: AMIN commented, Ugur should update this.
+  //op_ret = read_op.fetch_from_backend(filter, objDir.owner, objDir.bucket_name, objDir.obj_name, objDir.location);
 }
 
 

@@ -2435,11 +2435,17 @@ struct cache_obj{
   RGWAccessKey accesskey;
   rgw_user user_id;
   string destination; // s3 operation location
-  int loc;
+  string location;
+  //int loc;
   CacheLocation cache_location; // 
   uint64_t size_in_bytes; // s3 object size in bytes
   uint64_t offset; // rados obj offset
-
+  char dirty; //the object is clean or not
+  string etag;
+  string createTime; //create time of the object
+  string lastAccessTime; //last access time 
+  string backendProtocol; //are we using s3 or another protocol?
+  string acl;
 };
 
 

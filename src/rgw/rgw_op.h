@@ -196,8 +196,8 @@ public:
   virtual void cache_execute() {} 
   virtual void directory_lookup() {} 
   cache_obj c_obj;
-  objectDirectoryStruct_t objDir;
   RGWObjectDirectory objectDirectory;
+  //RGWBlockDirectory blockDirectory;
   /*datacache*/
   virtual void send_response() {}
   virtual void complete() {

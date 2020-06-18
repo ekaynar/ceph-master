@@ -424,7 +424,7 @@ void DataCache::submit_remote_req(struct RemoteRequest *c){
 void DataCache::retrieve_obj_info(cache_obj& c_obj){
   ldout(cct, 0) << __func__ <<dendl;
   ldout(cct, 0) << c_obj.bucket_name <<dendl;
-  c_obj.loc = 1;
+  c_obj.location = "1";
 
 }
 

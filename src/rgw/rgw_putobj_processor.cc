@@ -327,12 +327,16 @@ int AtomicObjectProcessor::complete(size_t accounted_size,
     writer.clear_written();
     
     /* datacache */
-    objectDirectory_t objDir;
 
-    objDir->bucket_name = op_target.get_obj().bucket.name;
-    objDir->obj_name = op_target.get_obj().key.name;
-    objDir->owner =  op_target.get_bucket_info().owner.id;
-    objDir->backendProtocol =  "s3";
+    cache_obj cacheObj;
+
+    /*
+    objectDirectoryStruct_t objDir;
+
+    objDir.bucket_name = op_target.get_obj().bucket.name;
+    objDir.obj_name = op_target.get_obj().key.name;
+    objDir.owner =  op_target.get_bucket_info().owner.id;
+    objDir.backendProtocol =  "s3";
 
     time_t rawTime = time (NULL);
     objDir.createTime = asctime(gmtime(&rawTime));
@@ -342,8 +346,8 @@ int AtomicObjectProcessor::complete(size_t accounted_size,
     objDir.size = manifest.get_obj_size();
     objDir.dirty = 0;
     objDir.etag = etag;
-    //r = store->getRados()->directory.setMetaValue(key, keyTime, s3_bucket_name, s3_object_name, "writecache", s3_userid, manifest.get_obj_size(), etag);
-    r = store->getRados()->objDirectory.setValue(&objDir);
+    */
+    r = store->getRados()->objDirectory.setValue(&cacheObj);
     /* datacache */
 
 

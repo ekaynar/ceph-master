@@ -57,6 +57,7 @@ class RGWReshardWait;
 
 class RGWSysObjectCtx;
 class RGWDirectory;
+class RGWObjectDirectory;
 
 /* flags for put_obj_meta() */
 #define PUT_OBJ_CREATE      0x01
@@ -1097,7 +1098,7 @@ public:
 
   /* datacache */
 
-  objectDirectory objDirectory;
+  RGWObjectDirectory objDirectory;
 
   int create_bucket(RGWRados *store, string userid, string dest_bucket_name, CephContext *cct, RGWBucketInfo& bucket_info, map<string, bufferlist>& bucket_attrs, RGWAccessKey& accesskey);
   int get_s3_credentials(RGWRados *store, string userid, RGWAccessKey& s3_key);

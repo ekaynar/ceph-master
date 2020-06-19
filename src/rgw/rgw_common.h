@@ -2423,30 +2423,37 @@ int decode_bl(bufferlist& bl, T& t)
 
 /* datacache */
 enum CacheLocation {
-     READ_CACHE = 0,
-     WRITE_BACK = 1,
-     BACK_END = 2,
+     LOCAL_READ_CACHE = 0,
+     WRITE_BACK_CACHE = 1,
+     REMOTE_CACHE = 2,
+     DATALAKE = 3,
+};
+
+enum BackendProtocol {
+     S3 = 0,
+     LIBRADOS = 1,
+     SWIFT = 2,
 };
 
 struct cache_obj{
   string user; // s3 username
   string bucket_name; // s3 bucket name
-  string obj_name; //s3 
-  RGWAccessKey accesskey;
+  string obj_name; //s3 obj name 
+  RGWAccessKey accesskey; //user's s3_key
   rgw_user user_id;
-  string destination; // s3 operation location
-  vector<string> locations;
-  //int loc;
-  CacheLocation cache_location; // 
+  string host; // hostname <ip:host> of the cache that request rados obj
+  vector<string> host_list; // list of hostnames <ip:host> of remote caches
+  CacheLocation cache_location;  
   uint64_t size_in_bytes; // s3 object size in bytes
-  uint64_t offset; // rados obj offset
-  char dirty; //the object is clean or not
-  string etag;
-  string createTime; //create time of the object
-  string lastAccessTime; //last access time 
-  string backendProtocol; //are we using s3 or another protocol?
-  string acl;
-  string aclTimeStamp;
+  uint64_t offset; // s3 obj offset
+  uint64_t chunk_id; // rados obj chunk id
+  bool dirty; // s3 object is clean or has been modified
+  string etag; 
+  ceph::real_time creationTime; // creation time of the s3 object
+  ceph::real_time lastAccessTime; // last access time 
+  BackendProtocol backendProtocol; // protocol used for backend communication
+  string obj_acl; // ACLs of s3 object
+  ceph::real_time aclTimeStamp; 
 };
 
 

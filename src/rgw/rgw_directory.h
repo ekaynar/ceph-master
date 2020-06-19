@@ -53,25 +53,27 @@ typedef struct cacheStatDirectoryStruct {
 */
 class RGWDirectory{
 public:
-  RGWDirectory() {}
-  virtual ~RGWDirectory(){ cout << "RGW Directory is destroyed!";}
-  virtual int getValue(cache_obj *ptr);
-  virtual int setValue(cache_obj *ptr);
+	RGWDirectory() {}
+	virtual ~RGWDirectory(){ cout << "RGW Directory is destroyed!";}
+	virtual int getValue(cache_obj *ptr);
+	virtual int setValue(cache_obj *ptr);
 };
 
 class RGWObjectDirectory: RGWDirectory {
 public:
 
-  RGWObjectDirectory() {}
-  virtual ~RGWObjectDirectory() { cout << "RGWObject Directory is destroyed!";}
-  //int getValue(objectDirectory_t &dir_val);
-  int getValue(cache_obj *ptr);
-  //int setValue(string key, string timeStr, string bucket_name, string obj_name, string location, string owner, uint64_t obj_size, string etag);
-  int setValue(cache_obj *ptr);
-  int updateValue(cache_obj *ptr, string field, string value);
-  //std::vector<std::pair<std::string, std::string>> get_aged_keys(string startTime, string endTime);
+	RGWObjectDirectory() {}
+	virtual ~RGWObjectDirectory() { cout << "RGWObject Directory is destroyed!";}
+	//int getValue(objectDirectory_t &dir_val);
+	int getValue(cache_obj *ptr);
+	//int setValue(string key, string timeStr, string bucket_name, string obj_name, string location, string owner, uint64_t obj_size, string etag);
+	int setValue(cache_obj *ptr);
+	int updateValue(cache_obj *ptr, string field, string value);
+	int delValue(cache_obj *ptr);
+	//std::vector<std::pair<std::string, std::string>> get_aged_keys(string startTime, string endTime);
 
 private:
+	int delKey(string key);
 	string buildIndex(cache_obj *ptr);
 	
 };

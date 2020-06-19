@@ -191,6 +191,30 @@ int RGWObjectDirectory::updateValue(cache_obj *ptr, string field, string value){
 	setValue(&tmpObj);
 }
 
+
+int RGWObjectDirectory::delValue(cache_obj *ptr){
+    string key = buildIndex(ptr);
+	int result = 0;
+
+	result += delKey(key);
+	return result;
+}
+
+int RGWObjectDirectory::delKey(string key){
+	int result = 0;
+    std::vector<std::string> keys;
+    keys.push_back(key);
+
+	cpp_redis::client client;
+	client.connect("127.0.0.1", 7000);
+
+	client.del(keys, [&result](cpp_redis::reply &reply){
+		result = reply.as_integer();
+	});
+	return result;
+}
+
+
 //returns all the keys between startTime and endTime as <key, time> paris
 /*
 std::vector<std::pair<std::string, std::string>> RGWDirectory::get_aged_keys(string startTime, string endTime){

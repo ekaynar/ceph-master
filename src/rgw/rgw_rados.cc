@@ -9214,7 +9214,7 @@ int RGWRados::get_local_obj_iterate_cb(const rgw_raw_obj& read_obj, string key, 
   op.read(read_ofs, read_len, nullptr, nullptr);
   svc.cache->get_datacache().retrieve_obj_info(c_obj); 
   // local read
-  //retrieve_obj_acls(c_obj);
+  retrieve_obj_acls(c_obj);
   c_obj.location ="1";
   if (c_obj.location == "0"){
     rgw_pool pool("default.rgw.buckets.data");
@@ -9252,7 +9252,17 @@ int RGWRados::get_local_obj_iterate_cb(const rgw_raw_obj& read_obj, string key, 
 
   // read from backend
 } 
+void stripTags( string &text )
+{
+  unsigned int start = 0, pos;
 
+  while ( start < text.size() )
+  {
+    start = text.find( "<", start );    if ( start == string::npos ) break;
+    pos   = text.find( ">", start );    if ( pos   == string::npos ) break;
+    text.erase( start, pos - start + 1 );
+  }
+}
 
 int RGWRados::retrieve_obj_acls(cache_obj& c_obj){
   RGWRESTStreamRWRequest *in_stream_req;
@@ -9268,10 +9278,7 @@ int RGWRados::retrieve_obj_acls(cache_obj& c_obj){
   RGWRESTConn *conn = new RGWRESTConn(this->cct, nullptr, "", endpoints, c_obj.accesskey);
   RGWGetExtraDataCB cb;
   real_time set_mtime;
-  uint64_t *psize;
-  map<string, string> *pheaders;
-  map<string, bufferlist> *pattrs;
-  string *petag;
+  map<string, string> pheaders;
 
   bool prepend_metadata = true;
   bool rgwx_stat = true;
@@ -9284,9 +9291,9 @@ int RGWRados::retrieve_obj_acls(cache_obj& c_obj){
       sync_manifest, skip_decrypt,
       true, &cb, &in_stream_req);
 
-  if (ret < 0 )
+    if (ret < 0 )
     return ret;
-  ret = conn->complete_request(in_stream_req, nullptr, &set_mtime, nullptr, nullptr, pheaders);
+  ret = conn->complete_request(in_stream_req, nullptr, &set_mtime, nullptr, nullptr, &pheaders);
   if (ret < 0 )
     return ret;
 
@@ -9299,33 +9306,31 @@ int RGWRados::retrieve_obj_acls(cache_obj& c_obj){
     }
 
     JSONDecoder::decode_json("attrs", src_attrs, &jp);
-
-    src_attrs.erase(RGW_ATTR_MANIFEST); // not interested in original object layout
   }
 
+  RGWAccessControlPolicy acl;
+  auto aiter = src_attrs.find(RGW_ATTR_ACL);
+  if (aiter != src_attrs.end()){
+    auto iter = aiter->second.cbegin();
+    acl.decode(iter);
+    RGWAccessControlPolicy_S3* const s3policy = static_cast<RGWAccessControlPolicy_S3*>(&acl);
 
-  if (petag) {
-    map<string, bufferlist>::iterator iter = src_attrs.find(RGW_ATTR_ETAG);
-    if (iter != src_attrs.end()) {
-      bufferlist& etagbl = iter->second;
-      *petag = etagbl.to_str();
-      while (petag->size() > 0 && (*petag)[petag->size() - 1] == '\0') {
-	*petag = petag->substr(0, petag->size() - 1);
-      }
+    RGWAccessControlList& obj_acl = s3policy->get_acl();
+    multimap<string, ACLGrant>& grant_map = obj_acl.get_grant_map();
+    multimap<string, ACLGrant>::iterator giter;
+    for (giter = grant_map.begin(); giter != grant_map.end(); ++giter) {
+      ACLGrant& src_grant = giter->second;
+      ACLPermission& perm = src_grant.get_permission();
+      ACLPermission_S3* const pp = static_cast<ACLPermission_S3*>(&perm);
+      stringstream so;
+      pp->to_xml(so);
+      c_obj.acl = so.str();
+      stripTags(c_obj.acl);
+      ldout(cct, 0) << __func__ << " Object S3 Permission " << c_obj.acl << dendl;
     }
   }
-  
-
-  if (pattrs) {
-    *pattrs = std::move(src_attrs);
-  }
-
   return 0;
-
-
-
 }
-
 
 int RGWRados::iterate_local_obj(RGWObjectCtx& obj_ctx, const rgw_obj& obj, cache_obj& c_obj, off_t ofs, off_t end, uint64_t max_chunk_size, iterate_local_obj_cb cb, void *arg, optional_yield y, RGWRados *store){
   dout(10) << __func__  <<dendl;

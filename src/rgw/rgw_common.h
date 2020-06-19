@@ -2435,7 +2435,7 @@ struct cache_obj{
   RGWAccessKey accesskey;
   rgw_user user_id;
   string destination; // s3 operation location
-  string location;
+  vector<string> locations;
   //int loc;
   CacheLocation cache_location; // 
   uint64_t size_in_bytes; // s3 object size in bytes
@@ -2446,6 +2446,7 @@ struct cache_obj{
   string lastAccessTime; //last access time 
   string backendProtocol; //are we using s3 or another protocol?
   string acl;
+  string aclTimeStamp;
 };
 
 

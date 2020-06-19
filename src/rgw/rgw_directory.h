@@ -73,7 +73,9 @@ public:
 	//std::vector<std::pair<std::string, std::string>> get_aged_keys(string startTime, string endTime);
 
 private:
+	int setKey(string key, cache_obj *ptr);
 	int delKey(string key);
+	int existKey(string key);
 	string buildIndex(cache_obj *ptr);
 	
 };

@@ -5,9 +5,26 @@
 #include "rgw_directory.h"
 #include <string>
 #include <iostream>
+#include <sstream>
+#include <algorithm>
 #include <vector>
 #include <list>
 
+vector<string> split(string str, string token){
+    vector<string>result;
+    while(str.size()){
+        int index = str.find(token);
+        if(index!=string::npos){
+            result.push_back(str.substr(0,index));
+            str = str.substr(index+token.size());
+            if(str.size()==0)result.push_back(str);
+        }else{
+            result.push_back(str);
+            str = "";
+        }
+    }
+    return result;
+}
 
 /* the following two functions should be implemented in their own respected classes */
 int RGWDirectory::getValue(cache_obj *ptr){
@@ -25,32 +42,81 @@ string RGWObjectDirectory::buildIndex(cache_obj *ptr){
 	return ptr->bucket_name + "_" + ptr->obj_name + "_" + to_string(ptr->offset);
 }
 
-int RGWObjectDirectory::setValue(cache_obj *ptr){
-
+int RGWObjectDirectory::existKey(string key){
 	cpp_redis::client client;
 	client.connect("127.0.0.1", 7000);
+
+	int result = 0;
+
+    vector<string> keys;
+    keys.push_back(key);
+
+	client.exists(keys, [&result](cpp_redis::reply &reply){
+		result = reply.as_integer();
+	});
+	return result;
+}
+
+int RGWObjectDirectory::setValue(cache_obj *ptr){
 
 	//creating the index based on bucket_name, obj_name, and offset
 	string key = buildIndex(ptr);
 
-	std::vector<std::pair<std::string, std::string>> list;
-	std::vector<std::string> keys;
-	std::multimap<std::string, std::string> timeKey;
-	std::vector<std::string> options;
+	//delete the existing key, 
+	//to update an existing key, updateValue() should be used
+	if (existKey(key))
+		delKey(key);
+
+	return setKey(key, ptr);
+	
+}
+int RGWObjectDirectory::setKey(string key, cache_obj *ptr){
+	cpp_redis::client client;
+	client.connect("127.0.0.1", 7000);
+
+	vector<pair<string, string>> list;
+	vector<string> keys;
+	multimap<string, string> timeKey;
+	vector<string> options;
+	string location;
+
+/*
+	//converting the vector of locations to a single string
+	//location1_location2_..._locationX
+	if (!ptr->locations.empty()) 
+	{ 
+		// Convert all but the last element to avoid a trailing "," 
+		copy(ptr->locations.begin(), ptr->locations.end()-1, 
+			ostream_iterator<string>(location, "_")); 
+ 
+		// Now add the last element with no delimiter 
+		location << ptr->locations.back(); 
+	}
+*/
+
+std::stringstream ss;
+for(size_t i = 0; i < ptr->locations.size(); ++i)
+{
+  if(i != 0)
+    ss << "_";
+  ss << ptr->locations[i];
+}
+location = ss.str();
 
 	//creating a list of key's properties
-	list.push_back(std::make_pair("key", key));
-	list.push_back(std::make_pair("owner", ptr->user));
-	list.push_back(std::make_pair("acl", ptr->acl));
-	list.push_back(std::make_pair("location", ptr->location));
-	list.push_back(std::make_pair("dirty", std::to_string(ptr->dirty)));
-	list.push_back(std::make_pair("size", std::to_string(ptr->size_in_bytes)));
-	list.push_back(std::make_pair("createTime", ptr->createTime));
-	list.push_back(std::make_pair("lastAccessTime", ptr->lastAccessTime));
-	list.push_back(std::make_pair("etag", ptr->etag));
-	list.push_back(std::make_pair("backendProtocol", ptr->backendProtocol));
-	list.push_back(std::make_pair("bucket_name", ptr->bucket_name));
-	list.push_back(std::make_pair("obj_name", ptr->obj_name));
+	list.push_back(make_pair("key", key));
+	list.push_back(make_pair("owner", ptr->user));
+	list.push_back(make_pair("acl", ptr->acl));
+	list.push_back(make_pair("aclTimeStamp", ptr->aclTimeStamp));
+	list.push_back(make_pair("location", location));
+	list.push_back(make_pair("dirty", std::to_string(ptr->dirty)));
+	list.push_back(make_pair("size", std::to_string(ptr->size_in_bytes)));
+	list.push_back(make_pair("createTime", ptr->createTime));
+	list.push_back(make_pair("lastAccessTime", ptr->lastAccessTime));
+	list.push_back(make_pair("etag", ptr->etag));
+	list.push_back(make_pair("backendProtocol", ptr->backendProtocol));
+	list.push_back(make_pair("bucket_name", ptr->bucket_name));
+	list.push_back(make_pair("obj_name", ptr->obj_name));
 
 	//creating a key entry
 	keys.push_back(key);
@@ -71,6 +137,7 @@ int RGWObjectDirectory::setValue(cache_obj *ptr){
 
 	// synchronous commit, no timeout
 	client.sync_commit();
+
 	return 0;
 
 }
@@ -81,6 +148,7 @@ int RGWObjectDirectory::getValue(cache_obj *ptr){
     string key = buildIndex(ptr);
     string owner;
     string acl;
+    string aclTimeStamp;
     string location;
     string dirty;
     string size;
@@ -99,6 +167,7 @@ int RGWObjectDirectory::getValue(cache_obj *ptr){
 	fields.push_back("key");
 	fields.push_back("owner");
 	fields.push_back("acl");
+	fields.push_back("aclTimeStamp");
 	fields.push_back("location");
 	fields.push_back("dirty");
 	fields.push_back("size");
@@ -109,28 +178,34 @@ int RGWObjectDirectory::getValue(cache_obj *ptr){
 	fields.push_back("bucket_name");
 	fields.push_back("obj_name");
 
-	client.hmget(key, fields, [&key, &owner, &acl, &location, &dirty, &size, &createTime, &lastAccessTime, &etag, &backendProtocol, &bucket_name, &obj_name](cpp_redis::reply &reply){
+	client.hmget(key, fields, [&key, &owner, &acl, &aclTimeStamp, &location, &dirty, &size, &createTime, &lastAccessTime, &etag, &backendProtocol, &bucket_name, &obj_name](cpp_redis::reply &reply){
 	      key = reply.as_string()[0];
 	      owner = reply.as_string()[1];
 	      acl = reply.as_string()[2];
-	      location = reply.as_string()[3];
-	      dirty = reply.as_string()[4];
-	      size = reply.as_string()[5];
-	      createTime = reply.as_string()[6];
-	      lastAccessTime = reply.as_string()[7];
-	      etag = reply.as_string()[8];
-  		  backendProtocol = reply.as_string()[9];
-  		  bucket_name = reply.as_string()[10];
-	      obj_name = reply.as_string()[11];
+	      aclTimeStamp = reply.as_string()[3];
+	      location = reply.as_string()[4];
+	      dirty = reply.as_string()[5];
+	      size = reply.as_string()[6];
+	      createTime = reply.as_string()[7];
+	      lastAccessTime = reply.as_string()[8];
+	      etag = reply.as_string()[9];
+  		  backendProtocol = reply.as_string()[10];
+  		  bucket_name = reply.as_string()[11];
+	      obj_name = reply.as_string()[12];
 	});
 
 	//finding offest -> key = bucketname_objName_offset
 	size_t pos = key.rfind("_");
 	offset = key.substr(pos++);
 
+	stringstream sloction(location);
+	string tmp;
+
 	ptr->user = owner;
 	ptr->acl = acl;
-	ptr->location = location;
+	ptr->aclTimeStamp = aclTimeStamp;
+	while(getline(sloction, tmp, '_'))
+		ptr->locations.push_back(tmp);
 	ptr->dirty = dirty[0];
 	ptr->size_in_bytes = stoull(size);
 	ptr->createTime = createTime;
@@ -158,37 +233,47 @@ int RGWObjectDirectory::updateValue(cache_obj *ptr, string field, string value){
 	tmpObj.obj_name = ptr->obj_name;
 	tmpObj.offset = ptr->offset;
 
-	//getting old values from the directory
-	getValue(&tmpObj);
+	string key = buildIndex(&tmpObj);
 
-	//updating the desired field
-	if (field == "user")
-		tmpObj.user = value;	
-	else if (field == "bucket_name")
-		tmpObj.bucket_name = value;
-	else if (field == "obj_name")
-		tmpObj.obj_name = value;
-	else if (field == "location")
-		tmpObj.location = value;
-	else if (field == "size_in_bytes")
-		tmpObj.size_in_bytes = stoull(value);
-	else if (field == "dirty")
-		tmpObj.dirty = value[0];
-	else if (field == "offset")
-		tmpObj.offset = stoull(value);
-	else if (field == "etag")
-		tmpObj.etag = value;
-	else if (field == "createTime")
-		tmpObj.createTime = value;
-	else if (field == "lastAccessTime")
-		tmpObj.lastAccessTime = value;
-	else if (field == "backendProtocol")
-		tmpObj.backendProtocol = value;
-	else if (field == "acl")
-		tmpObj.acl = value;
+	if (existKey(key))
+	{
+		//getting old values from the directory
+		getValue(&tmpObj);
 
-	//updating the directory value 
-	setValue(&tmpObj);
+		//updating the desired field
+		if (field == "user")
+			tmpObj.user = value;	
+		else if (field == "bucket_name")
+			tmpObj.bucket_name = value;
+		else if (field == "obj_name")
+			tmpObj.obj_name = value;
+		else if (field == "location")
+			tmpObj.locations.push_back(value);
+		else if (field == "size_in_bytes")
+			tmpObj.size_in_bytes = stoull(value);
+		else if (field == "dirty")
+			tmpObj.dirty = value[0];
+		else if (field == "offset")
+			tmpObj.offset = stoull(value);
+		else if (field == "etag")
+			tmpObj.etag = value;
+		else if (field == "createTime")
+			tmpObj.createTime = value;
+		else if (field == "lastAccessTime")
+			tmpObj.lastAccessTime = value;
+		else if (field == "backendProtocol")
+			tmpObj.backendProtocol = value;
+		else if (field == "acl")
+			tmpObj.acl = value;
+		else if (field == "aclTimeStamp")
+			tmpObj.aclTimeStamp = value;
+
+		//updating the directory value 
+		setKey(key, &tmpObj);
+	}
+	else
+		setValue(&tmpObj);
+	
 }
 
 
@@ -202,7 +287,7 @@ int RGWObjectDirectory::delValue(cache_obj *ptr){
 
 int RGWObjectDirectory::delKey(string key){
 	int result = 0;
-    std::vector<std::string> keys;
+    vector<string> keys;
     keys.push_back(key);
 
 	cpp_redis::client client;

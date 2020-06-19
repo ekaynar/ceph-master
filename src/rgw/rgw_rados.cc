@@ -9215,8 +9215,8 @@ int RGWRados::get_local_obj_iterate_cb(const rgw_raw_obj& read_obj, string key, 
   svc.cache->get_datacache().retrieve_obj_info(c_obj); 
   // local read
   retrieve_obj_acls(c_obj);
-  c_obj.location ="1";
-  if (c_obj.location == "0"){
+  c_obj.locations.push_back("1");
+  if (find(c_obj.locations.begin(), c_obj.locations.end(), "0") != c_obj.locations.end()){
     rgw_pool pool("default.rgw.buckets.data");
     rgw_raw_obj read_obj1(pool,key);
     auto obj1 = d->store->svc.rados->obj(read_obj1);
@@ -9226,7 +9226,7 @@ int RGWRados::get_local_obj_iterate_cb(const rgw_raw_obj& read_obj, string key, 
   }
 
   // remote read
-  else if (c_obj.location == "1"){
+  else if (find(c_obj.locations.begin(), c_obj.locations.end(), "1") != c_obj.locations.end()){
     rgw_user user_id(c_obj.user);
     rgw_bucket bucket;
     bucket.name = c_obj.bucket_name;
@@ -9241,7 +9241,7 @@ int RGWRados::get_local_obj_iterate_cb(const rgw_raw_obj& read_obj, string key, 
     return d->flush(std::move(completed));
   }
   // osd read
-  else if(c_obj.location == "2"){
+  else if (find(c_obj.locations.begin(), c_obj.locations.end(), "2") != c_obj.locations.end()){
     rgw_raw_obj read_obj;
     int r = retrieve_oid(c_obj, read_obj, obj_ofs, d->yield);
     auto obj = d->store->svc.rados->obj(read_obj);

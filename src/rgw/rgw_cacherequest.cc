@@ -58,7 +58,8 @@ int RemoteRequest::submit_op(){
   cb2->aio = aio;
   cb2->pbl = bl; 
   list<string> endpoints;
-  endpoints.push_back(c_obj->destination);
+  //endpoints.push_back(c_obj->destination);
+  endpoints.push_back(c_obj->host); //FIXME: Ugur should it be host?
   RGWRESTConn *conn = new RGWRESTConn(this->cct, nullptr, "", endpoints, c_obj->accesskey);
   real_time set_mtime;
   uint64_t expected_size = 0;

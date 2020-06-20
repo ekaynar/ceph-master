@@ -2423,16 +2423,16 @@ int decode_bl(bufferlist& bl, T& t)
 
 /* datacache */
 enum CacheLocation {
-     LOCAL_READ_CACHE = 0,
-     WRITE_BACK_CACHE = 1,
-     REMOTE_CACHE = 2,
-     DATALAKE = 3,
+     LOCAL_READ_CACHE,
+     WRITE_BACK_CACHE,
+     REMOTE_CACHE,
+     DATALAKE
 };
 
 enum BackendProtocol {
-     S3 = 0,
-     LIBRADOS = 1,
-     SWIFT = 2,
+     S3,
+     LIBRADOS,
+     SWIFT
 };
 
 struct cache_obj{
@@ -2449,11 +2449,12 @@ struct cache_obj{
   uint64_t chunk_id; // rados obj chunk id
   bool dirty; // s3 object is clean or has been modified
   string etag; 
-  ceph::real_time creationTime; // creation time of the s3 object
-  ceph::real_time lastAccessTime; // last access time 
+  //ceph::real_time creationTime; // creation time of the s3 object
+  string creationTime; // creation time of the s3 object
+  string lastAccessTime; // last access time 
   BackendProtocol backendProtocol; // protocol used for backend communication
   string obj_acl; // ACLs of s3 object
-  ceph::real_time aclTimeStamp; 
+  string aclTimeStamp; 
 };
 
 

@@ -10,21 +10,19 @@
 #include <vector>
 #include <list>
 
-vector<string> split(string str, string token){
-    vector<string>result;
-    while(str.size()){
-        int index = str.find(token);
-        if(index!=string::npos){
-            result.push_back(str.substr(0,index));
-            str = str.substr(index+token.size());
-            if(str.size()==0)result.push_back(str);
-        }else{
-            result.push_back(str);
-            str = "";
-        }
-    }
-    return result;
+inline const string BoolToString(bool b)
+{	
+	return b ? "true" : "false";
 }
+
+inline const bool StringToBool(string s)
+{
+	if (s == "true")
+		return true;
+	else 
+		return false;	
+}
+
 
 /* the following two functions should be implemented in their own respected classes */
 int RGWDirectory::getValue(cache_obj *ptr){
@@ -36,10 +34,10 @@ int RGWDirectory::setValue(cache_obj *ptr){
 }
 
 /* builds the index for the directory
- * based on bucket_name, obj_name, and offset
+ * based on bucket_name, obj_name, and chunk_id
  */
 string RGWObjectDirectory::buildIndex(cache_obj *ptr){
-	return ptr->bucket_name + "_" + ptr->obj_name + "_" + to_string(ptr->offset);
+	return ptr->bucket_name + "_" + ptr->obj_name + "_" + to_string(ptr->chunk_id);
 }
 
 int RGWObjectDirectory::existKey(string key){
@@ -59,7 +57,7 @@ int RGWObjectDirectory::existKey(string key){
 
 int RGWObjectDirectory::setValue(cache_obj *ptr){
 
-	//creating the index based on bucket_name, obj_name, and offset
+	//creating the index based on bucket_name, obj_name, and chunk_id
 	string key = buildIndex(ptr);
 
 	//delete the existing key, 
@@ -78,38 +76,24 @@ int RGWObjectDirectory::setKey(string key, cache_obj *ptr){
 	vector<string> keys;
 	multimap<string, string> timeKey;
 	vector<string> options;
-	string location;
+	string host;
 
-/*
-	//converting the vector of locations to a single string
-	//location1_location2_..._locationX
-	if (!ptr->locations.empty()) 
-	{ 
-		// Convert all but the last element to avoid a trailing "," 
-		copy(ptr->locations.begin(), ptr->locations.end()-1, 
-			ostream_iterator<string>(location, "_")); 
- 
-		// Now add the last element with no delimiter 
-		location << ptr->locations.back(); 
+	stringstream ss;
+	for(size_t i = 0; i < ptr->host_list.size(); ++i)
+	{
+		if(i != 0)
+			ss << "_";
+			ss << ptr->host_list[i];
 	}
-*/
-
-std::stringstream ss;
-for(size_t i = 0; i < ptr->locations.size(); ++i)
-{
-  if(i != 0)
-    ss << "_";
-  ss << ptr->locations[i];
-}
-location = ss.str();
+	host = ss.str();
 
 	//creating a list of key's properties
 	list.push_back(make_pair("key", key));
 	list.push_back(make_pair("owner", ptr->user));
-	list.push_back(make_pair("acl", ptr->acl));
+	list.push_back(make_pair("obj_acl", ptr->obj_acl));
 	list.push_back(make_pair("aclTimeStamp", ptr->aclTimeStamp));
-	list.push_back(make_pair("location", location));
-	list.push_back(make_pair("dirty", std::to_string(ptr->dirty)));
+	list.push_back(make_pair("host", host));
+	list.push_back(make_pair("dirty", BoolToString(ptr->dirty)));
 	list.push_back(make_pair("size", std::to_string(ptr->size_in_bytes)));
 	list.push_back(make_pair("createTime", ptr->createTime));
 	list.push_back(make_pair("lastAccessTime", ptr->lastAccessTime));
@@ -123,7 +107,6 @@ location = ss.str();
 
 	//making key and time a pair
 	timeKey.emplace(ptr->createTime,key);
-
 
 	client.hmset(key, list, [](cpp_redis::reply &reply){
 	});
@@ -147,15 +130,15 @@ int RGWObjectDirectory::getValue(cache_obj *ptr){
 
     string key = buildIndex(ptr);
     string owner;
-    string acl;
+    string obj_acl;
     string aclTimeStamp;
-    string location;
+    string host;
     string dirty;
     string size;
     string createTime;
     string lastAccessTime;
     string etag;
-	string offset;
+	string chunk_id;
     string backendProtocol;
     string bucket_name;
     string obj_name;
@@ -166,9 +149,9 @@ int RGWObjectDirectory::getValue(cache_obj *ptr){
 	std::vector<std::string> fields;
 	fields.push_back("key");
 	fields.push_back("owner");
-	fields.push_back("acl");
+	fields.push_back("obj_acl");
 	fields.push_back("aclTimeStamp");
-	fields.push_back("location");
+	fields.push_back("host");
 	fields.push_back("dirty");
 	fields.push_back("size");
 	fields.push_back("createTime");
@@ -178,12 +161,12 @@ int RGWObjectDirectory::getValue(cache_obj *ptr){
 	fields.push_back("bucket_name");
 	fields.push_back("obj_name");
 
-	client.hmget(key, fields, [&key, &owner, &acl, &aclTimeStamp, &location, &dirty, &size, &createTime, &lastAccessTime, &etag, &backendProtocol, &bucket_name, &obj_name](cpp_redis::reply &reply){
+	client.hmget(key, fields, [&key, &owner, &obj_acl, &aclTimeStamp, &host, &dirty, &size, &createTime, &lastAccessTime, &etag, &backendProtocol, &bucket_name, &obj_name](cpp_redis::reply &reply){
 	      key = reply.as_string()[0];
 	      owner = reply.as_string()[1];
-	      acl = reply.as_string()[2];
+	      obj_acl = reply.as_string()[2];
 	      aclTimeStamp = reply.as_string()[3];
-	      location = reply.as_string()[4];
+	      host = reply.as_string()[4];
 	      dirty = reply.as_string()[5];
 	      size = reply.as_string()[6];
 	      createTime = reply.as_string()[7];
@@ -194,24 +177,24 @@ int RGWObjectDirectory::getValue(cache_obj *ptr){
 	      obj_name = reply.as_string()[12];
 	});
 
-	//finding offest -> key = bucketname_objName_offset
+	//finding offest -> key = bucketname_objName_chunk_id
 	size_t pos = key.rfind("_");
-	offset = key.substr(pos++);
+	chunk_id = key.substr(pos++);
 
-	stringstream sloction(location);
+	stringstream sloction(host);
 	string tmp;
 
 	ptr->user = owner;
-	ptr->acl = acl;
+	ptr->obj_acl = obj_acl;
 	ptr->aclTimeStamp = aclTimeStamp;
 	while(getline(sloction, tmp, '_'))
-		ptr->locations.push_back(tmp);
-	ptr->dirty = dirty[0];
+		ptr->host_list.push_back(tmp);
+	ptr->dirty = StringToBool(dirty[0]);
 	ptr->size_in_bytes = stoull(size);
 	ptr->createTime = createTime;
 	ptr->lastAccessTime = lastAccessTime;
 	ptr->etag = etag;
-	ptr->offset = stoull(offset);
+	ptr->chunk_id = stoull(chunk_id);
 	ptr->backendProtocol = backendProtocol;
 	ptr->bucket_name = bucket_name;
 	ptr->obj_name = obj_name;
@@ -222,8 +205,109 @@ int RGWObjectDirectory::getValue(cache_obj *ptr){
 	return 0;
 }
 
+/* updatinh the directory value of host_list
+ * its input is a host which has a copy of the data
+ * and bucket_name, obj_name and chunk_id in *ptr
+ */
+int RGWObjectDirectory::updateHostList(cache_obj *ptr, string host){
+
+	cache_obj tmpObj;
+	
+	//we need to build the key to find the object in the directory
+	tmpObj.bucket_name = ptr->bucket_name;
+	tmpObj.obj_name = ptr->obj_name;
+	tmpObj.chunk_id = ptr->chunk_id;
+
+	string key = buildIndex(&tmpObj);
+
+	if (existKey(key))
+	{
+		//getting old values from the directory
+		getValue(&tmpObj);
+
+		//updating the desired field
+		tmpObj.host_list.push_back(value);
+
+		//updating the directory value 
+		setKey(key, &tmpObj);
+	}
+	else
+		return -1;
+	return 0;
+	
+}
+
+/* updatinh the directory value of acl_obj
+ * its input is a new acl of the object
+ * and bucket_name, obj_name and chunk_id in *ptr
+ */
+int RGWObjectDirectory::updateACL(cache_obj *ptr, string obj_acl){
+
+	cache_obj tmpObj;
+	
+	//we need to build the key to find the object in the directory
+	tmpObj.bucket_name = ptr->bucket_name;
+	tmpObj.obj_name = ptr->obj_name;
+	tmpObj.chunk_id = ptr->chunk_id;
+
+	string key = buildIndex(&tmpObj);
+
+	if (existKey(key))
+	{
+		//getting old values from the directory
+		getValue(&tmpObj);
+
+		tmpObj.obj_acl = value;
+
+		//updating the directory value 
+		setKey(key, &tmpObj);
+	}
+	else
+		return -1;
+	return 0;
+	
+}
+
+/* updatinh the directory value of lastAccessTime
+ * its input is object's ceph::real_time last access time 
+ * and bucket_name, obj_name and chunk_id in *ptr
+ */
+int RGWObjectDirectory::updateLastAcessTime(cache_obj *ptr, ceph::real_time lastAccessTime){
+
+	stringstream ss << lastAccessTime;
+	string time = ss.str();
+
+	cache_obj tmpObj;
+	
+	//we need to build the key to find the object in the directory
+	tmpObj.bucket_name = ptr->bucket_name;
+	tmpObj.obj_name = ptr->obj_name;
+	tmpObj.chunk_id = ptr->chunk_id;
+
+	string key = buildIndex(&tmpObj);
+
+	if (existKey(key))
+	{
+		//getting old values from the directory
+		getValue(&tmpObj);
+
+		tmpObj.obj_acl = time;
+
+		//updating the directory value 
+		setKey(key, &tmpObj);
+	}
+	else
+		return -1;
+	return 0;
+	
+}
+
+
+
+
 /* updatinh the directory value*/
-/* value should be string even for fields such as size or offset */
+/* value should be string even for fields such as size or chunk_id */
+/*
 int RGWObjectDirectory::updateValue(cache_obj *ptr, string field, string value){
 
 	cache_obj tmpObj;
@@ -231,7 +315,7 @@ int RGWObjectDirectory::updateValue(cache_obj *ptr, string field, string value){
 	//we need to build the key to find the object in the directory
 	tmpObj.bucket_name = ptr->bucket_name;
 	tmpObj.obj_name = ptr->obj_name;
-	tmpObj.offset = ptr->offset;
+	tmpObj.chunk_id = ptr->chunk_id;
 
 	string key = buildIndex(&tmpObj);
 
@@ -247,14 +331,14 @@ int RGWObjectDirectory::updateValue(cache_obj *ptr, string field, string value){
 			tmpObj.bucket_name = value;
 		else if (field == "obj_name")
 			tmpObj.obj_name = value;
-		else if (field == "location")
-			tmpObj.locations.push_back(value);
+		else if (field == "host")
+			tmpObj.host_list.push_back(value);
 		else if (field == "size_in_bytes")
 			tmpObj.size_in_bytes = stoull(value);
 		else if (field == "dirty")
 			tmpObj.dirty = value[0];
-		else if (field == "offset")
-			tmpObj.offset = stoull(value);
+		else if (field == "chunk_id")
+			tmpObj.chunk_id = stoull(value);
 		else if (field == "etag")
 			tmpObj.etag = value;
 		else if (field == "createTime")
@@ -263,8 +347,8 @@ int RGWObjectDirectory::updateValue(cache_obj *ptr, string field, string value){
 			tmpObj.lastAccessTime = value;
 		else if (field == "backendProtocol")
 			tmpObj.backendProtocol = value;
-		else if (field == "acl")
-			tmpObj.acl = value;
+		else if (field == "obj_acl")
+			tmpObj.obj_acl = value;
 		else if (field == "aclTimeStamp")
 			tmpObj.aclTimeStamp = value;
 
@@ -275,7 +359,7 @@ int RGWObjectDirectory::updateValue(cache_obj *ptr, string field, string value){
 		setValue(&tmpObj);
 	
 }
-
+*/
 
 int RGWObjectDirectory::delValue(cache_obj *ptr){
     string key = buildIndex(ptr);

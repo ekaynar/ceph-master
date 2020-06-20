@@ -68,7 +68,9 @@ public:
 	int getValue(cache_obj *ptr);
 	//int setValue(string key, string timeStr, string bucket_name, string obj_name, string location, string owner, uint64_t obj_size, string etag);
 	int setValue(cache_obj *ptr);
-	int updateValue(cache_obj *ptr, string field, string value);
+	int updateLastAcessTime(cache_obj *ptr, ceph::real_time lastAccessTime);
+	int updateACL(cache_obj *ptr, string obj_acl);
+	int updateHostList(cache_obj *ptr, string host);
 	int delValue(cache_obj *ptr);
 	//std::vector<std::pair<std::string, std::string>> get_aged_keys(string startTime, string endTime);
 

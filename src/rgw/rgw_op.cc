@@ -8281,7 +8281,7 @@ void RGWGetObj::cache_execute()
   c_obj.size_in_bytes = 20971520;
   s->obj_size = 20971520;
   this->total_len = 20971520;
-  c_obj.destination="http://128.31.25.83:8000";
+  c_obj.host="http://128.31.25.83:8000";
   c_obj.bucket_name = s->bucket_name;
   c_obj.obj_name = s->object.name;
   c_obj.user = s->user->get_info().user_id.id;

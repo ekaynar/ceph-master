@@ -9215,8 +9215,8 @@ int RGWRados::get_local_obj_iterate_cb(const rgw_raw_obj& read_obj, string key, 
   svc.cache->get_datacache().retrieve_obj_info(c_obj); 
   // local read
   retrieve_obj_acls(c_obj);
-  c_obj.locations.push_back("1");
-  if (find(c_obj.locations.begin(), c_obj.locations.end(), "0") != c_obj.locations.end()){
+  c_obj.host_list.push_back("1");
+  if (find(c_obj.host_list.begin(), c_obj.host_list.end(), "0") != c_obj.host_list.end()){
     rgw_pool pool("default.rgw.buckets.data");
     rgw_raw_obj read_obj1(pool,key);
     auto obj1 = d->store->svc.rados->obj(read_obj1);
@@ -9226,7 +9226,7 @@ int RGWRados::get_local_obj_iterate_cb(const rgw_raw_obj& read_obj, string key, 
   }
 
   // remote read
-  else if (find(c_obj.locations.begin(), c_obj.locations.end(), "1") != c_obj.locations.end()){
+  else if (find(c_obj.host_list.begin(), c_obj.host_list.end(), "1") != c_obj.host_list.end()){
     rgw_user user_id(c_obj.user);
     rgw_bucket bucket;
     bucket.name = c_obj.bucket_name;
@@ -9241,7 +9241,7 @@ int RGWRados::get_local_obj_iterate_cb(const rgw_raw_obj& read_obj, string key, 
     return d->flush(std::move(completed));
   }
   // osd read
-  else if (find(c_obj.locations.begin(), c_obj.locations.end(), "2") != c_obj.locations.end()){
+  else if (find(c_obj.host_list.begin(), c_obj.host_list.end(), "2") != c_obj.host_list.end()){
     rgw_raw_obj read_obj;
     int r = retrieve_oid(c_obj, read_obj, obj_ofs, d->yield);
     auto obj = d->store->svc.rados->obj(read_obj);
@@ -9324,9 +9324,9 @@ int RGWRados::retrieve_obj_acls(cache_obj& c_obj){
       ACLPermission_S3* const pp = static_cast<ACLPermission_S3*>(&perm);
       stringstream so;
       pp->to_xml(so);
-      c_obj.acl = so.str();
-      stripTags(c_obj.acl);
-      ldout(cct, 0) << __func__ << " Object S3 Permission " << c_obj.acl << dendl;
+      c_obj.obj_acl = so.str();
+      stripTags(c_obj.obj_acl);
+      ldout(cct, 0) << __func__ << " Object S3 Permission " << c_obj.obj_acl << dendl;
     }
   }
   return 0;

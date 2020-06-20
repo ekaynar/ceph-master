@@ -95,18 +95,18 @@ int RGWObjectDirectory::setKey(string key, cache_obj *ptr){
 */
 
 std::stringstream ss;
-for(size_t i = 0; i < ptr->locations.size(); ++i)
+for(size_t i = 0; i < ptr->host_list.size(); ++i)
 {
   if(i != 0)
     ss << "_";
-  ss << ptr->locations[i];
+  ss << ptr->host_list[i];
 }
 location = ss.str();
 
 	//creating a list of key's properties
 	list.push_back(make_pair("key", key));
 	list.push_back(make_pair("owner", ptr->user));
-	list.push_back(make_pair("acl", ptr->acl));
+	list.push_back(make_pair("acl", ptr->obj_acl));
 	list.push_back(make_pair("aclTimeStamp", ptr->aclTimeStamp));
 	list.push_back(make_pair("location", location));
 	list.push_back(make_pair("dirty", std::to_string(ptr->dirty)));
@@ -202,10 +202,10 @@ int RGWObjectDirectory::getValue(cache_obj *ptr){
 	string tmp;
 
 	ptr->user = owner;
-	ptr->acl = acl;
+	ptr->obj_acl = acl;
 	ptr->aclTimeStamp = aclTimeStamp;
 	while(getline(sloction, tmp, '_'))
-		ptr->locations.push_back(tmp);
+		ptr->host_list.push_back(tmp);
 	ptr->dirty = dirty[0];
 	ptr->size_in_bytes = stoull(size);
 	ptr->createTime = createTime;
@@ -248,7 +248,7 @@ int RGWObjectDirectory::updateValue(cache_obj *ptr, string field, string value){
 		else if (field == "obj_name")
 			tmpObj.obj_name = value;
 		else if (field == "location")
-			tmpObj.locations.push_back(value);
+			tmpObj.host_list.push_back(value);
 		else if (field == "size_in_bytes")
 			tmpObj.size_in_bytes = stoull(value);
 		else if (field == "dirty")
@@ -264,7 +264,7 @@ int RGWObjectDirectory::updateValue(cache_obj *ptr, string field, string value){
 		else if (field == "backendProtocol")
 			tmpObj.backendProtocol = value;
 		else if (field == "acl")
-			tmpObj.acl = value;
+			tmpObj.obj_acl = value;
 		else if (field == "aclTimeStamp")
 			tmpObj.aclTimeStamp = value;
 

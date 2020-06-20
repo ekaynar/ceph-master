@@ -492,7 +492,6 @@ int DataCache::create_aio_write_request(bufferlist& bl, uint64_t len, std::strin
     ldout(cct, 0) << "Error: aio_write failed "<< ret << dendl;
     goto error;
   }
-  //  ldout(cct, 10) << "after error1" << dendl;
   return 0;
 
 error:

@@ -424,7 +424,7 @@ void DataCache::submit_remote_req(struct RemoteRequest *c){
 void DataCache::retrieve_obj_info(cache_obj& c_obj){
   ldout(cct, 0) << __func__ <<dendl;
   ldout(cct, 0) << c_obj.bucket_name <<dendl;
-  c_obj.locations.push_back("1");
+  c_obj.host_list.push_back("1");
 
 }
 
@@ -570,7 +570,7 @@ int RemoteS3Request::submit_http_get_request_s3(){
   string YourSecretAccessKeyID=req->c_obj->accesskey.key;
   string signature = sign_s3_request("GET", uri, date, YourSecretAccessKeyID, AWSAccessKeyId);
   string Authorization = "AWS "+ AWSAccessKeyId +":" + signature;
-  string loc = req->c_obj->destination + uri;
+  string loc = req->c_obj->host + uri;
   string auth="Authorization: " + Authorization;
   string timestamp="Date: " + date;
   string user_agent="User-Agent: aws-sdk-java/1.7.4 Linux/3.10.0-514.6.1.el7.x86_64 OpenJDK_64-Bit_Server_VM/24.131-b00/1.7.0_131";

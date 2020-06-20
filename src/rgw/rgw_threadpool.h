@@ -61,7 +61,7 @@ public:
   Task() {}
   virtual ~Task() {}
   virtual void run()=0;
-//  virtual void set_handler(void*) = 0;
+  virtual void set_handler(void*) = 0;
 };
 
 

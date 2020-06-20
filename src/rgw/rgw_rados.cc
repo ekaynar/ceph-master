@@ -9236,7 +9236,7 @@ int RGWRados::get_local_obj_iterate_cb(const rgw_raw_obj& read_obj, string key, 
     rgw_raw_obj read_obj1(pool,key);
     auto obj1 = d->store->svc.rados->obj(read_obj1);
     int ret = obj1.open();
-    auto completed = d->aio->get(obj1, rgw::Aio::remote_op(std::move(op) , d->yield, obj_ofs, read_ofs, read_len, c_obj.destination, c), cost, id);
+    auto completed = d->aio->get(obj1, rgw::Aio::remote_op(std::move(op) , d->yield, obj_ofs, read_ofs, read_len, c_obj.host, c), cost, id);
     svc.cache->get_datacache().submit_remote_req(c);
     return d->flush(std::move(completed));
   }
@@ -9267,7 +9267,7 @@ void stripTags( string &text )
 int RGWRados::retrieve_obj_acls(cache_obj& c_obj){
   RGWRESTStreamRWRequest *in_stream_req;
   list<string> endpoints;
-  endpoints.push_back(c_obj.destination);
+  endpoints.push_back(c_obj.host);
 
   rgw_user user_id(c_obj.user);
   rgw_bucket bucket;
@@ -9674,7 +9674,7 @@ int RGWRados::copy_remote(RGWRados *store, cache_obj& c_obj){
   const string src_tenant_name = "";
   const string src_bucket_name = c_obj.bucket_name;
   const string src_obj_name = c_obj.obj_name;
-  string url ="http://" + c_obj.destination;
+  string url ="http://" + c_obj.host;
   string etag;
 
   HostStyle host_style = PathStyle;

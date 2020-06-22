@@ -2453,7 +2453,7 @@ struct cache_obj{
   string creationTime; // creation time of the s3 object
   string lastAccessTime; // last access time 
   BackendProtocol backendProtocol; // protocol used for backend communication
-  string obj_acl; // ACLs of s3 object
+  string acl; // ACLs of s3 object
   string aclTimeStamp; 
 };
 

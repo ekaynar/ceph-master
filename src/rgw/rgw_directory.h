@@ -56,31 +56,49 @@ public:
 	RGWDirectory() {}
 	virtual ~RGWDirectory(){ cout << "RGW Directory is destroyed!";}
 	virtual int getValue(cache_obj *ptr);
-	virtual int setValue(cache_obj *ptr);
+	int setValue(RGWDirectory *dirObj, cache_obj *ptr);
+	int updateLastAcessTime(RGWDirectory *dirObj, cache_obj *ptr, string lastAccessTime);
+	int updateACL(RGWDirectory *dirObj, cache_obj *ptr, string acl);
+	int updateHostList(RGWDirectory *dirObj, cache_obj *ptr, string host);
+	int delValue(RGWDirectory *dirObj, cache_obj *ptr);
+	//std::vector<std::pair<std::string, std::string>> get_aged_keys(string startTime, string endTime);
+
+private:
+	virtual int setKey(string key, cache_obj *ptr);
+	int delKey(string key);
+	int existKey(string key);
+	virtual string buildIndex(cache_obj *ptr);
+
 };
 
-class RGWObjectDirectory: RGWDirectory {
+class RGWObjectDirectory: public RGWDirectory {
 public:
 
 	RGWObjectDirectory() {}
 	virtual ~RGWObjectDirectory() { cout << "RGWObject Directory is destroyed!";}
-	//int getValue(objectDirectory_t &dir_val);
 	int getValue(cache_obj *ptr);
-	//int setValue(string key, string timeStr, string bucket_name, string obj_name, string location, string owner, uint64_t obj_size, string etag);
-	int setValue(cache_obj *ptr);
-	int updateLastAcessTime(cache_obj *ptr, string lastAccessTime);
-	int updateACL(cache_obj *ptr, string obj_acl);
-	int updateHostList(cache_obj *ptr, string host);
-	int delValue(cache_obj *ptr);
 	//std::vector<std::pair<std::string, std::string>> get_aged_keys(string startTime, string endTime);
 
 private:
 	int setKey(string key, cache_obj *ptr);
-	int delKey(string key);
-	int existKey(string key);
 	string buildIndex(cache_obj *ptr);
 	
 };
+
+class RGWBlockDirectory: RGWDirectory {
+public:
+
+	RGWBlockDirectory() {}
+	virtual ~RGWBlockDirectory() { cout << "RGWObject Directory is destroyed!";}
+	int getValue(cache_obj *ptr);
+	//std::vector<std::pair<std::string, std::string>> get_aged_keys(string startTime, string endTime);
+
+private:
+	int setKey(string key, cache_obj *ptr);
+	string buildIndex(cache_obj *ptr);
+	
+};
+
 
 
 

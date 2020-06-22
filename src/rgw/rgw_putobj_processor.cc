@@ -347,7 +347,7 @@ int AtomicObjectProcessor::complete(size_t accounted_size,
     objDir.dirty = 0;
     objDir.etag = etag;
     */
-    r = store->getRados()->objDirectory.setValue(&cacheObj);
+    r = store->getRados()->objDirectory.setValue(&store->getRados()->objDirectory, &cacheObj);
     /* datacache */
 
 

@@ -9315,8 +9315,8 @@ int RGWRados::retrieve_obj_acls(cache_obj& c_obj){
     acl.decode(iter);
     RGWAccessControlPolicy_S3* const s3policy = static_cast<RGWAccessControlPolicy_S3*>(&acl);
 
-    RGWAccessControlList& obj_acl = s3policy->get_acl();
-    multimap<string, ACLGrant>& grant_map = obj_acl.get_grant_map();
+    RGWAccessControlList& acl = s3policy->get_acl();
+    multimap<string, ACLGrant>& grant_map = acl.get_grant_map();
     multimap<string, ACLGrant>::iterator giter;
     for (giter = grant_map.begin(); giter != grant_map.end(); ++giter) {
       ACLGrant& src_grant = giter->second;
@@ -9324,9 +9324,9 @@ int RGWRados::retrieve_obj_acls(cache_obj& c_obj){
       ACLPermission_S3* const pp = static_cast<ACLPermission_S3*>(&perm);
       stringstream so;
       pp->to_xml(so);
-      c_obj.obj_acl = so.str();
-      stripTags(c_obj.obj_acl);
-      ldout(cct, 0) << __func__ << " Object S3 Permission " << c_obj.obj_acl << dendl;
+      c_obj.acl = so.str();
+      stripTags(c_obj.acl);
+      ldout(cct, 0) << __func__ << " Object S3 Permission " << c_obj.acl << dendl;
     }
   }
   return 0;

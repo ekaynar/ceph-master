@@ -428,6 +428,21 @@ void DataCache::retrieve_obj_info(cache_obj& c_obj){
 
 }
 
+void DataCache::aging_wb_cache(cache_obj& c_obj, RGWRados *store){
+  int ret = store->copy_remote(store, c_obj);
+}
+
+size_t DataCache::remove_read_cache_entry(cache_obj& c_obj){
+  string location = cct->_conf->rgw_datacache_path + "/"+ c_obj.bucket_name+"_"+c_obj.obj_name+"_" + std::to_string(c_obj.chunk_id);
+  if(access(location.c_str(), F_OK ) != -1 ) { // file 
+    remove(location.c_str());
+    return c_obj.chunk_size_in_bytes;
+  }
+  return 0;
+}
+
+
+
 int cacheAioWriteRequest::create_io(bufferlist& bl, uint64_t len, string key) {
   //std::string location =  "/tmp/"+ key;
   std::string location = cct->_conf->rgw_datacache_path + "/"+ key;

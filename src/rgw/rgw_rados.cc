@@ -1100,6 +1100,7 @@ int RGWRados::init_rados()
   }
 
   cr_registry = crs.release();
+
   return ret;
 }
 

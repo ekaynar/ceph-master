@@ -331,10 +331,12 @@ struct DataCache {
     DataCache();
     ~DataCache() {}
     void retrieve_obj_info(cache_obj& c_obj);
+    void aging_wb_cache(cache_obj& c_obj, RGWRados *store);
     void submit_remote_req(struct RemoteRequest *c);
     void put(bufferlist& bl, uint64_t len, string key);
     int create_aio_write_request(bufferlist& bl, uint64_t len, std::string key);
     void cache_aio_write_completion_cb(cacheAioWriteRequest *c);
+    size_t remove_read_cache_entry(cache_obj& c_obj);
     void init(CephContext *_cct) {
       cct = _cct;
       capacity = 1000;

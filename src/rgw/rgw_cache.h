@@ -27,10 +27,12 @@
 #include <aio.h>
 #include "rgw_threadpool.h"
 #include "rgw_cacherequest.h"
+#include "rgw_directory.h"
 #include <curl/curl.h>
-struct DataCache;
-class CacheThreadPool;
-class RemoteS3Request;
+
+//class DataCache;
+//class CacheThreadPool;
+//class RemoteS3Request;
 /*datacache*/
 
 
@@ -236,7 +238,7 @@ class ObjectCache {
 };
 
 /* datacache */
-
+/*
 class CacheThreadPool {
   public:
     CacheThreadPool(int n) {
@@ -319,7 +321,8 @@ struct cacheAioWriteRequest{
   }
 };
 
-struct DataCache {
+
+class DataCache {
   private:
     std::list<string> outstanding_write_list;
     uint64_t capacity ;
@@ -344,5 +347,6 @@ struct DataCache {
       tp = new CacheThreadPool(32);
     }
 };
+*/
 
 #endif

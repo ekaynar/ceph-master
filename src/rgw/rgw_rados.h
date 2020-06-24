@@ -36,9 +36,10 @@
 #include <cpp_redis/cpp_redis>
 #include "rgw_cacherequest.h"
 #include "rgw_directory.h"
-//#include "rgw_cache.h"
+#include "rgw_cache.h"
 /*datacache*/
 
+class DataCache;
 class RGWWatcher;
 class SafeTimer;
 class ACLOwner;
@@ -1100,6 +1101,7 @@ public:
 
   /* datacache */
 
+  DataCache d_cache;
   RGWObjectDirectory objDirectory;
 
   int create_bucket(RGWRados *store, string userid, string dest_bucket_name, CephContext *cct, RGWBucketInfo& bucket_info, map<string, bufferlist>& bucket_attrs, RGWAccessKey& accesskey);

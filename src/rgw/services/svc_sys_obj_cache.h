@@ -5,6 +5,7 @@
 
 #include "rgw/rgw_service.h"
 #include "rgw/rgw_cache.h"
+#include "rgw/rgw_directory.h"
 
 #include "svc_sys_obj_core.h"
 

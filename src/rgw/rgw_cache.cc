@@ -413,7 +413,7 @@ ObjectCache::~ObjectCache()
 
 
 /* datacache */
-
+/*
 DataCache::DataCache () : cct(NULL), capacity(0)  {}
 
 void DataCache::submit_remote_req(struct RemoteRequest *c){
@@ -489,6 +489,7 @@ void _cache_aio_write_completion_cb(sigval_t sigval) {
   c->priv_data->cache_aio_write_completion_cb(c);
 }
 
+
 int DataCache::create_aio_write_request(bufferlist& bl, uint64_t len, std::string key){
   struct cacheAioWriteRequest *wr= new struct cacheAioWriteRequest(cct);
   int ret = 0;
@@ -538,6 +539,7 @@ void DataCache::put(bufferlist& bl, uint64_t len, string key){
     return;
   }
 }
+
 
 static size_t _remote_req_cb(void *ptr, size_t size, size_t nmemb, void* param) {
   RemoteRequest *req = static_cast<RemoteRequest *>(param);
@@ -615,7 +617,7 @@ int RemoteS3Request::submit_http_get_request_s3(){
 
 }
 
-/*Remote S3 Request datacacahe*/
+//Remote S3 Request datacacahe
 int RemoteS3Request::submit_op() {
   ldout(cct, 10) << __func__  << " for block" <<  req->key << dendl;
   return req->submit_op();
@@ -641,4 +643,4 @@ void RemoteS3Request::run() {
 
   }
 
-
+*/

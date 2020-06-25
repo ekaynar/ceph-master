@@ -424,7 +424,7 @@ void DataCache::submit_remote_req(struct RemoteRequest *c){
 
 void DataCache::retrieve_obj_info(cache_obj* c_obj, RGWRados *store){
   ldout(cct, 0) << __func__ <<dendl;
-//  int ret = store->getValue(c_obj);
+  int ret = store->blkDirectory.getValue(c_obj);
 }
 
 void retrieve_aged_objList(RGWRados *store, string start_time, string end_time){

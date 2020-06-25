@@ -1108,6 +1108,7 @@ public:
   /* datacache */
 
   RGWObjectDirectory objDirectory;
+  RGWBlockDirectory blkDirectory;
 
   int create_bucket(RGWRados *store, string userid, string dest_bucket_name, CephContext *cct, RGWBucketInfo& bucket_info, map<string, bufferlist>& bucket_attrs, RGWAccessKey& accesskey);
   int get_s3_credentials(RGWRados *store, string userid, RGWAccessKey& s3_key);

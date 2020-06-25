@@ -599,8 +599,7 @@ int RGWObjectDirectory::updateValue(cache_obj *ptr, string field, string value){
 
 
 //returns all the keys between startTime and endTime as <key, time> paris
-/*
-std::vector<std::pair<std::string, std::string>> RGWDirectory::get_aged_keys(string startTime, string endTime){
+std::vector<std::pair<std::string, std::string>> RGWObjectDirectory::get_aged_keys(string startTime, string endTime){
 	std::vector<std::pair<std::string, std::string>> list;
 	std::string key;
 	std::string time;
@@ -609,13 +608,14 @@ std::vector<std::pair<std::string, std::string>> RGWDirectory::get_aged_keys(str
 	//	//client.connect();
 	client.connect("127.0.0.1", 7000);
 
-	std::string dirKey = "main_directory";
-	client.zrangebyscore(dirKey, startTime, endTime, true, [&key, &time](cpp_redis::reply &reply){
+	std::string dirKey = "keyObjectDirectory";
+	client.zrangebyscore(dirKey, startTime, endTime, true, [&key, &time, &list](cpp_redis::reply &reply){
 	      for (unsigned i = 0; i < reply.as_array().size(); i+=2)
 	      {
 	          key = reply.as_string()[i];
 	          time = reply.as_string()[i+1];
 
+			  list.push_back(make_pair(key, time));
 	      }
 	      //if (reply.is_error() == false)
   });
@@ -626,6 +626,5 @@ std::vector<std::pair<std::string, std::string>> RGWDirectory::get_aged_keys(str
 	return list;
 }
 
-*/
 
 

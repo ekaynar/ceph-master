@@ -36,6 +36,7 @@
 #include <cpp_redis/cpp_redis>
 #include "rgw_cacherequest.h"
 #include "rgw_directory.h"
+//#include "rgw_cache.h"
 /*datacache*/
 
 class RGWWatcher;
@@ -631,6 +632,7 @@ public:
     set_context(_cct);
     return initialize();
   }
+   
   /** Initialize the RADOS instance and prepare to do other ops */
   int init_svc(bool raw);
   int init_ctl();

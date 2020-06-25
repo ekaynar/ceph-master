@@ -2441,12 +2441,13 @@ struct cache_obj{
   string obj_name; //s3 obj name 
   RGWAccessKey accesskey; //user's s3_key
   rgw_user user_id;
-  string host; // hostname <ip:host> of the cache that request rados obj
+  string host; // url <ip:post> of the cache that request rados obj
   vector<string> host_list; // list of hostnames <ip:host> of remote caches
   CacheLocation cache_location;  
   uint64_t size_in_bytes; // s3 object size in bytes
   uint64_t offset; // s3 obj offset
   uint64_t chunk_id; // rados obj chunk id
+  uint64_t chunk_size_in_bytes; // rados obj chunk size in bytes
   bool dirty; // s3 object is clean or has been modified
   string etag; 
   //ceph::real_time creationTime; // creation time of the s3 object

@@ -331,7 +331,7 @@ struct DataCache {
   public:
     DataCache();
     ~DataCache() {}
-    void retrieve_obj_info(cache_obj& c_obj);
+    void retrieve_obj_info(cache_obj* c_obj, RGWRados *store);
     //void timer_start(RGWRados *store, size_t interval);
     void submit_remote_req(struct RemoteRequest *c);
     void put(bufferlist& bl, uint64_t len, string key);

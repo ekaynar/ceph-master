@@ -1241,9 +1241,11 @@ OPTION(rados_mon_op_timeout, OPT_DOUBLE) // how many seconds to wait for a respo
 OPTION(rados_osd_op_timeout, OPT_DOUBLE) // how many seconds to wait for a response from osds before returning an error from a rados operation. 0 means no limit.
 OPTION(rados_tracing, OPT_BOOL) // true if LTTng-UST tracepoints should be enabled
 
+OPTION(rgw_datacache_enabled, OPT_BOOL) // enable rgw object datacache
+OPTION(rgw_datacache_path, OPT_STR) // rgw local read cache path
+OPTION(aging_interval, OPT_INT) // rgw datacache wb cache aging interval
+OPTION(backend_url, OPT_STR) // rgw datacache wb cache aging interval
 
-OPTION(rgw_datacache_enabled, OPT_BOOL) // datacache
-OPTION(rgw_datacache_path, OPT_STR) // datacache
 OPTION(rgw_max_attr_name_len, OPT_SIZE)
 OPTION(rgw_max_attr_size, OPT_SIZE)
 OPTION(rgw_max_attrs_num_in_req, OPT_U64)

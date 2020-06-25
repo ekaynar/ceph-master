@@ -7008,7 +7008,14 @@ std::vector<Option> get_rgw_options() {
     .set_default("/tmp/")
     .set_description("rgw datacache path"),
 
+    Option("aging_interval", Option::TYPE_INT, Option::LEVEL_ADVANCED)
+    .set_default(5)
+    .set_description("rgw wb datacache aging internval"),
 
+    Option("backend_url", Option::TYPE_STR, Option::LEVEL_ADVANCED)
+    .set_default("localhost:8000")
+    .set_description("datalake url"),
+    
     Option("rgw_dmclock_metadata_wgt", Option::TYPE_FLOAT, Option::LEVEL_ADVANCED)
     .set_default(500.0)
     .set_description("mclock weight for metadata requests")

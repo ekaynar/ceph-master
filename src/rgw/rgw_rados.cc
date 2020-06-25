@@ -9215,7 +9215,7 @@ int RGWRados::get_local_obj_iterate_cb(const rgw_raw_obj& read_obj, string key, 
   auto obj = d->store->svc.rados->obj(read_obj);
   int ret = obj.open();
   op.read(read_ofs, read_len, nullptr, nullptr);
-  svc.cache->get_datacache().retrieve_obj_info(c_obj); 
+  svc.cache->get_datacache().retrieve_obj_info(&c_obj, store); 
   // local read
   retrieve_obj_acls(c_obj);
   c_obj.host_list.push_back("1");

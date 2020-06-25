@@ -422,8 +422,9 @@ void DataCache::submit_remote_req(struct RemoteRequest *c){
   tp->addTask(new RemoteS3Request(c, cct));
 }
 
-void DataCache::retrieve_obj_info(cache_obj& c_obj){
+void DataCache::retrieve_obj_info(cache_obj* c_obj, RGWRados *store){
   ldout(cct, 0) << __func__ <<dendl;
+//  int ret = store->getValue(c_obj);
 }
 
 void retrieve_aged_objList(RGWRados *store, string start_time, string end_time){
@@ -456,7 +457,7 @@ size_t DataCache::get_used_pool_capacity(string pool_name, RGWRados *store){
 }
 
 
-void timer_start(RGWRados *store, size_t interval)
+void timer_start(RGWRados *store, int interval)
 {
     time_t rawTime = time(NULL);
     string end_time = asctime(gmtime(&rawTime));
@@ -467,8 +468,7 @@ void timer_start(RGWRados *store, size_t interval)
         {
 	    std::vector<std::pair<std::string, std::string>> object_list;
 	    retrieve_aged_objList(store, start_time, end_time); 
-            cache_obj c_obj;
-	    for (int i =0; i <5; i++){ //FIXME : iterate over aged objects
+	    for (const auto& c_obj : object_list){ //FIXME : iterate over aged objects
 	//	    store->copy_remote(store, c_obj); //aging function
 	    }
             std::this_thread::sleep_for(std::chrono::minutes(interval));
@@ -482,8 +482,7 @@ void timer_start(RGWRados *store, size_t interval)
 
 void DataCache::start_cache_aging(RGWRados *store){
   ldout(cct, 0) << __func__ <<dendl;
-  size_t interval = 1;
-  timer_start(store,interval);
+  timer_start(store,cct->_conf->aging_interval);
 }
 
 size_t DataCache::remove_read_cache_entry(cache_obj& c_obj){

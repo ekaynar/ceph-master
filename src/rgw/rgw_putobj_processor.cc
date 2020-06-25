@@ -330,23 +330,22 @@ int AtomicObjectProcessor::complete(size_t accounted_size,
 
     cache_obj cacheObj;
 
-    /*
-    objectDirectoryStruct_t objDir;
+    cacheObj.user =  op_target.get_bucket_info().owner.id;
+    cacheObj.bucket_name = op_target.get_obj().bucket.name;
+    cacheObj.obj_name = op_target.get_obj().key.name;
 
-    objDir.bucket_name = op_target.get_obj().bucket.name;
-    objDir.obj_name = op_target.get_obj().key.name;
-    objDir.owner =  op_target.get_bucket_info().owner.id;
-    objDir.backendProtocol =  "s3";
-
-    time_t rawTime = time (NULL);
-    objDir.createTime = asctime(gmtime(&rawTime));
-    objDir.lastAccessTime = asctime(gmtime(&rawTime));
-    objDir.key = s3_bucket_name+"_"+s3_object_name;
-    objDir.location = "writecache";
-    objDir.size = manifest.get_obj_size();
-    objDir.dirty = 0;
-    objDir.etag = etag;
-    */
+    cacheObj.host_list.push_back("writecache");
+    cacheObj.size_in_bytes = manifest.get_obj_size();
+    cacheObj.chunk_id = 0; //FIXME
+    cacheObj.dirty = true;
+    cacheObj.etag = etag;
+    time_t rawTime = time(NULL);
+    cacheObj.creationTime = asctime(gmtime(&rawTime));
+    cacheObj.lastAccessTime = asctime(gmtime(&rawTime));
+    cacheObj.backendProtocol =  S3;
+    cacheObj.acl = "acl_test"; //FIXME
+    cacheObj.aclTimeStamp = asctime(gmtime(&rawTime)); //FIXME
+   
     r = store->getRados()->objDirectory.setValue(&store->getRados()->objDirectory, &cacheObj);
     /* datacache */
 

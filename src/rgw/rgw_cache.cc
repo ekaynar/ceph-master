@@ -22,6 +22,7 @@ uint64_t expected_size = 0;
 #include <openssl/hmac.h>
 #include <ctime>
 #include <curl/curl.h>
+#include <time.h>
 //#include "rgw_cacherequest.h"
 static const std::string base64_chars =
 "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -423,10 +424,15 @@ void DataCache::submit_remote_req(struct RemoteRequest *c){
 
 void DataCache::retrieve_obj_info(cache_obj& c_obj){
   ldout(cct, 0) << __func__ <<dendl;
-  ldout(cct, 0) << c_obj.bucket_name <<dendl;
-  c_obj.host_list.push_back("1");
-
 }
+
+void retrieve_aged_objList(RGWRados *store, string start_time, string end_time){
+//  ldout(cct, 0) << __func__ <<dendl;
+  std::vector<std::pair<std::string, std::string>> object_list;
+  object_list = store->objDirectory.get_aged_keys(start_time, end_time);
+}
+
+
 
 size_t DataCache::get_used_pool_capacity(string pool_name, RGWRados *store){
 
@@ -450,28 +456,34 @@ size_t DataCache::get_used_pool_capacity(string pool_name, RGWRados *store){
 }
 
 
-void timer_start(RGWRados *store, unsigned int interval)
+void timer_start(RGWRados *store, size_t interval)
 {
-    std::thread([store, interval]() {
+    time_t rawTime = time(NULL);
+    string end_time = asctime(gmtime(&rawTime));
+    rawTime = rawTime - (60 * interval);
+    string start_time = asctime(gmtime(&rawTime));
+    std::thread([store, interval, &start_time, &end_time]() {
         while (true)
         {
-	    cache_obj c_obj;
-//            store->copy_remote(store, c_obj);
+	    std::vector<std::pair<std::string, std::string>> object_list;
+	    retrieve_aged_objList(store, start_time, end_time); 
+            cache_obj c_obj;
+	    for (int i =0; i <5; i++){ //FIXME : iterate over aged objects
+	//	    store->copy_remote(store, c_obj); //aging function
+	    }
             std::this_thread::sleep_for(std::chrono::minutes(interval));
-        }
+	    start_time = end_time;
+	    time_t rawTime = time(NULL);
+	    end_time = asctime(gmtime(&rawTime));
+	}
     }).detach();
 }
 
 
-
 void DataCache::start_cache_aging(RGWRados *store){
   ldout(cct, 0) << __func__ <<dendl;
-  int interval = 1;
+  size_t interval = 1;
   timer_start(store,interval);
-}
-
-void DataCache::aging_wb_cache(cache_obj& c_obj, RGWRados *store){
-  int ret = store->copy_remote(store, c_obj);
 }
 
 size_t DataCache::remove_read_cache_entry(cache_obj& c_obj){

@@ -326,6 +326,7 @@ struct DataCache {
     CephContext *cct;
     std::string path;
     CacheThreadPool *tp;
+
     //ceph::mutex lock = ceph::make_mutex("DataCache::lock");
   public:
     DataCache();
@@ -337,6 +338,8 @@ struct DataCache {
     int create_aio_write_request(bufferlist& bl, uint64_t len, std::string key);
     void cache_aio_write_completion_cb(cacheAioWriteRequest *c);
     size_t remove_read_cache_entry(cache_obj& c_obj);
+    size_t get_used_pool_capacity(string pool_name, RGWRados *store);
+    void start_cache_aging(RGWRados *store);
     void init(CephContext *_cct) {
       cct = _cct;
       capacity = 1000;

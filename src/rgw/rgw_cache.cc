@@ -428,6 +428,48 @@ void DataCache::retrieve_obj_info(cache_obj& c_obj){
 
 }
 
+size_t DataCache::get_used_pool_capacity(string pool_name, RGWRados *store){
+
+  ldout(cct, 0) << __func__ <<dendl;
+  size_t used_capacity = 0;
+  librados::Rados *rados = store->get_rados_handle();
+  list<string> vec;
+  int r = rados->pool_list(vec);
+//  vec.push_back(pool_name);
+  map<string,librados::pool_stat_t> stats;
+  r = rados->get_pool_stats(vec, stats);
+  if (r < 0) {
+    ldout(cct, 0) << "error fetching pool stats: " <<dendl;
+    return -1;
+  }
+  for (map<string,librados::pool_stat_t>::iterator i = stats.begin();i != stats.end(); ++i) {
+    const char *pool_name = i->first.c_str();
+    librados::pool_stat_t& s = i->second;
+  }
+  return used_capacity; //return used size
+}
+
+
+void timer_start(RGWRados *store, unsigned int interval)
+{
+    std::thread([store, interval]() {
+        while (true)
+        {
+	    cache_obj c_obj;
+//            store->copy_remote(store, c_obj);
+            std::this_thread::sleep_for(std::chrono::minutes(interval));
+        }
+    }).detach();
+}
+
+
+
+void DataCache::start_cache_aging(RGWRados *store){
+  ldout(cct, 0) << __func__ <<dendl;
+  int interval = 1;
+  timer_start(store,interval);
+}
+
 void DataCache::aging_wb_cache(cache_obj& c_obj, RGWRados *store){
   int ret = store->copy_remote(store, c_obj);
 }
@@ -444,7 +486,6 @@ size_t DataCache::remove_read_cache_entry(cache_obj& c_obj){
 
 
 int cacheAioWriteRequest::create_io(bufferlist& bl, uint64_t len, string key) {
-  //std::string location =  "/tmp/"+ key;
   std::string location = cct->_conf->rgw_datacache_path + "/"+ key;
   int ret = 0;
   cb = new struct aiocb;

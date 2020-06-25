@@ -1100,7 +1100,9 @@ int RGWRados::init_rados()
   }
 
   cr_registry = crs.release();
-
+  if (use_datacache){
+    svc.cache->get_datacache().start_cache_aging(this); // datacache
+  }
   return ret;
 }
 

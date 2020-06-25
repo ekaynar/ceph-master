@@ -517,6 +517,7 @@ protected:
   RGWIndexCompletionManager *index_completion_manager{nullptr};
 
   bool use_cache{false};
+  bool use_datacache{false};//datacache
 public:
   RGWRados(): timer(NULL),
                gc(NULL), lc(NULL), obj_expirer(NULL), use_gc_thread(false), use_lc_thread(false), quota_threads(false),
@@ -536,6 +537,12 @@ public:
     return *this;
   }
 
+/*datacache*/
+  RGWRados& set_use_datacache(bool status) {
+    use_datacache = status;
+    return *this;
+  }
+/*datacache*/
   RGWLC *get_lc() {
     return lc;
   }

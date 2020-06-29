@@ -430,7 +430,7 @@ void DataCache::retrieve_obj_info(cache_obj* c_obj, RGWRados *store){
 void retrieve_aged_objList(RGWRados *store, string start_time, string end_time){
 //  ldout(cct, 0) << __func__ <<dendl;
   vector<vector<string>> object_list;
-  object_list = store->objDirectory.get_aged_keys(start_time, end_time);
+//  object_list = store->objDirectory.get_aged_keys(start_time, end_time);
 }
 
 
@@ -466,7 +466,8 @@ void timer_start(RGWRados *store, int interval)
     std::thread([store, interval, &start_time, &end_time]() {
         while (true)
         {
-	    std::vector<std::pair<std::string, std::string>> object_list;
+//	    std::vector<std::pair<std::string, std::string>> object_list;
+	    vector<vector<string>> object_list;
 	    retrieve_aged_objList(store, start_time, end_time); 
 	    for (const auto& c_obj : object_list){ //FIXME : iterate over aged objects
 	//	    store->copy_remote(store, c_obj); //aging function

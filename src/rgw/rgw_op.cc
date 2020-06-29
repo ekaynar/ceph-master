@@ -55,6 +55,8 @@
 #include "services/svc_quota.h"
 #include "services/svc_sys_obj.h"
 
+#include "services/svc_sys_obj_cache.h" //datacache
+
 #include "cls/lock/cls_lock_client.h"
 #include "cls/rgw/cls_rgw_client.h"
 
@@ -8234,58 +8236,32 @@ void RGWDeleteBucketPublicAccessBlock::execute()
 
 /*datacache*/
 
-void RGWGetObj::fetch_remote_execute()
-{
- ldpp_dout(this, 10) << __func__  << dendl;
-  this->total_len = s->obj_size;
-  RGWGetObj_CB cb(this);
-  RGWGetObj_Filter* filter = (RGWGetObj_Filter *)&cb;
-  RGWBucketInfo dest_bucket_info;
-//  map<string, bufferlist> dest_attrs;
-  RGWRados::Object op_target(store->getRados(), dest_bucket_info, *static_cast<RGWObjectCtx *>(s->obj_ctx), obj);
-  RGWRados::Object::Read read_op(&op_target);
-  // FIXME: AMIN commented, Ugur should update this.
-  //op_ret = read_op.fetch_from_backend(filter, objDir.owner, objDir.bucket_name, objDir.obj_name, objDir.location);
-}
+bool cache_authorize(cache_obj &c_obj){
+  bool allow =  false;
+  time_t now = time(0); 
+  //if(c_obj)
 
-
-void RGWGetObj::directory_lookup()
-{
-  /*c_obj.bucket_name = s->bucket_name;
-  c_obj.obj_name = s->object.name;
-  c_obj.user = s->user->get_info().user_id.id;
-  c_obj.size_in_bytes = 20971520;
-  c_obj.destination="http://128.31.25.83:8000"; 
-  s->obj_size = 20971520;
-
-  objDir.bucket_name = s->bucket_name;
-  objDir.obj_name = s->object.name;
-  objDir.key = s->bucket_name +"_"+s->object.name;
-  ldpp_dout(this, 10) << __func__ << this->objDir.key  << dendl;
-  ldpp_dout(this, 10) << __func__ << this->c_obj.user  << dendl;
-  //int ret = store->getRados()->objDirectory.getValue(this->objDir);
-  objDir.location = "readcache";
-
-  objDir.owner = "testuser";
-  objDir.obj_size = 20971520;
- /* if (this->objDir.location == "cache") {
-    ldpp_dout(this, 10) << "data in cache" << dendl;
-  } else if (this->objDir.location == "datalake") {
-    ldpp_dout(this, 10) << "data in datalake" << dendl;
-  }*/
+  
+  return allow;
 }
 
 void RGWGetObj::cache_execute()
 {
   ldpp_dout(this, 10) << __func__  << dendl;
+
   c_obj.size_in_bytes = 20971520;
   s->obj_size = 20971520;
   this->total_len = 20971520;
-  c_obj.host="http://128.31.25.83:8000";
   c_obj.bucket_name = s->bucket_name;
   c_obj.obj_name = s->object.name;
   c_obj.user = s->user->get_info().user_id.id;
-    
+  
+  op_ret = objectDirectory.getValue(&c_obj);
+
+  if(false){
+//   goto done_err;
+  }
+
   int64_t ofs_x, end_x;
   ofs_x = 0;
   end_x = c_obj.size_in_bytes - 1;
@@ -8295,7 +8271,7 @@ void RGWGetObj::cache_execute()
   RGWBucketInfo dest_bucket_info;
   RGWRados::Object op_target(store->getRados(), dest_bucket_info, *static_cast<RGWObjectCtx *>(s->obj_ctx), obj);
   RGWRados::Object::Read read_op(&op_target);
-  
+
   op_ret = read_op.read(ofs_x, end_x, filter, c_obj, s->yield); 
   if (op_ret >= 0)
     op_ret = filter->flush();

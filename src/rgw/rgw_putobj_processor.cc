@@ -340,11 +340,11 @@ int AtomicObjectProcessor::complete(size_t accounted_size,
     cacheObj.dirty = true;
     cacheObj.etag = etag;
     time_t rawTime = time(NULL);
-    cacheObj.creationTime = asctime(gmtime(&rawTime));
-    cacheObj.lastAccessTime = asctime(gmtime(&rawTime));
+    cacheObj.creationTime = mktime(gmtime(&rawTime));
+    cacheObj.lastAccessTime = mktime(gmtime(&rawTime));
     cacheObj.backendProtocol =  S3;
     cacheObj.acl = "acl_test"; //FIXME
-    cacheObj.aclTimeStamp = asctime(gmtime(&rawTime)); //FIXME
+    cacheObj.aclTimeStamp = mktime(gmtime(&rawTime)); //FIXME
    
     r = store->getRados()->objDirectory.setValue(&store->getRados()->objDirectory, &cacheObj);
     /* datacache */

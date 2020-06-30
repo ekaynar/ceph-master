@@ -427,6 +427,8 @@ void DataCache::retrieve_obj_info(cache_obj* c_obj, RGWRados *store){
   int ret = store->blkDirectory.getValue(c_obj);
 }
 
+
+
 void retrieve_aged_objList(RGWRados *store, string start_time, string end_time){
 //  ldout(cct, 0) << __func__ <<dendl;
   vector<vector<string>> object_list;
@@ -469,10 +471,10 @@ void timer_start(RGWRados *store, int interval)
 //	    std::vector<std::pair<std::string, std::string>> object_list;
 	    vector<vector<string>> object_list;
 	    retrieve_aged_objList(store, start_time, end_time); 
-	    for (const auto& c_obj : object_list){ //FIXME : iterate over aged objects
+/*	    for (const auto& c_obj : object_list){ //FIXME : iterate over aged objects
 	//	    store->copy_remote(store, c_obj); //aging function
 	    }
-            std::this_thread::sleep_for(std::chrono::minutes(interval));
+  */          std::this_thread::sleep_for(std::chrono::minutes(interval));
 	    start_time = end_time;
 	    time_t rawTime = time(NULL);
 	    end_time = asctime(gmtime(&rawTime));
@@ -694,4 +696,56 @@ void RemoteS3Request::run() {
 
   }
 
+static size_t throw_away(void *ptr, size_t size, size_t nmemb, void *data)
+{
+    (void)ptr;
+      (void)data;
+        /* we are not interested in the headers itself,
+	 *      so we only return the size we would have saved ... */ 
+	  return (size_t)(size * nmemb);
+}
 
+void DataCache::get_obj_size(cache_obj& c_obj){
+  ldout(cct, 10) << __func__  << c_obj.bucket_name<< " " << c_obj.obj_name << dendl;
+  CURL *curl = curl_easy_init();
+  RemoteS3Request *rr;
+  CURLcode res;
+  string uri = "/"+c_obj.bucket_name + "/" +c_obj.obj_name;
+  string date = rr->get_date();
+  string AWSAccessKeyId=c_obj.accesskey.id;
+  string YourSecretAccessKeyID=c_obj.accesskey.key;
+  string signature = rr->sign_s3_request("GET", uri, date, YourSecretAccessKeyID, AWSAccessKeyId);
+  string Authorization = "AWS "+ AWSAccessKeyId +":" + signature;
+  string loc = c_obj.host + uri;
+  string auth="Authorization: " + Authorization;
+  string timestamp="Date: " + date;
+  string user_agent="User-Agent: aws-sdk-java/1.7.4 Linux/3.10.0-514.6.1.el7.x86_64 OpenJDK_64-Bit_Server_VM/24.131-b00/1.7.0_131";
+  string content_type="Content-Type: application/x-www-form-urlencoded; charset=utf-8";
+  double cl;
+  ldout(cct, 10) << __func__  << loc.c_str() << dendl;
+  if(curl) {
+ struct curl_slist *chunk = NULL;
+    chunk = curl_slist_append(chunk, auth.c_str());
+    chunk = curl_slist_append(chunk, timestamp.c_str());
+    chunk = curl_slist_append(chunk, user_agent.c_str());
+    chunk = curl_slist_append(chunk, content_type.c_str());
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, chunk); //set headers
+    curl_easy_setopt(curl, CURLOPT_NOBODY, 1L);  
+//    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1);
+    curl_easy_setopt(curl, CURLOPT_URL, loc.c_str());
+    curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, throw_away);
+    curl_easy_setopt(curl, CURLOPT_HEADER, 0L);
+    res = curl_easy_perform(curl);
+  if(CURLE_OK == res) {
+    ldout(cct, 10) << __func__ << "curl_ok " <<cl <<dendl;
+    
+    res = curl_easy_getinfo(curl, CURLINFO_CONTENT_LENGTH_DOWNLOAD, &cl);
+    if ((CURLE_OK == res) && (cl>0.0))
+  { ldout(cct, 10) << __func__ << "curl_ok size_ok" <<cl <<dendl;	}
+    c_obj.size_in_bytes = (size_t)cl;
+  }
+  }
+  curl_easy_cleanup(curl);
+
+  ldout(cct, 10) << __func__ << "ugur " <<cl <<dendl;
+}

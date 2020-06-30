@@ -1101,7 +1101,7 @@ int RGWRados::init_rados()
 
   cr_registry = crs.release();
   if (use_datacache){
-    svc.cache->get_datacache().start_cache_aging(this); // datacache
+//    svc.cache->get_datacache().start_cache_aging(this); // datacache
   }
   return ret;
 }
@@ -9215,9 +9215,9 @@ int RGWRados::get_local_obj_iterate_cb(const rgw_raw_obj& read_obj, string key, 
   auto obj = d->store->svc.rados->obj(read_obj);
   int ret = obj.open();
   op.read(read_ofs, read_len, nullptr, nullptr);
-  svc.cache->get_datacache().retrieve_obj_info(&c_obj, store); 
+//  svc.cache->get_datacache().retrieve_obj_info(&c_obj, store); 
   // local read
-  retrieve_obj_acls(c_obj);
+//  retrieve_obj_acls(c_obj);
   c_obj.host_list.push_back("1");
   if (find(c_obj.host_list.begin(), c_obj.host_list.end(), "0") != c_obj.host_list.end()){
     rgw_pool pool("default.rgw.buckets.data");
@@ -9267,7 +9267,15 @@ void stripTags( string &text )
   }
 }
 
+int RGWRados::retrieve_obj_size(cache_obj& c_obj, RGWRados *store){
+  int ret = get_s3_credentials(store, c_obj.user, c_obj.accesskey);
+  svc.cache->get_datacache().get_obj_size(c_obj);
+}
+
+
 int RGWRados::retrieve_obj_acls(cache_obj& c_obj){
+  ldout(cct, 20) << __func__ <<dendl;
+  get_s3_credentials(store->getRados(), c_obj.user, c_obj.accesskey);
   RGWRESTStreamRWRequest *in_stream_req;
   list<string> endpoints;
   endpoints.push_back(c_obj.host);
@@ -9282,7 +9290,8 @@ int RGWRados::retrieve_obj_acls(cache_obj& c_obj){
   RGWGetExtraDataCB cb;
   real_time set_mtime;
   map<string, string> pheaders;
-
+  uint64_t obj_size = 0;
+  
   bool prepend_metadata = true;
   bool rgwx_stat = true;
   bool skip_decrypt =true;
@@ -9296,7 +9305,7 @@ int RGWRados::retrieve_obj_acls(cache_obj& c_obj){
 
     if (ret < 0 )
     return ret;
-  ret = conn->complete_request(in_stream_req, nullptr, &set_mtime, nullptr, nullptr, &pheaders);
+  ret = conn->complete_request(in_stream_req, nullptr, &set_mtime, &obj_size, nullptr, &pheaders);
   if (ret < 0 )
     return ret;
 
@@ -9332,6 +9341,7 @@ int RGWRados::retrieve_obj_acls(cache_obj& c_obj){
       ldout(cct, 0) << __func__ << " Object S3 Permission " << c_obj.acl << dendl;
     }
   }
+   c_obj.size_in_bytes = obj_size;
   return 0;
 }
 

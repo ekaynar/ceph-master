@@ -283,11 +283,11 @@ class RemoteS3Request : public Task {
     virtual void set_handler(void *handle) {
       curl_handle = (CURL *)handle;
     }
+    string sign_s3_request(string HTTP_Verb, string uri, string date, string YourSecretAccessKeyID, string AWSAccessKeyId);
+    string get_date();
   private:
     int submit_op();
-    string sign_s3_request(string HTTP_Verb, string uri, string date, string YourSecretAccessKeyID, string AWSAccessKeyId);
     int submit_http_get_request_s3();
-    string get_date();
   private:
     pthread_mutex_t qmtx;
     pthread_cond_t wcond;
@@ -332,6 +332,7 @@ struct DataCache {
     DataCache();
     ~DataCache() {}
     void retrieve_obj_info(cache_obj* c_obj, RGWRados *store);
+    void get_obj_size(cache_obj& c_obj);
     //void timer_start(RGWRados *store, size_t interval);
     void submit_remote_req(struct RemoteRequest *c);
     void put(bufferlist& bl, uint64_t len, string key);

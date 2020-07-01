@@ -9185,14 +9185,12 @@ int RGWRados::Object::Read::read(int64_t ofs, int64_t end, RGWGetDataCB *cb, cac
   const uint64_t chunk_size = cct->_conf->rgw_get_obj_max_req_size;
   const uint64_t window_size = cct->_conf->rgw_get_obj_window_size;
   int r = store->get_s3_credentials(store, c_obj.user, c_obj.accesskey);
-  ldout(cct, 0) << __func__ << dendl;
 
   auto aio = rgw::make_throttle(window_size, y);
   get_obj_data data(store, cb, &*aio, ofs, y);  
   rgw_obj obj;
   r = store->iterate_local_obj(obj_ctx, obj, c_obj, ofs, end, chunk_size, _get_local_obj_iterate_cb,  &data, y, store);
   if (r < 0) {
-    ldout(cct, 0) << "iterate_local_obj() failed with " << r << dendl;
     data.cancel(); // drain completions without writing back to client
     return r;
   }
@@ -9267,11 +9265,12 @@ void stripTags( string &text )
   }
 }
 
+/*
 int RGWRados::retrieve_obj_size(cache_obj& c_obj, RGWRados *store){
   int ret = get_s3_credentials(store, c_obj.user, c_obj.accesskey);
   svc.cache->get_datacache().get_obj_size(c_obj);
 }
-
+*/
 
 int RGWRados::retrieve_obj_acls(cache_obj& c_obj){
   ldout(cct, 20) << __func__ <<dendl;
@@ -9316,7 +9315,6 @@ int RGWRados::retrieve_obj_acls(cache_obj& c_obj){
       ldout(cct, 0) << "failed to parse response extra data. len=" << extra_data_bl.length() << " data=" << extra_data_bl.c_str() << dendl;
       return -EIO;
     }
-
     JSONDecoder::decode_json("attrs", src_attrs, &jp);
   }
 
@@ -9338,7 +9336,6 @@ int RGWRados::retrieve_obj_acls(cache_obj& c_obj){
       pp->to_xml(so);
       c_obj.acl = so.str();
       stripTags(c_obj.acl);
-      ldout(cct, 0) << __func__ << " Object S3 Permission " << c_obj.acl << dendl;
     }
   }
    c_obj.size_in_bytes = obj_size;
@@ -9353,9 +9350,6 @@ int RGWRados::iterate_local_obj(RGWObjectCtx& obj_ctx, const rgw_obj& obj, cache
   string key = c_obj.bucket_name+"_"+c_obj.obj_name+"_";    
   rgw_pool pool("default.rgw.buckets.data");
   rgw_raw_obj read_obj(pool,c_obj.obj_name);
-
-
-
 
   //Calculate_chunk_id
   chunk_id = 0;
@@ -9384,7 +9378,6 @@ int RGWRados::iterate_local_obj(RGWObjectCtx& obj_ctx, const rgw_obj& obj, cache
   return 0;
 
 }
-
 
 int RGWRados::Object::Read::fetch_from_backend(RGWGetDataCB *cb, string owner, string bucket_name, string obj_name, string location){
   RGWRados *store = source->get_store();
@@ -9461,7 +9454,6 @@ int RGWRados::get_s3_credentials(RGWRados *store, string userid, RGWAccessKey& s
     s3_key.id=k.id;
     s3_key.key = k.key;
   }
-  dout(10) << __func__ << " s3 key ="  << s3_key.key << dendl;
   return 0;
 }
 

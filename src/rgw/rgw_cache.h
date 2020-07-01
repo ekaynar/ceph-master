@@ -28,6 +28,7 @@
 #include "rgw_threadpool.h"
 #include "rgw_cacherequest.h"
 #include <curl/curl.h>
+#include <mutex>
 struct DataCache;
 class CacheThreadPool;
 class RemoteS3Request;
@@ -322,18 +323,14 @@ struct cacheAioWriteRequest{
 struct DataCache {
   private:
     std::list<string> outstanding_write_list;
-    uint64_t capacity ;
+    uint64_t capacity;
     CephContext *cct;
     std::string path;
     CacheThreadPool *tp;
-
-    //ceph::mutex lock = ceph::make_mutex("DataCache::lock");
   public:
-    DataCache();
+    DataCache() ;
     ~DataCache() {}
     void retrieve_obj_info(cache_obj* c_obj, RGWRados *store);
-    void get_obj_size(cache_obj& c_obj);
-    //void timer_start(RGWRados *store, size_t interval);
     void submit_remote_req(struct RemoteRequest *c);
     void put(bufferlist& bl, uint64_t len, string key);
     int create_aio_write_request(bufferlist& bl, uint64_t len, std::string key);
@@ -345,7 +342,7 @@ struct DataCache {
       cct = _cct;
       capacity = 1000;
       path = cct->_conf->rgw_datacache_path;
-      tp = new CacheThreadPool(32);
+      tp = new CacheThreadPool(cct->_conf->cache_threadpool_size);
     }
 };
 

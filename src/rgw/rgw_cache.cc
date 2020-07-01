@@ -21,6 +21,7 @@ uint64_t expected_size = 0;
 #include "rgw_rest_conn.h"
 #include <openssl/hmac.h>
 #include <ctime>
+#include <mutex>
 #include <curl/curl.h>
 #include <time.h>
 //#include "rgw_cacherequest.h"
@@ -415,8 +416,13 @@ ObjectCache::~ObjectCache()
 
 /* datacache */
 
-DataCache::DataCache () : cct(NULL), capacity(0)  {}
+DataCache::DataCache() : cct(NULL), capacity(0){}
 
+/*DataCache::~DataCache()
+{
+std::lock_guard lock{mutex};
+}
+*/
 void DataCache::submit_remote_req(struct RemoteRequest *c){
   ldout(cct, 0) << "submit_remote_req" <<dendl;
   tp->addTask(new RemoteS3Request(c, cct));
@@ -577,12 +583,12 @@ void DataCache::put(bufferlist& bl, uint64_t len, string key){
   // cache_lock.lock();  
   std::list<std::string>::iterator it = std::find(outstanding_write_list.begin(), outstanding_write_list.end(),key);
   if (it != outstanding_write_list.end()) {
-    //       cache_lock.unlock();
+  //         cache_lock.unlock();
     ldout(cct, 5) << "re-write: write already issued, key "<< key << dendl;
     return;
   }
   outstanding_write_list.push_back(key);
-  //cache_lock.unlock();
+ // cache_lock.unlock();
 
   ret = create_aio_write_request(bl, len, key);
   if (ret < 0) {
@@ -679,12 +685,10 @@ int RemoteS3Request::submit_op() {
 void RemoteS3Request::run() {
 
   ldout(cct, 10) << __func__  <<dendl;
-  //int retries =  cct->_conf->rgw_l2_request_thread_num;   
-  int retries = 10;
+  int max_retries = cct->_conf->max_remote_retries;
   int r = 0;
-  for (int i=0; i<retries; i++ ){
+  for (int i=0; i<max_retries; i++ ){
     if(!(r = submit_http_get_request_s3())){
-//      if(!(r = req->submit_op())){
       req->finish();
       return;
     }
@@ -696,56 +700,3 @@ void RemoteS3Request::run() {
 
   }
 
-static size_t throw_away(void *ptr, size_t size, size_t nmemb, void *data)
-{
-    (void)ptr;
-      (void)data;
-        /* we are not interested in the headers itself,
-	 *      so we only return the size we would have saved ... */ 
-	  return (size_t)(size * nmemb);
-}
-
-void DataCache::get_obj_size(cache_obj& c_obj){
-  ldout(cct, 10) << __func__  << c_obj.bucket_name<< " " << c_obj.obj_name << dendl;
-  CURL *curl = curl_easy_init();
-  RemoteS3Request *rr;
-  CURLcode res;
-  string uri = "/"+c_obj.bucket_name + "/" +c_obj.obj_name;
-  string date = rr->get_date();
-  string AWSAccessKeyId=c_obj.accesskey.id;
-  string YourSecretAccessKeyID=c_obj.accesskey.key;
-  string signature = rr->sign_s3_request("GET", uri, date, YourSecretAccessKeyID, AWSAccessKeyId);
-  string Authorization = "AWS "+ AWSAccessKeyId +":" + signature;
-  string loc = c_obj.host + uri;
-  string auth="Authorization: " + Authorization;
-  string timestamp="Date: " + date;
-  string user_agent="User-Agent: aws-sdk-java/1.7.4 Linux/3.10.0-514.6.1.el7.x86_64 OpenJDK_64-Bit_Server_VM/24.131-b00/1.7.0_131";
-  string content_type="Content-Type: application/x-www-form-urlencoded; charset=utf-8";
-  double cl;
-  ldout(cct, 10) << __func__  << loc.c_str() << dendl;
-  if(curl) {
- struct curl_slist *chunk = NULL;
-    chunk = curl_slist_append(chunk, auth.c_str());
-    chunk = curl_slist_append(chunk, timestamp.c_str());
-    chunk = curl_slist_append(chunk, user_agent.c_str());
-    chunk = curl_slist_append(chunk, content_type.c_str());
-    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, chunk); //set headers
-    curl_easy_setopt(curl, CURLOPT_NOBODY, 1L);  
-//    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1);
-    curl_easy_setopt(curl, CURLOPT_URL, loc.c_str());
-    curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, throw_away);
-    curl_easy_setopt(curl, CURLOPT_HEADER, 0L);
-    res = curl_easy_perform(curl);
-  if(CURLE_OK == res) {
-    ldout(cct, 10) << __func__ << "curl_ok " <<cl <<dendl;
-    
-    res = curl_easy_getinfo(curl, CURLINFO_CONTENT_LENGTH_DOWNLOAD, &cl);
-    if ((CURLE_OK == res) && (cl>0.0))
-  { ldout(cct, 10) << __func__ << "curl_ok size_ok" <<cl <<dendl;	}
-    c_obj.size_in_bytes = (size_t)cl;
-  }
-  }
-  curl_easy_cleanup(curl);
-
-  ldout(cct, 10) << __func__ << "ugur " <<cl <<dendl;
-}

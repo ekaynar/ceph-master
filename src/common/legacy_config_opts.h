@@ -1244,7 +1244,10 @@ OPTION(rados_tracing, OPT_BOOL) // true if LTTng-UST tracepoints should be enabl
 OPTION(rgw_datacache_enabled, OPT_BOOL) // enable rgw object datacache
 OPTION(rgw_datacache_path, OPT_STR) // rgw local read cache path
 OPTION(aging_interval, OPT_INT) // rgw datacache wb cache aging interval
-OPTION(backend_url, OPT_STR) // rgw datacache wb cache aging interval
+OPTION(backend_url, OPT_STR) // url for backend data lake
+OPTION(cache_acl_timeout, OPT_INT) // timeout window for acls of cached object
+OPTION(max_remote_retries, OPT_INT) // maximum retry count for remote cache requests
+OPTION(cache_threadpool_size ,OPT_INT) // cache threadpool size for remote requests
 
 OPTION(rgw_max_attr_name_len, OPT_SIZE)
 OPTION(rgw_max_attr_size, OPT_SIZE)

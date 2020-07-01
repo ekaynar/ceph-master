@@ -8238,15 +8238,7 @@ void RGWDeleteBucketPublicAccessBlock::execute()
 //FIXME:: UGUR
 //
 bool compare_acls(){return true;}
-/*
-bool cache_authorize(cache_obj &c_obj){
-  bool allow =  false;
-  time_t now = time(0); 
-  //if(c_obj)
 
-
-  return allow;
-}*/
 bool RGWGetObj::cache_authorize(cache_obj &c_obj){
   bool allow =  false;
   //  int op_ret = objectDirectory.getValue(&c_obj);
@@ -8254,29 +8246,26 @@ bool RGWGetObj::cache_authorize(cache_obj &c_obj){
 
 // Object is in write-back cache
   if (op_ret >= 0) {
-    ldpp_dout(this, 10) << __func__ <<"ugur1" << dendl;
     time_t now = time(0);
     c_obj.aclTimeStamp = now;
 
     //ACLs are valid
-    if(difftime(now,c_obj.aclTimeStamp) < 10 ){
+    if(difftime(now,c_obj.aclTimeStamp) < s->cct->_conf->cache_acl_timeout ){
       allow = compare_acls();
-      ldpp_dout(this, 10) << __func__ <<"ugur1" << dendl;
     }
     //ACLS are expired
     else{
-      c_obj.host = "http://"+s->cct->_conf->backend_url+"/";
+      c_obj.host = "http://"+s->cct->_conf->backend_url;
       store->getRados()->retrieve_obj_acls(c_obj);//retrieve acls, etag and object size in bytes from backend
       allow = compare_acls();
       if (allow){
 	//        objectDirectory.updateACL(c_obj,c_obj.acl);
-
-      }}
+      }
+    }
     return allow;
   }
 
-  // Object not found in cache
-  // We retrieve acls from backend
+  // Object not found in object cache, and it's size and acls retrieved from backend
   else if (op_ret < 0){
     c_obj.host = "http://"+s->cct->_conf->backend_url;
     store->getRados()->retrieve_obj_acls(c_obj);
@@ -8292,25 +8281,15 @@ void RGWGetObj::cache_execute()
   c_obj.bucket_name = s->bucket_name;
   c_obj.obj_name = s->object.name;
   c_obj.user = s->user->get_info().user_id.id;
-  // c_obj.host = "http://128.31.25.83:8000"; 
-  //op_ret = objectDirectory.getValue(&c_obj);
-  /*if(op_ret < 0){
-    c_obj.host = "http://"+ s->cct->_conf->backend_url;
-  }*/
-  if(!cache_authorize(c_obj)){
+  if(!cache_authorize(c_obj))
     return;
-  }
-/*
-  ldpp_dout(this, 10) << __func__  << "ugur hotst " <<c_obj.host << dendl;
-  //  ss->retrieve_obj_size(c_obj, ss);
-  ldpp_dout(this, 10) << __func__  << "ugur1 " <<c_obj.size_in_bytes << dendl;
-  RGWRados *ss = store->getRados();
-  ss->get_s3_credentials(ss, c_obj.user, c_obj.accesskey);
-  ss->retrieve_obj_acls(c_obj);
- */
-  ldpp_dout(this, 10) << __func__  << "ugur2 " <<c_obj.size_in_bytes << dendl;
+  
+  if (c_obj.size_in_bytes <=0)
+    return;
+
   s->obj_size = c_obj.size_in_bytes;
   this->total_len = c_obj.size_in_bytes;
+  
   int64_t ofs_x, end_x;
   ofs_x = 0;
   end_x = c_obj.size_in_bytes - 1;
@@ -8320,9 +8299,7 @@ void RGWGetObj::cache_execute()
   RGWBucketInfo dest_bucket_info;
   RGWRados::Object op_target(store->getRados(), dest_bucket_info, *static_cast<RGWObjectCtx *>(s->obj_ctx), obj);
   RGWRados::Object::Read read_op(&op_target);
-
   op_ret = read_op.read(ofs_x, end_x, filter, c_obj, s->yield); 
-  ldpp_dout(this, 10) << __func__  << "ugur3 " <<c_obj.size_in_bytes << dendl;
   if (op_ret >= 0)
     op_ret = filter->flush();
 

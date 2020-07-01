@@ -7016,6 +7016,21 @@ std::vector<Option> get_rgw_options() {
     .set_default("localhost:8000")
     .set_description("datalake url"),
     
+    Option("cache_acl_timeout", Option::TYPE_INT, Option::LEVEL_ADVANCED)
+    .set_default(5)
+    .set_description("timeout for the acls of an object stored in cache"),
+
+    Option("max_remote_retries", Option::TYPE_INT, Option::LEVEL_ADVANCED)
+    .set_default(5)
+    .set_description("maximum retry count for remote cache requests"),
+
+    Option("cache_threadpool_size", Option::TYPE_INT, Option::LEVEL_ADVANCED)
+    .set_default(32)
+    .set_description("cache threadpool size for remote requests"),
+
+
+
+
     Option("rgw_dmclock_metadata_wgt", Option::TYPE_FLOAT, Option::LEVEL_ADVANCED)
     .set_default(500.0)
     .set_description("mclock weight for metadata requests")

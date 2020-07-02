@@ -159,6 +159,7 @@ int RGWDirectory::updateHostList(RGWDirectory *dirObj, cache_obj *ptr){
  */
 int RGWDirectory::updateACL(RGWDirectory *dirObj, cache_obj *ptr){
 	string acl = ptr->acl;
+	time_t aclTimeStamp = ptr->aclTimeStamp;
 
 	cache_obj tmpObj;
 	
@@ -175,6 +176,7 @@ int RGWDirectory::updateACL(RGWDirectory *dirObj, cache_obj *ptr){
 		getValue(&tmpObj);
 
 		tmpObj.acl = acl;
+		tmpObj.aclTimeStamp = aclTimeStamp;
 
 		//updating the directory value 
 		setKey(key, &tmpObj);

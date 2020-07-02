@@ -9172,10 +9172,10 @@ int RGWRados::delete_obj_aio(const rgw_obj& obj,
 }
 
 
-static int _get_local_obj_iterate_cb(const rgw_raw_obj& read_obj, std::string key, cache_obj& c_obj, off_t obj_ofs, off_t read_ofs, off_t len, void *arg, RGWRados *store)
+static int _get_cache_obj_iterate_cb(cache_obj& c_obj, off_t obj_ofs, off_t read_ofs, off_t len, void *arg, RGWRados *store)
 {
   struct get_obj_data *d = (struct get_obj_data *)arg;
-  return d->store->get_local_obj_iterate_cb(read_obj, key, c_obj, obj_ofs, read_ofs, len, arg, store);
+  return d->store->get_cache_obj_iterate_cb(c_obj, obj_ofs, read_ofs, len, arg, store);
 }
 
 
@@ -9183,15 +9183,14 @@ static int _get_local_obj_iterate_cb(const rgw_raw_obj& read_obj, std::string ke
 int RGWRados::Object::Read::read(int64_t ofs, int64_t end, RGWGetDataCB *cb, cache_obj& c_obj, optional_yield y){
   RGWRados *store = source->get_store();
   CephContext *cct = store->ctx();
-  RGWObjectCtx& obj_ctx = source->get_ctx();
+  
   const uint64_t chunk_size = cct->_conf->rgw_get_obj_max_req_size;
   const uint64_t window_size = cct->_conf->rgw_get_obj_window_size;
   int r = store->get_s3_credentials(store, c_obj.user, c_obj.accesskey);
 
   auto aio = rgw::make_throttle(window_size, y);
   get_obj_data data(store, cb, &*aio, ofs, y);  
-  rgw_obj obj;
-  r = store->iterate_local_obj(obj_ctx, obj, c_obj, ofs, end, chunk_size, _get_local_obj_iterate_cb,  &data, y, store);
+  r = store->iterate_obj( c_obj, ofs, end, chunk_size, _get_cache_obj_iterate_cb,  &data, y, store);
   if (r < 0) {
     data.cancel(); // drain completions without writing back to client
     return r;
@@ -9201,9 +9200,10 @@ int RGWRados::Object::Read::read(int64_t ofs, int64_t end, RGWGetDataCB *cb, cac
 
 
 
-int RGWRados::get_local_obj_iterate_cb(const rgw_raw_obj& read_obj, string key, cache_obj& c_obj, off_t obj_ofs, off_t read_ofs, off_t read_len,  void *arg, RGWRados *store){
+int RGWRados::get_cache_obj_iterate_cb(cache_obj& c_obj, off_t obj_ofs, off_t read_ofs, off_t read_len,  void *arg, RGWRados *store){
 
-  dout(10) << __func__  <<  " key "<< key  << " obj_ofs "<< obj_ofs
+  dout(10) << __func__   << " obj_ofs "<< obj_ofs
+    << " chunk_id " << c_obj.chunk_id 
     << " read_ofs " << read_ofs 
     << " read_len " << read_len << dendl;
   ObjectReadOperation op;
@@ -9211,17 +9211,15 @@ int RGWRados::get_local_obj_iterate_cb(const rgw_raw_obj& read_obj, string key, 
 
   const uint64_t cost = read_len;
   const uint64_t id = obj_ofs;
-
-  auto obj = d->store->svc.rados->obj(read_obj);
-  int ret = obj.open();
+  
+  string oid = c_obj.bucket_name + "_"+c_obj.obj_name+"_"+ std::to_string(c_obj.chunk_id);
   op.read(read_ofs, read_len, nullptr, nullptr);
 //  svc.cache->get_datacache().retrieve_obj_info(&c_obj, store); 
   // local read
-//  retrieve_obj_acls(c_obj);
   c_obj.host_list.push_back("1");
   if (find(c_obj.host_list.begin(), c_obj.host_list.end(), "0") != c_obj.host_list.end()){
     rgw_pool pool("default.rgw.buckets.data");
-    rgw_raw_obj read_obj1(pool,key);
+    rgw_raw_obj read_obj1(pool,oid);
     auto obj1 = d->store->svc.rados->obj(read_obj1);
     int ret = obj1.open();
     auto completed = d->aio->get(obj1, rgw::Aio::cache_op(std::move(op) , d->yield, obj_ofs, read_ofs, read_len), cost, id);
@@ -9236,7 +9234,7 @@ int RGWRados::get_local_obj_iterate_cb(const rgw_raw_obj& read_obj, string key, 
     rgw_obj src_obj(bucket, c_obj.obj_name); 
     RemoteRequest *c =  new RemoteRequest(src_obj, &c_obj, store, cct);
     rgw_pool pool("default.rgw.buckets.data");
-    rgw_raw_obj read_obj1(pool,key);
+    rgw_raw_obj read_obj1(pool,oid);
     auto obj1 = d->store->svc.rados->obj(read_obj1);
     int ret = obj1.open();
     auto completed = d->aio->get(obj1, rgw::Aio::remote_op(std::move(op) , d->yield, obj_ofs, read_ofs, read_len, c_obj.host, c), cost, id);
@@ -9345,17 +9343,13 @@ int RGWRados::retrieve_obj_acls(cache_obj& c_obj){
   return 0;
 }
 
-int RGWRados::iterate_local_obj(RGWObjectCtx& obj_ctx, const rgw_obj& obj, cache_obj& c_obj, off_t ofs, off_t end, uint64_t max_chunk_size, iterate_local_obj_cb cb, void *arg, optional_yield y, RGWRados *store){
+int RGWRados::iterate_obj(cache_obj& c_obj, off_t ofs, off_t end, uint64_t max_chunk_size, iterate_cache_obj_cb cb, void *arg, optional_yield y, RGWRados *store){
   dout(10) << __func__  <<dendl;
   uint64_t len;
   uint64_t read_ofs = 0;
   uint64_t chunk_id;
-  string key = c_obj.bucket_name+"_"+c_obj.obj_name+"_";    
-  rgw_pool pool("default.rgw.buckets.data");
-  rgw_raw_obj read_obj(pool,c_obj.obj_name);
 
-  //Calculate_chunk_id
-  chunk_id = 0;
+  //FIXME:: Calculate_chunk_id
   if (end < 0)
     len = 0;
   else
@@ -9363,19 +9357,15 @@ int RGWRados::iterate_local_obj(RGWObjectCtx& obj_ctx, const rgw_obj& obj, cache
 
   while (ofs <= end) {
     uint64_t read_len = std::min(len, max_chunk_size);
-    //Calculate key
-    string oid = key + std::to_string(chunk_id);    
-
-    dout(10) << __func__  << " key " << oid  << " ofs "<< ofs  << " read_len " << read_len << " end " << end << dendl;
-    int r = 1;
-    r = cb(read_obj, oid, c_obj, ofs, read_ofs, read_len, arg, store);
+    c_obj.chunk_id = ofs/max_chunk_size;
+    int r = cb(c_obj, ofs, read_ofs, read_len, arg, store);
+    
     if ( r < 0 ) {
       return r;
     }
 
     len -= read_len;
     ofs += read_len;
-    chunk_id += 1;
 
   } 
   return 0;

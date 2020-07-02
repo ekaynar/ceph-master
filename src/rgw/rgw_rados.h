@@ -36,9 +36,10 @@
 #include <cpp_redis/cpp_redis>
 #include "rgw_cacherequest.h"
 #include "rgw_directory.h"
-//#include "rgw_cache.h"
+#include "rgw_cache.h"
 /*datacache*/
 
+struct DataCache;
 class RGWWatcher;
 class SafeTimer;
 class ACLOwner;
@@ -1109,7 +1110,7 @@ public:
 
   RGWObjectDirectory objDirectory;
   RGWBlockDirectory blkDirectory;
-
+  DataCache *datacache;
   int create_bucket(RGWRados *store, string userid, string dest_bucket_name, CephContext *cct, RGWBucketInfo& bucket_info, map<string, bufferlist>& bucket_attrs, RGWAccessKey& accesskey);
   int get_s3_credentials(RGWRados *store, string userid, RGWAccessKey& s3_key);
   int copy_remote(RGWRados *store, cache_obj& c_obj);

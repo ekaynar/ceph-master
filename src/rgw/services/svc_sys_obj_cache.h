@@ -21,7 +21,6 @@ class RGWSI_SysObj_Cache : public RGWSI_SysObj_Core
 
   RGWSI_Notify *notify_svc{nullptr};
   ObjectCache cache;
-  DataCache datacache; //datacache
 
   std::shared_ptr<RGWSI_SysObj_Cache_CB> cb;
 
@@ -96,11 +95,6 @@ protected:
 public:
   RGWSI_SysObj_Cache(CephContext *cct) : RGWSI_SysObj_Core(cct), asocket(this) {
     cache.set_ctx(cct);
-    datacache.init(cct); //datacache
-  }
-
-  DataCache get_datacache() {
-    return datacache;
   }
   bool chain_cache_entry(std::initializer_list<rgw_cache_entry_info *> cache_info_entries,
                          RGWChainedCache::Entry *chained_entry);

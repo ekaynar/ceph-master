@@ -1102,6 +1102,8 @@ int RGWRados::init_rados()
   cr_registry = crs.release();
   if (use_datacache){
 //    svc.cache->get_datacache().start_cache_aging(this); // datacache
+  datacache = new DataCache();
+  datacache->init(cct);
   }
   return ret;
 }
@@ -9236,7 +9238,8 @@ int RGWRados::get_cache_obj_iterate_cb(cache_obj& c_obj, off_t obj_ofs, off_t re
     auto obj1 = d->store->svc.rados->obj(read_obj1);
     int ret = obj1.open();
     auto completed = d->aio->get(obj1, rgw::Aio::remote_op(std::move(op) , d->yield, obj_ofs, read_ofs, read_len, c_obj.host, c), cost, id);
-    svc.cache->get_datacache().submit_remote_req(c);
+    datacache->submit_remote_req(c);
+    //svc.cache->get_datacache().submit_remote_req(c);
     return d->flush(std::move(completed));
   }
   // osd read
@@ -9764,7 +9767,8 @@ int RGWRados::delete_cache_obj(RGWRados *store, string userid, string src_bucket
 
 int RGWRados::put_data(string key, bufferlist& bl, unsigned int len){
   dout(10) << __func__ << " local cache write "  << key << dendl;
-  svc.cache->get_datacache().put(bl,len,key); 
+  datacache->put(bl,len,key); 
+  //svc.cache->get_datacache().put(bl,len,key); 
 
   return 0;
 }

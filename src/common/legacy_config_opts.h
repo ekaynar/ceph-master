@@ -1248,6 +1248,8 @@ OPTION(backend_url, OPT_STR) // url for backend data lake
 OPTION(cache_acl_timeout, OPT_INT) // timeout window for acls of cached object
 OPTION(max_remote_retries, OPT_INT) // maximum retry count for remote cache requests
 OPTION(cache_threadpool_size ,OPT_INT) // cache threadpool size for remote requests
+OPTION(obj_directory_addr ,OPT_STR) // cache object directory address 
+OPTION(block_directory_addr,OPT_STR) // cache block directory address
 
 OPTION(rgw_max_attr_name_len, OPT_SIZE)
 OPTION(rgw_max_attr_size, OPT_SIZE)

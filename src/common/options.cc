@@ -7028,8 +7028,13 @@ std::vector<Option> get_rgw_options() {
     .set_default(32)
     .set_description("cache threadpool size for remote requests"),
 
+    Option("obj_directory_addr", Option::TYPE_STR, Option::LEVEL_ADVANCED)
+    .set_default("localhost:6379")
+    .set_description("address of object directory"),
 
-
+    Option("block_directory_addr", Option::TYPE_STR, Option::LEVEL_ADVANCED)
+    .set_default("localhost:6379")
+    .set_description("address of block directory"),
 
     Option("rgw_dmclock_metadata_wgt", Option::TYPE_FLOAT, Option::LEVEL_ADVANCED)
     .set_default(500.0)

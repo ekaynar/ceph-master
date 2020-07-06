@@ -9272,7 +9272,7 @@ int RGWRados::retrieve_obj_acls(cache_obj& c_obj){
   get_s3_credentials(store->getRados(), c_obj.owner, c_obj.accesskey);
   RGWRESTStreamRWRequest *in_stream_req;
   list<string> endpoin;
-  endpoints.push_back(c_obj.host);
+  endpoints.push_back(c_obj.backend_hostname);
 
   rgw_user user_id(c_obj.owner);
   rgw_bucket bucket;
@@ -9672,7 +9672,7 @@ int RGWRados::copy_remote(RGWRados *store, cache_obj& c_obj){
   const string src_tenant_name = "";
   const string src_bucket_name = c_obj.bucket_name;
   const string src_obj_name = c_obj.obj_name;
-  string url ="http://" + c_obj.host;
+  string url ="http://" + c_obj.backend_hostname;
   string etag;
 
   HostStyle host_style = PathStyle;

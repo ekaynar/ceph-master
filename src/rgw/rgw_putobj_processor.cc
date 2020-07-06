@@ -330,13 +330,13 @@ int AtomicObjectProcessor::complete(size_t accounted_size,
 
     cache_obj cacheObj;
 
-    cacheObj.user =  op_target.get_bucket_info().owner.id;
+    cacheObj.owner =  op_target.get_bucket_info().owner.id;
     cacheObj.bucket_name = op_target.get_obj().bucket.name;
     cacheObj.obj_name = op_target.get_obj().key.name;
 
     cacheObj.host_list.push_back("writecache");
     cacheObj.size_in_bytes = manifest.get_obj_size();
-    cacheObj.chunk_id = 0; //FIXME
+    //cacheObj.block_id = 0; //FIXME
     cacheObj.dirty = true;
     cacheObj.etag = etag;
     time_t rawTime = time(NULL);

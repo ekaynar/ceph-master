@@ -14,12 +14,10 @@ struct get_obj_data;
 struct AioResult;
 class Aio;
 class RGWRESTStreamRWRequest;
-//class RGWRadosGetObj;
 
 class CacheRequest {
   public:
     ceph::mutex lock = ceph::make_mutex("CacheRequest");
-//    struct get_obj_data *op_data;
     int sequence;
     int stat;
     bufferlist *bl;
@@ -109,16 +107,15 @@ struct RemoteRequest : public CacheRequest{
   void *tp;
   RGWRESTConn *conn;
   RGWRESTStreamRWRequest *in_stream_req;
-  cache_obj *c_obj;
+  cache_block *c_block;
   RGWRados *store;
   CephContext *cct;
   rgw_obj obj;
-  RemoteRequest(rgw_obj& _obj, cache_obj* _c_obj, RGWRados* _store, CephContext* _cct) :  CacheRequest() , stat(-1), obj(_obj), c_obj(_c_obj), store(_store), cct(_cct){
+  RemoteRequest(rgw_obj& _obj, cache_block* _c_block, RGWRados* _store, CephContext* _cct) :  CacheRequest() , stat(-1), obj(_obj), c_block(_c_block), store(_store), cct(_cct){
     }
 
   ~RemoteRequest(){}
   int prepare_op(std::string key,  bufferlist *bl, int read_len, int ofs, int read_ofs, string dest, rgw::Aio* aio, rgw::AioResult* r);
-  int submit_op();
   
   void release (){
     lock.lock();

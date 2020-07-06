@@ -8239,10 +8239,11 @@ void RGWDeleteBucketPublicAccessBlock::execute()
 //
 bool compare_acls(){return true;}
 
-bool RGWGetObj::cache_authorize(cache_obj &c_obj){
+bool RGWGetObj::cache_authorize(cache_obj &c_obj, string requester){
   bool allow =  false;
   //  int op_ret = objectDirectory.getValue(&c_obj);
   int op_ret = -1;
+  c_obj.owner = requester;
 
 // Object is in write-back cache
   if (op_ret >= 0) {
@@ -8255,7 +8256,7 @@ bool RGWGetObj::cache_authorize(cache_obj &c_obj){
     }
     //ACLS are expired
     else{
-      c_obj.host = "http://"+s->cct->_conf->backend_url;
+      c_obj.backend_hostname = "http://"+s->cct->_conf->backend_url;
       store->getRados()->retrieve_obj_acls(c_obj);//retrieve acls, etag and object size in bytes from backend
       allow = compare_acls();
       if (allow){
@@ -8267,7 +8268,7 @@ bool RGWGetObj::cache_authorize(cache_obj &c_obj){
 
   // Object not found in object cache, and it's size and acls retrieved from backend
   else if (op_ret < 0){
-    c_obj.host = "http://"+s->cct->_conf->backend_url;
+    c_obj.backend_hostname = "http://"+s->cct->_conf->backend_url;
     store->getRados()->retrieve_obj_acls(c_obj);
     allow = compare_acls();
     return allow;
@@ -8277,11 +8278,9 @@ bool RGWGetObj::cache_authorize(cache_obj &c_obj){
 void RGWGetObj::cache_execute()
 {
   ldpp_dout(this, 10) << __func__  << dendl;
-  //this->total_len = 20971520;
   c_obj.bucket_name = s->bucket_name;
   c_obj.obj_name = s->object.name;
-  c_obj.user = s->user->get_info().user_id.id;
-  if(!cache_authorize(c_obj))
+  if(!cache_authorize(c_obj, s->user->get_info().user_id.id))
     return;
   
   if (c_obj.size_in_bytes <=0)

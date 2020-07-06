@@ -289,7 +289,6 @@ class RemoteS3Request : public Task {
     string sign_s3_request(string HTTP_Verb, string uri, string date, string YourSecretAccessKeyID, string AWSAccessKeyId);
     string get_date();
   private:
-    int submit_op();
     int submit_http_get_request_s3();
   private:
     pthread_mutex_t qmtx;
@@ -360,7 +359,7 @@ struct DataCache {
     void put(bufferlist& bl, uint64_t len, string obj_id);
     int create_aio_write_request(bufferlist& bl, uint64_t len, std::string obj_id);
     void cache_aio_write_completion_cb(cacheAioWriteRequest *c);
-    size_t remove_read_cache_entry(cache_obj& c_obj);
+    size_t remove_read_cache_entry(cache_block& c_block);
     size_t get_used_pool_capacity(string pool_name, RGWRados *store);
     void start_cache_aging(RGWRados *store);
     void init(CephContext *_cct) {

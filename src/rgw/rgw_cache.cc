@@ -489,9 +489,9 @@ void DataCache::start_cache_aging(RGWRados *store){
   timer_start(store,cct->_conf->aging_interval);
 }
 
-size_t DataCache::remove_read_cache_entry(cache_obj& c_obj){
+size_t DataCache::remove_read_cache_entry(cache_block& c_block){
 
-  string oid = c_obj.bucket_name+"_"+c_obj.obj_name+"_" + std::to_string(c_obj.chunk_id);
+  string oid = c_block.c_obj.bucket_name+"_"+c_block.c_obj.obj_name+"_" + std::to_string(c_block.block_id);
   /*
   ChunkDataInfo *del_entry;
   cache_lock.lock();
@@ -508,10 +508,10 @@ size_t DataCache::remove_read_cache_entry(cache_obj& c_obj){
   cache_map.erase(del_oid); 
   cache_lock.unlock();
 */
-  string location = cct->_conf->rgw_datacache_path + "/"+ c_obj.bucket_name+"_"+c_obj.obj_name+"_" + std::to_string(c_obj.chunk_id);
+  string location = cct->_conf->rgw_datacache_path + "/"+ c_block.c_obj.bucket_name+"_"+c_block.c_obj.obj_name+"_" + std::to_string(c_block.block_id);
   if(access(location.c_str(), F_OK ) != -1 ) { 
     remove(location.c_str());
-    return c_obj.chunk_size_in_bytes;
+    return c_block.size_in_bytes;
   }
   return 0;
 }
@@ -671,13 +671,13 @@ int RemoteS3Request::submit_http_get_request_s3(){
   string range = std::to_string(req->ofs + req->read_ofs)+ "-"+ std::to_string(req->ofs + req->read_ofs + req->read_len - 1);
   ldout(cct, 10) << __func__  << " range " << range << dendl;
   CURLcode res;
-  string uri = "/"+req->c_obj->bucket_name + "/" +req->c_obj->obj_name;
+  string uri = "/"+req->c_block->c_obj.bucket_name + "/" +req->c_block->c_obj.obj_name;
   string date = get_date();
-  string AWSAccessKeyId=req->c_obj->accesskey.id;
-  string YourSecretAccessKeyID=req->c_obj->accesskey.key;
+  string AWSAccessKeyId=req->c_block->c_obj.accesskey.id;
+  string YourSecretAccessKeyID=req->c_block->c_obj.accesskey.key;
   string signature = sign_s3_request("GET", uri, date, YourSecretAccessKeyID, AWSAccessKeyId);
   string Authorization = "AWS "+ AWSAccessKeyId +":" + signature;
-  string loc = req->c_obj->host + uri;
+  string loc = req->c_block->host + uri;
   string auth="Authorization: " + Authorization;
   string timestamp="Date: " + date;
   string user_agent="User-Agent: aws-sdk-java/1.7.4 Linux/3.10.0-514.6.1.el7.x86_64 OpenJDK_64-Bit_Server_VM/24.131-b00/1.7.0_131";
@@ -706,11 +706,6 @@ int RemoteS3Request::submit_http_get_request_s3(){
     req->aio->put(*(req->r));
     return 0;}
 
-}
-
-/*Remote S3 Request datacacahe*/
-int RemoteS3Request::submit_op() {
-  return req->submit_op();
 }
 
 void RemoteS3Request::run() {

@@ -18,19 +18,11 @@ class RGWDirectory{
 public:
 	RGWDirectory() {}
 	virtual ~RGWDirectory(){ cout << "RGW Directory is destroyed!";}
-	virtual int getValue(cache_obj *ptr);
-	int setValue(RGWDirectory *dirObj, cache_obj *ptr);
-	int updateLastAcessTime(RGWDirectory *dirObj, cache_obj *ptr);
-	int updateHostList(RGWDirectory *dirObj, cache_obj *ptr);
-	int updateACL(RGWDirectory *dirObj, cache_obj *ptr);
-	int delValue(RGWDirectory *dirObj, cache_obj *ptr);
-	//std::vector<std::pair<std::string, std::string>> get_aged_keys(string startTime, string endTime);
+	int existKey(string key);
+	int delKey(string key);
 
 private:
-	virtual int setKey(string key, cache_obj *ptr);
-	int delKey(string key);
-	int existKey(string key);
-	virtual string buildIndex(cache_obj *ptr);
+	//virtual int setKey(string key, cache_obj *ptr);
 
 };
 
@@ -39,7 +31,13 @@ public:
 
 	RGWObjectDirectory() {}
 	virtual ~RGWObjectDirectory() { cout << "RGWObject Directory is destroyed!";}
+	int setValue(cache_obj *ptr);
 	int getValue(cache_obj *ptr);
+	int updateHostsList(cache_obj *ptr);
+	int updateHomeLocation(cache_obj *ptr);
+	int updateACL(cache_obj *ptr);
+	int updateLastAcessTime(cache_obj *ptr);
+	int delValue(cache_obj *ptr);
 	vector<pair<vector<string>, time_t>> get_aged_keys(time_t startTime, time_t endTime);
 
 private:
@@ -53,12 +51,14 @@ public:
 
 	RGWBlockDirectory() {}
 	virtual ~RGWBlockDirectory() { cout << "RGWObject Directory is destroyed!";}
-	int getValue(cache_obj *ptr);
-	//std::vector<std::pair<std::string, std::string>> get_aged_keys(string startTime, string endTime);
+	int setValue(cache_block *ptr);
+	int getValue(cache_block *ptr);
+	int updateHostsList(cache_block *ptr);
+	int delValue(cache_block *ptr);
 
 private:
-	int setKey(string key, cache_obj *ptr);
-	string buildIndex(cache_obj *ptr);
+	int setKey(string key, cache_block *ptr);
+	string buildIndex(string bucket_name, string obj_name, uint64_t block_id);
 	
 };
 

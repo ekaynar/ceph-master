@@ -2450,7 +2450,8 @@ struct cache_obj {
   string etag;
   BackendProtocol backendProtocol; // protocol used for backend communication
   HomeLocation home_location; // Home location of S3 Object
-  string backend_hostname; // Objects backend hostname 
+  vector<string> hosts_list; // list of hostnames <ip:post> of block locations
+  //string backend_hostname; // Objects backend hostname 
   string acl;  // ACLs of S3 Object
   time_t aclTimeStamp; // ACLs timestamp
   time_t creationTime; // Creation time of the S3 Object
@@ -2459,13 +2460,13 @@ struct cache_obj {
 
 struct cache_block {
   cache_obj c_obj;
-  uint64_t offset; // s3 obj offset
+  //uint64_t offset; // s3 obj offset
   uint64_t block_id; // rados obj block id
   uint64_t size_in_bytes; // block size_in_bytes
   string etag; //etag for s3 object
-  vector<string> host_list; // list of hostnames <ip:post> of block locations
-  CacheLocation cache_location;  
-  string host; // hostname of remote cache
+  vector<string> hosts_list; // list of hostnames <ip:post> of block locations
+  //CacheLocation cache_location;  
+ // string host; // hostname of remote cache
 };
 /* datacache */
 

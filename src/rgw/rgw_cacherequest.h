@@ -116,7 +116,8 @@ struct RemoteRequest : public CacheRequest{
 
   ~RemoteRequest(){}
   int prepare_op(std::string key,  bufferlist *bl, int read_len, int ofs, int read_ofs, string dest, rgw::Aio* aio, rgw::AioResult* r);
-  
+  int submit_op();
+
   void release (){
     lock.lock();
     lock.unlock();

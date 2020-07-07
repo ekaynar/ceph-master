@@ -33,6 +33,7 @@
 // #include "common/RWLock.h"
 struct DataCache;
 class CacheThreadPool;
+struct RemoteRequest;
 class RemoteS3Request;
 /*datacache*/
 
@@ -354,7 +355,7 @@ struct DataCache {
   public:
     DataCache() ;
     ~DataCache() {}
-    void retrieve_obj_info(cache_obj* c_obj, RGWRados *store);
+    void retrieve_block_info(cache_block* c_block, RGWRados *store);
     void submit_remote_req(struct RemoteRequest *c);
     void put(bufferlist& bl, uint64_t len, string obj_id);
     int create_aio_write_request(bufferlist& bl, uint64_t len, std::string obj_id);

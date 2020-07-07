@@ -8256,7 +8256,6 @@ bool RGWGetObj::cache_authorize(cache_obj &c_obj, string requester){
     }
     //ACLS are expired
     else{
-      c_obj.backend_hostname = "http://"+s->cct->_conf->backend_url;
       store->getRados()->retrieve_obj_acls(c_obj);//retrieve acls, etag and object size in bytes from backend
       allow = compare_acls();
       if (allow){
@@ -8268,7 +8267,6 @@ bool RGWGetObj::cache_authorize(cache_obj &c_obj, string requester){
 
   // Object not found in object cache, and it's size and acls retrieved from backend
   else if (op_ret < 0){
-    c_obj.backend_hostname = "http://"+s->cct->_conf->backend_url;
     store->getRados()->retrieve_obj_acls(c_obj);
     allow = compare_acls();
     return allow;

@@ -347,7 +347,7 @@ public:
   void pre_exec() override;
   void execute() override;
   void cache_execute() override; // datacache
-  bool cache_authorize(cache_obj &c_obj); // datacache
+  bool cache_authorize(cache_obj &c_obj, string requester); // datacache
   int parse_range();
   int read_user_manifest_part(
     rgw_bucket& bucket,

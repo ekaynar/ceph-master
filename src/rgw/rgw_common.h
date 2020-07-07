@@ -2450,8 +2450,7 @@ struct cache_obj {
   string etag;
   BackendProtocol backendProtocol; // protocol used for backend communication
   HomeLocation home_location; // Home location of S3 Object
-  vector<string> hosts_list; // list of hostnames <ip:post> of block locations
-  //string backend_hostname; // Objects backend hostname 
+  vector<string> hosts_list; // list of hostnames for multiple backend
   string acl;  // ACLs of S3 Object
   time_t aclTimeStamp; // ACLs timestamp
   time_t creationTime; // Creation time of the S3 Object

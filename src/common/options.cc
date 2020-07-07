@@ -7028,9 +7028,18 @@ std::vector<Option> get_rgw_options() {
     .set_default(32)
     .set_description("cache threadpool size for remote requests"),
 
+    Option("directory_addr", Option::TYPE_STR, Option::LEVEL_ADVANCED)
+    .set_default("localhost")
+    .set_description("address of cache directory"),
 
+    Option("obj_directory_port", Option::TYPE_STR, Option::LEVEL_ADVANCED)
+    .set_default("6379")
+    .set_description("port of obj directory"),
 
-
+    Option("block_directory_port", Option::TYPE_STR, Option::LEVEL_ADVANCED)
+    .set_default("6379")
+    .set_description("port of block directory"),
+    
     Option("rgw_dmclock_metadata_wgt", Option::TYPE_FLOAT, Option::LEVEL_ADVANCED)
     .set_default(500.0)
     .set_description("mclock weight for metadata requests")

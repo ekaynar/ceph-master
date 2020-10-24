@@ -308,6 +308,8 @@ struct cacheAioWriteRequest{
   DataCache *priv_data;
   CephContext *cct;
   bool write; 
+  RGWRados *store;
+  cache_block* c_block;
 
   cacheAioWriteRequest(CephContext *_cct) : cct(_cct) , write(false) {}
   int create_io(bufferlist& bl, uint64_t len, std::string key);
@@ -344,21 +346,23 @@ struct ChunkDataInfo : public LRUObject {
 
 struct DataCache {
   private:
-//    std::map<string, ChunkDataInfo*> cache_map;
+    std::map<string, ChunkDataInfo*> cache_map;
     std::list<string> outstanding_write_list;
     uint64_t capacity;
     CephContext *cct;
     std::string path;
     CacheThreadPool *tp;
     ceph::mutex cache_lock = ceph::make_mutex("DataCache::cache_lock");
-  
+    ceph::mutex eviction_lock = ceph::make_mutex("DataCache::eviction_lock");
+    RGWBlockDirectory *blkDirectory;
+
   public:
     DataCache() ;
     ~DataCache() {}
     void retrieve_block_info(cache_block* c_block, RGWRados *store);
     void submit_remote_req(struct RemoteRequest *c);
-    void put(bufferlist& bl, uint64_t len, string obj_id);
-    int create_aio_write_request(bufferlist& bl, uint64_t len, std::string obj_id);
+    void put(bufferlist& bl, uint64_t len, string obj_id, cache_block* c_block);
+    int create_aio_write_request(bufferlist& bl, uint64_t len, std::string obj_id, cache_block* c_block);
     void cache_aio_write_completion_cb(cacheAioWriteRequest *c);
     size_t remove_read_cache_entry(cache_block& c_block);
     size_t get_used_pool_capacity(string pool_name, RGWRados *store);
@@ -368,6 +372,9 @@ struct DataCache {
       capacity = 1000;
       path = cct->_conf->rgw_datacache_path;
       tp = new CacheThreadPool(cct->_conf->cache_threadpool_size);
+    }
+    void set_block_directory(RGWBlockDirectory *_blkDirectory){
+	blkDirectory = _blkDirectory;
     }
 };
 

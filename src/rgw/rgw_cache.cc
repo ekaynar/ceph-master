@@ -425,7 +425,7 @@ void DataCache::submit_remote_req(struct RemoteRequest *c){
 
 void DataCache::retrieve_block_info(cache_block* c_block, RGWRados *store){
   ldout(cct, 0) << __func__ <<dendl;
-  int ret = store->blkDirectory.getValue(c_block);
+  int ret = store->blkDirectory->getValue(c_block);
 }
 
 
@@ -553,16 +553,38 @@ done:
 void DataCache::cache_aio_write_completion_cb(cacheAioWriteRequest *c){
   ChunkDataInfo  *chunk_info = NULL;
   
-  ldout(cct, 20) << __func__ <<dendl;
+  ldout(cct, 20) << __func__ << dendl;
+  
   cache_lock.lock();
   outstanding_write_list.remove(c->key);
-  /*chunk_info = new ChunkDataInfo;
+  chunk_info = new ChunkDataInfo;
   chunk_info->obj_id = c->key;
   chunk_info->set_ctx(cct);
   chunk_info->size = c->cb->aio_nbytes;
   cache_map.insert(pair<string, ChunkDataInfo*>(c->key, chunk_info));
-  */
   cache_lock.unlock();
+  
+  /*update free size*/
+  /*eviction_lock.Lock();
+  free_data_cache_size -= c->cb->aio_nbytes;
+  outstanding_write_size -=  c->cb->aio_nbytes;
+  lru_insert_head(chunk_info);
+  eviction_lock.Unlock();
+  */
+//  eviction_lock.lock();
+
+  time_t rawTime = time(NULL);
+//  c->c_block->c_obj.creationTime = mktime(gmtime(&rawTime));
+  c->c_block->lastAccessTime = mktime(gmtime(&rawTime));
+//  c->c_block->c_obj.backendProtocol =  S3;
+ // c->c_block->c_obj.creationTime = mktime(gmtime(&rawTime));
+//  
+  int ret = blkDirectory->setValue(c->c_block);
+
+ // eviction_lock.unlock();
+  ldout(cct, 20) << __func__ << "after"<< dendl;
+
+  
   c->release(); 
 
 }
@@ -573,7 +595,8 @@ void _cache_aio_write_completion_cb(sigval_t sigval) {
   c->priv_data->cache_aio_write_completion_cb(c);
 }
 
-int DataCache::create_aio_write_request(bufferlist& bl, uint64_t len, std::string key){
+int DataCache::create_aio_write_request(bufferlist& bl, uint64_t len, std::string key, cache_block* c_block){
+  ldout(cct, 10) << __func__  << dendl;
   struct cacheAioWriteRequest *wr= new struct cacheAioWriteRequest(cct);
   int ret = 0;
   if (wr->create_io(bl, len, key) < 0) {
@@ -587,6 +610,8 @@ int DataCache::create_aio_write_request(bufferlist& bl, uint64_t len, std::strin
   wr->cb->aio_sigevent.sigev_value.sival_ptr = (void*)wr;
   wr->key = key;
   wr->priv_data = this;
+  wr->c_block = c_block;
+
   if((ret= ::aio_write(wr->cb)) != 0) {
     ldout(cct, 0) << "Error: aio_write failed "<< ret << dendl;
     goto error;
@@ -600,29 +625,30 @@ done:
 
 
 }
-void DataCache::put(bufferlist& bl, uint64_t len, string obj_id){
+void DataCache::put(bufferlist& bl, uint64_t len, string obj_id, cache_block *c_block){
   ldout(cct, 10) << __func__  << obj_id <<dendl;
-
+  
   cache_lock.lock(); 
-  /*
+  
   map<string, ChunkDataInfo *>::iterator iter = cache_map.find(obj_id);
   if (iter != cache_map.end()) {
     cache_lock.unlock();
     ldout(cct, 10) << "Warning: obj data already is cached, no re-write" << dendl;
     return;
-  }*/
+  }
 
   std::list<std::string>::iterator it = std::find(outstanding_write_list.begin(), outstanding_write_list.end(),obj_id);
   if (it != outstanding_write_list.end()) {
     cache_lock.unlock();
-    ldout(cct, 5) << "Warning: write is already issued, re-write, obj_id="<< obj_id << dendl;
+    ldout(cct, 5) << "Warning: write is already issued, no re-write, obj_id="<< obj_id << dendl;
     return;
   }
 
   outstanding_write_list.push_back(obj_id);
   cache_lock.unlock();
 
-  int ret = create_aio_write_request(bl, len, obj_id);
+
+  int ret = create_aio_write_request(bl, len, obj_id, c_block);
   if (ret < 0) {
     cache_lock.lock();
     outstanding_write_list.remove(obj_id);

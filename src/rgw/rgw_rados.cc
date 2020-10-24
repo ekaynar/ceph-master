@@ -1103,6 +1103,12 @@ int RGWRados::init_rados()
   if (use_datacache){
   datacache = new DataCache();
   datacache->init(cct);
+  objDirectory = new RGWObjectDirectory();
+  objDirectory->init(cct);
+  blkDirectory = new RGWBlockDirectory();		
+  blkDirectory->init(cct);
+  datacache->set_block_directory(blkDirectory);
+
   }
   return ret;
 }
@@ -3437,7 +3443,7 @@ class RGWRadosPutObj : public RGWHTTPStreamRWRequest::ReceiveCB
       bufferlist tmp;
       chunk_buffer.splice(0, chunk_size, &tmp);
       string key = chunk_name + "_" + std::to_string(chunk_id);
-      int ret = store->put_data(key, tmp , tmp.length());
+      int ret = store->put_data(key, tmp , tmp.length(), nullptr);
       chunk_id += 1;
     }
 
@@ -6278,14 +6284,18 @@ struct get_obj_data {
   uint64_t offset; // next offset to write to client
   rgw::AioResultList completed; // completed read results, sorted by offset
   optional_yield yield;
+  cache_obj c_obj;
 
   /* datacache */
   int sequence;
   std::list<string> pending_key_list;
+  std::list<cache_block*> pending_block_list;
   void add_pending_key(std::string key);
+  void add_pending_block(std::string oid, cache_block c_block);
   string get_pending_key();
+  cache_block  get_pending_block(std::string oid);
+  std::map<std::string, cache_block> cache_block_map;  
   ceph::mutex cache_lock = ceph::make_mutex("cache_lock");
-  std::map<off_t, CacheRequest*> cache_aio_map;  
   /* datacache */
 
 
@@ -6309,6 +6319,14 @@ struct get_obj_data {
       completed.pop_front_and_dispose(std::default_delete<rgw::AioResultEntry>{});
       offset += bl.length();
       string key = get_pending_key();
+      cache_block *c_block = new cache_block();
+      *c_block = get_pending_block(key);
+//      cache_block c_block;
+
+//      c_block.c_obj = c_obj;
+      if (bl.length() == 0x400000){
+      	store->put_data(key, bl, bl.length(), c_block); 
+      }
       int r = client_cb->handle_data(bl, 0, bl.length());
       if (r < 0) {
 	return r;
@@ -6337,6 +6355,35 @@ struct get_obj_data {
 };
 
 /* datacache */
+
+void get_obj_data::add_pending_block(std::string oid, cache_block c_block)
+{
+	cache_lock.lock();
+//	cache_block_map.insert(pair<std::string, cache_block*>(oid, &c_block));
+	cache_block_map[oid] = c_block;
+	cache_lock.unlock();
+
+}
+
+cache_block  get_obj_data::get_pending_block(std::string oid)
+{
+  struct cache_block c;
+  cache_lock.lock();
+  map<string, cache_block>::iterator iter = cache_block_map.find(oid);	
+  if (!(iter == cache_block_map.end())){
+	c = iter->second;	
+	cache_block_map.erase(oid);
+  }
+  //  _c_block = cache_block_map[oid];
+  cache_lock.unlock();
+  /*  if (!pending_block_list.empty()) {
+    _c_block = pending_block_list.front();
+    pending_block_list.pop_front();
+  }*/
+  return c;
+}
+
+
 void get_obj_data::add_pending_key(std::string key)
 {
   pending_key_list.push_back(key);
@@ -6352,6 +6399,7 @@ string get_obj_data::get_pending_key()
   }
   return str;
 }
+
 
 /* datacache */
 
@@ -9207,18 +9255,29 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
     << " read_len " << read_len << dendl;
   ObjectReadOperation op;
   struct get_obj_data *d = (struct get_obj_data *)arg;
-
+ 
   const uint64_t cost = read_len;
   const uint64_t id = obj_ofs;
   
   string oid = c_block.c_obj.bucket_name + "_"+c_block.c_obj.obj_name+"_"+ std::to_string(c_block.block_id);
   op.read(read_ofs, read_len, nullptr, nullptr);
 
-//  datacache->retrieve_obj_info(&c_block, store);
+  d->add_pending_key(oid);
+//  d->c_obj = c_block.c_obj;
+  //  datacache->retrieve_obj_info(&c_block, store);
 
-  
+  int ret = -1;
+  if (ret < 0){ // item does not exists
+	c_block.freq = 1;
+	}
+  else{
+	c_block.freq += 1;
+  }
+  c_block.size_in_bytes = read_len;
+  d->add_pending_block(oid, c_block);
+
   // read block from local ssd cache
-  c_block.hosts_list.push_back("3");
+  c_block.hosts_list.push_back("2");
   if (find(c_block.hosts_list.begin(), c_block.hosts_list.end(), "0") != c_block.hosts_list.end()){
     rgw_pool pool("default.rgw.buckets.data");
     rgw_raw_obj read_obj1(pool,oid);
@@ -9247,6 +9306,7 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
   // read from write-back cache
   else if (find(c_block.hosts_list.begin(), c_block.hosts_list.end(), "2") != c_block.hosts_list.end()){
     rgw_raw_obj read_obj;
+
     int r = retrieve_oid(c_block.c_obj, read_obj, obj_ofs, d->yield);
     auto obj = d->store->svc.rados->obj(read_obj);
     r = obj.open();
@@ -9780,11 +9840,17 @@ int RGWRados::delete_cache_obj(RGWRados *store, string userid, string src_bucket
 
 // Cache operation
 
-int RGWRados::put_data(string key, bufferlist& bl, unsigned int len){
-  dout(10) << __func__ << " local cache write "  << key << dendl;
-  datacache->put(bl,len,key); 
+int RGWRados::put_data(string key, bufferlist& bl, unsigned int len, cache_block *c_block){
+  dout(10) << __func__ << " local cache write "  << key << " " << c_block->size_in_bytes <<" " << c_block->block_id << dendl;
+  datacache->put(bl,len,key, c_block); 
   return 0;
 }
 
+int RGWRados::test(cache_obj &ptr){
+  dout(10) << __func__ << " ugur cache write "  << dendl;
+  objDirectory->getValue(&ptr);
+  dout(10) << __func__ << " ugur cache after "  << dendl;
+  return 0;
+}
 
 

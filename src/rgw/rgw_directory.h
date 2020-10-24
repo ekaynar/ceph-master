@@ -6,7 +6,7 @@
 #include <sys/types.h>
 #include <sstream>
 #include "rgw_common.h"
-
+#include <cpp_redis/cpp_redis>
 #include <string>
 #include <iostream>
 #include <vector>
@@ -20,6 +20,7 @@ public:
 	virtual ~RGWDirectory(){ cout << "RGW Directory is destroyed!";}
 	int existKey(string key);
 	int delKey(string key);
+	CephContext *cct;
 
 private:
 	//virtual int setKey(string key, cache_obj *ptr);
@@ -30,6 +31,12 @@ class RGWObjectDirectory: public RGWDirectory {
 public:
 
 	RGWObjectDirectory() {}
+	cpp_redis::client client;
+	void init(CephContext *_cct) {
+      		cct = _cct;
+		client.connect(cct->_conf->rgw_directory_address, cct->_conf->rgw_directory_port);
+    	}
+
 	virtual ~RGWObjectDirectory() { cout << "RGWObject Directory is destroyed!";}
 	int setValue(cache_obj *ptr);
 	int getValue(cache_obj *ptr);
@@ -50,6 +57,11 @@ class RGWBlockDirectory: RGWDirectory {
 public:
 
 	RGWBlockDirectory() {}
+	 cpp_redis::client client2;
+	void init(CephContext *_cct) {
+		cct = _cct;
+		client2.connect(cct->_conf->rgw_directory_address, cct->_conf->rgw_directory_port);
+	}
 	virtual ~RGWBlockDirectory() { cout << "RGWObject Directory is destroyed!";}
 	int setValue(cache_block *ptr);
 	int getValue(cache_block *ptr);

@@ -8241,8 +8241,9 @@ bool compare_acls(){return true;}
 
 bool RGWGetObj::cache_authorize(cache_obj &c_obj, string requester){
   bool allow =  false;
-  //  int op_ret = objectDirectory.getValue(&c_obj);
-  int op_ret = -1;
+//  int op_ret = objectDirectory.getValue(&c_obj);
+  //int op_ret = store->getRados()->objDirectory.getValue(&c_obj);
+//  int op_ret = 0;
   c_obj.owner = requester;
 
 // Object is in write-back cache
@@ -8278,20 +8279,30 @@ void RGWGetObj::cache_execute()
   ldpp_dout(this, 10) << __func__  << dendl;
   c_obj.bucket_name = s->bucket_name;
   c_obj.obj_name = s->object.name;
-  if(!cache_authorize(c_obj, s->user->get_info().user_id.id))
-    return;
-  
-  if (c_obj.size_in_bytes <=0)
-    return;
+  c_obj.backendProtocol =  S3;
+  RGWGetObj_CB cb(this);
+  RGWGetObj_Filter* filter = (RGWGetObj_Filter *)&cb;
+//  if(!cache_authorize(c_obj, s->user->get_info().user_id.id))
 
+//    return;
+  
+//  if (c_obj.size_in_bytes <=0)
+//    return;
+//  int op = store->getRados()->objDirectory->getValue(&c_obj);
+  int op = store->getRados()->test(c_obj);
+  if(op < 0 or c_obj.size_in_bytes <=0 ){
+	ldpp_dout(this, 10) << __func__  << "error" << dendl; 
+	return;
+  }
+
+  ldpp_dout(this, 10) << __func__  <<  c_obj.size_in_bytes << dendl;
   s->obj_size = c_obj.size_in_bytes;
+
   this->total_len = c_obj.size_in_bytes;
   
   int64_t ofs_x, end_x;
   ofs_x = 0;
   end_x = c_obj.size_in_bytes - 1;
-  RGWGetObj_CB cb(this);
-  RGWGetObj_Filter* filter = (RGWGetObj_Filter *)&cb;
 
   RGWBucketInfo dest_bucket_info;
   RGWRados::Object op_target(store->getRados(), dest_bucket_info, *static_cast<RGWObjectCtx *>(s->obj_ctx), obj);

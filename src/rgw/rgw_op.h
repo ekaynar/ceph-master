@@ -193,7 +193,7 @@ public:
   /*datacache*/
   virtual void cache_execute() {}  
   cache_obj c_obj;
-  RGWObjectDirectory objectDirectory;
+//  RGWObjectDirectory objectDirectory;
   /*datacache*/
 
   virtual void send_response() {}

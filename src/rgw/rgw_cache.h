@@ -309,7 +309,7 @@ struct cacheAioWriteRequest{
   CephContext *cct;
   bool write; 
   RGWRados *store;
-  cache_block* c_block;
+  cache_block c_block;
 
   cacheAioWriteRequest(CephContext *_cct) : cct(_cct) , write(false) {}
   int create_io(bufferlist& bl, uint64_t len, std::string key);

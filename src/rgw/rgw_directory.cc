@@ -434,13 +434,15 @@ int RGWObjectDirectory::setKey(string key, cache_obj *ptr){
  */
 int RGWBlockDirectory::setKey(string key, cache_block *ptr){
 	ldout(cct,10) <<"block after connect" << key <<dendl;
-	cpp_redis::client client;
-	client.connect("192.168.32.103", 7000);
+//	cpp_redis::client client;
+//	client.connect("192.168.32.103", 7000);
 
 	vector<pair<string, string>> list;
 	vector<string> options;
 	string hosts;
 
+	ldout(cct,10) << __func__ << "before"<< key<< " "<<ptr->block_id  <<dendl;
+	
 	stringstream ss;
 	for(size_t i = 0; i < ptr->hosts_list.size(); ++i)
 	{
@@ -466,7 +468,7 @@ int RGWBlockDirectory::setKey(string key, cache_block *ptr){
 
 	// synchronous commit, no timeout
 	client.sync_commit();
-	ldout(cct,10) <<"__func__" << "setValueafter" << dendl;
+	ldout(cct,10) << __func__ << "setValueafter" << dendl;
 	return 0;
 
 }
@@ -474,7 +476,7 @@ int RGWBlockDirectory::setKey(string key, cache_block *ptr){
 int RGWObjectDirectory::getValue(cache_obj *ptr){
     string key = buildIndex(ptr);
 
-     ldout(cct,10) <<"__func__" << "getValue" << dendl;
+     ldout(cct,10) << __func__ << "getValue" << dendl;
     //delete the existing key,
     //to update an existing key, updateValue() should be used
     //if (RGWDirectory::existKey(key))i

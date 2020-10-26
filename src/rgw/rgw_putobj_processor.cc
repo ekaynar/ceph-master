@@ -327,7 +327,7 @@ int AtomicObjectProcessor::complete(size_t accounted_size,
     writer.clear_written();
     
     /* datacache */
-
+    if( store->ctx()->_conf->rgw_datacache_enabled){
     cache_obj cacheObj;
     cacheObj.owner =  op_target.get_bucket_info().owner.id;
     cacheObj.bucket_name = op_target.get_obj().bucket.name;
@@ -350,7 +350,7 @@ int AtomicObjectProcessor::complete(size_t accounted_size,
    
     r = store->getRados()->objDirectory->setValue(&cacheObj);
     /* datacache */
-
+    }
 
   }
   if (pcanceled) {

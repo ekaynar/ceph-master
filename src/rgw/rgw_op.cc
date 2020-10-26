@@ -8290,11 +8290,12 @@ void RGWGetObj::cache_execute()
 //    return;
 //  int op = store->getRados()->objDirectory->getValue(&c_obj);
   int op = store->getRados()->test(c_obj);
-  if(op < 0 or c_obj.size_in_bytes <=0 ){
+//  c_obj.size_in_bytes =41943040; 
+ /*if(op < 0 or c_obj.size_in_bytes <=0 ){
 	ldpp_dout(this, 10) << __func__  << "error" << dendl; 
 	return;
   }
-
+*/
   ldpp_dout(this, 10) << __func__  <<  c_obj.size_in_bytes << dendl;
   s->obj_size = c_obj.size_in_bytes;
 

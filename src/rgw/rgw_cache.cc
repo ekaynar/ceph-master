@@ -571,17 +571,11 @@ void DataCache::cache_aio_write_completion_cb(cacheAioWriteRequest *c){
   lru_insert_head(chunk_info);
   eviction_lock.Unlock();
   */
-//  eviction_lock.lock();
 
   time_t rawTime = time(NULL);
-//  c->c_block->c_obj.creationTime = mktime(gmtime(&rawTime));
-  c->c_block->lastAccessTime = mktime(gmtime(&rawTime));
-//  c->c_block->c_obj.backendProtocol =  S3;
- // c->c_block->c_obj.creationTime = mktime(gmtime(&rawTime));
-//  
-  int ret = blkDirectory->setValue(c->c_block);
-
- // eviction_lock.unlock();
+//  c->c_block->c_obj.creationTime = mktime(gmtime(&rawTime));  
+  ldout(cct, 20) << __func__ << "before" << c->key  << " " << c->c_block.c_obj.bucket_name<< dendl;
+  int ret = blkDirectory->setValue(&(c->c_block));
   ldout(cct, 20) << __func__ << "after"<< dendl;
 
   
@@ -595,8 +589,8 @@ void _cache_aio_write_completion_cb(sigval_t sigval) {
   c->priv_data->cache_aio_write_completion_cb(c);
 }
 
-int DataCache::create_aio_write_request(bufferlist& bl, uint64_t len, std::string key, cache_block* c_block){
-  ldout(cct, 10) << __func__  << dendl;
+int DataCache::create_aio_write_request(bufferlist& bl, uint64_t len, std::string key, cache_block *c_b){
+  ldout(cct, 10) << __func__  << c_b->c_obj.bucket_name << dendl;
   struct cacheAioWriteRequest *wr= new struct cacheAioWriteRequest(cct);
   int ret = 0;
   if (wr->create_io(bl, len, key) < 0) {
@@ -610,7 +604,8 @@ int DataCache::create_aio_write_request(bufferlist& bl, uint64_t len, std::strin
   wr->cb->aio_sigevent.sigev_value.sival_ptr = (void*)wr;
   wr->key = key;
   wr->priv_data = this;
-  wr->c_block = c_block;
+  wr->c_block = *c_b;
+//  ldout(cct, 10) << __func__  << " cache_aio_re "<< wr->c_block->c_obj.bucket_name << dendl;
 
   if((ret= ::aio_write(wr->cb)) != 0) {
     ldout(cct, 0) << "Error: aio_write failed "<< ret << dendl;

@@ -6289,10 +6289,16 @@ struct get_obj_data {
   /* datacache */
   int sequence;
   std::list<string> pending_key_list;
-  std::list<cache_block*> pending_block_list;
   void add_pending_key(std::string key);
-  void add_pending_block(std::string oid, cache_block c_block);
   string get_pending_key();
+
+
+//  std::list<cache_block> pending_block_list;
+//  std::vector <cache_block> pending_block_list;
+//  void add_pending_block(cache_block c_block);
+//  cache_block get_pending_block();
+
+  void add_pending_block(std::string oid, cache_block c_block);
   cache_block  get_pending_block(std::string oid);
   std::map<std::string, cache_block> cache_block_map;  
   ceph::mutex cache_lock = ceph::make_mutex("cache_lock");
@@ -6318,14 +6324,16 @@ struct get_obj_data {
       auto bl = std::move(completed.front().data);
       completed.pop_front_and_dispose(std::default_delete<rgw::AioResultEntry>{});
       offset += bl.length();
-      string key = get_pending_key();
-      cache_block *c_block = new cache_block();
-      *c_block = get_pending_block(key);
-//      cache_block c_block;
-
-//      c_block.c_obj = c_obj;
-      if (bl.length() == 0x400000){
-      	store->put_data(key, bl, bl.length(), c_block); 
+      if(cct->_conf->rgw_datacache_enabled){
+        string key = get_pending_key();
+        ldout(cct, 0) << "outside flush "<< key << dendl;
+//	cache_block *c_block;
+//	c_block.size_in_bytes = bl.length;
+        cache_block c_block = get_pending_block(key); 	
+//	c_block = get_pending_block(key); 
+        if (bl.length() == 0x400000){
+      	  store->put_data(key, bl, bl.length(), &c_block); 
+        }
       }
       int r = client_cb->handle_data(bl, 0, bl.length());
       if (r < 0) {
@@ -6358,32 +6366,41 @@ struct get_obj_data {
 
 void get_obj_data::add_pending_block(std::string oid, cache_block c_block)
 {
-	cache_lock.lock();
+//	cache_lock.lock();
 //	cache_block_map.insert(pair<std::string, cache_block*>(oid, &c_block));
 	cache_block_map[oid] = c_block;
-	cache_lock.unlock();
+	//cache_lock.unlock();
 
 }
 
-cache_block  get_obj_data::get_pending_block(std::string oid)
+cache_block get_obj_data::get_pending_block(std::string oid)
 {
   struct cache_block c;
-  cache_lock.lock();
+  //cache_lock.lock();
   map<string, cache_block>::iterator iter = cache_block_map.find(oid);	
   if (!(iter == cache_block_map.end())){
 	c = iter->second;	
 	cache_block_map.erase(oid);
   }
-  //  _c_block = cache_block_map[oid];
-  cache_lock.unlock();
-  /*  if (!pending_block_list.empty()) {
-    _c_block = pending_block_list.front();
-    pending_block_list.pop_front();
-  }*/
+ // cache_lock.unlock();
   return c;
 }
 
+/*
+void get_obj_data::add_pending_block(cache_block c_block)
+{
+  pending_block_list.push_back(c_block);
+}
 
+cache_block get_obj_data::get_pending_block()
+{
+  cache_block c_block;
+  if (!pending_block_list.empty()) {
+    c_block = pending_block_list.front();
+    pending_block_list.erase(pending_block_list.begin());
+  }
+  return c_block;
+}*/
 void get_obj_data::add_pending_key(std::string key)
 {
   pending_key_list.push_back(key);
@@ -9251,6 +9268,7 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
 
   dout(10) << __func__   << " obj_ofs "<< obj_ofs
     << " block_id " << c_block.block_id
+    << " bucket_name " << c_block.c_obj.bucket_name
     << " read_ofs " << read_ofs 
     << " read_len " << read_len << dendl;
   ObjectReadOperation op;
@@ -9275,6 +9293,7 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
   }
   c_block.size_in_bytes = read_len;
   d->add_pending_block(oid, c_block);
+  //d->add_pending_block(c_block);
 
   // read block from local ssd cache
   c_block.hosts_list.push_back("2");
@@ -9841,7 +9860,7 @@ int RGWRados::delete_cache_obj(RGWRados *store, string userid, string src_bucket
 // Cache operation
 
 int RGWRados::put_data(string key, bufferlist& bl, unsigned int len, cache_block *c_block){
-  dout(10) << __func__ << " local cache write "  << key << " " << c_block->size_in_bytes <<" " << c_block->block_id << dendl;
+  dout(10) << __func__ << " local cache write "  << key << " " << c_block->size_in_bytes <<" " << c_block->block_id << c_block->c_obj.bucket_name <<dendl;
   datacache->put(bl,len,key, c_block); 
   return 0;
 }

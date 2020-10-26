@@ -57,10 +57,10 @@ class RGWBlockDirectory: RGWDirectory {
 public:
 
 	RGWBlockDirectory() {}
-	 cpp_redis::client client2;
+	 cpp_redis::client client;
 	void init(CephContext *_cct) {
 		cct = _cct;
-		client2.connect(cct->_conf->rgw_directory_address, cct->_conf->rgw_directory_port);
+		client.connect(cct->_conf->rgw_directory_address, cct->_conf->rgw_directory_port);
 	}
 	virtual ~RGWBlockDirectory() { cout << "RGWObject Directory is destroyed!";}
 	int setValue(cache_block *ptr);

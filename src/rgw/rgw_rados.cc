@@ -6323,7 +6323,7 @@ struct get_obj_data {
         cache_block c_block = get_pending_block(key); 	
         if (bl.length() == 0x400000){
 	  c_block.hosts_list.push_back(cct->_conf->host);
-      	  store->put_data(key, bl, bl.length(), &c_block); 
+	  store->put_data(key, bl, bl.length(), &c_block); 
         }
       }
       int r = client_cb->handle_data(bl, 0, bl.length());
@@ -9275,9 +9275,6 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
   //  datacache->retrieve_obj_info(&c_block, store);
 
   int ret = blkDirectory->getValue(&c_block);
-  dout(10) << __func__   << "ret " << ret 
-	  << " host size " << c_block.hosts_list.size() 
-	  << " lastaccesstime " <<c_block.lastAccessTime << dendl;
   if (ret < 0){ // item does not exists
 	c_block.freq = 1;
   	c_block.size_in_bytes = read_len;

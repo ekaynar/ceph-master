@@ -336,7 +336,6 @@ int AtomicObjectProcessor::complete(size_t accounted_size,
     cacheObj.hosts_list.push_back("writecache");
     cacheObj.home_location = CACHE;
     cacheObj.size_in_bytes = manifest.get_obj_size();
-    ldpp_dout(dpp, 1) << "ugur "<< cacheObj.bucket_name<<" " << manifest.get_obj_size() << dendl;
 
     cacheObj.dirty = true;
     cacheObj.etag = etag;
@@ -344,9 +343,8 @@ int AtomicObjectProcessor::complete(size_t accounted_size,
     cacheObj.creationTime =  mktime(gmtime(&rawTime));
     cacheObj.lastAccessTime = mktime(gmtime(&rawTime));
     cacheObj.backendProtocol =  S3;
-    cacheObj.acl = "acl_test"; //FIXME
+    cacheObj.acl = "ugur_acl_test"; //FIXME
     cacheObj.aclTimeStamp = mktime(gmtime(&rawTime)); //FIXME
-    ldpp_dout(dpp, 1) << "ugur timestamp"<<  rawTime <<" " << cacheObj.aclTimeStamp << dendl;
    
     r = store->getRados()->objDirectory->setValue(&cacheObj);
     /* datacache */

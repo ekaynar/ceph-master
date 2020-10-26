@@ -134,14 +134,15 @@ int RGWDirectory::existKey(string key){
 	client.connect("192.168.32.103", 7000);
 
 	int result = 0;
-
     vector<string> keys;
     keys.push_back(key);
 
 	client.exists(keys, [&result](cpp_redis::reply &reply){
-		auto arr = reply.as_array();
-		result = arr[0].as_integer();
+//		auto arr = reply.as_array();
+		result = reply.as_integer();
+//		result = arr[0].as_integer();
 	});
+	client.sync_commit();	
 	return result;
 }
 
@@ -348,8 +349,8 @@ int RGWObjectDirectory::setValue(cache_obj *ptr){
 
 	//delete the existing key, 
 	//to update an existing key, updateValue() should be used
-	if (RGWDirectory::existKey(key))
-		RGWDirectory::delKey(key);
+//	if (RGWDirectory::existKey(key))
+//		RGWDirectory::delKey(key);
 
 	return setKey(key, ptr);
 	
@@ -362,8 +363,8 @@ int RGWBlockDirectory::setValue(cache_block *ptr){
 
 	//delete the existing key, 
 	//to update an existing key, updateValue() should be used
-	if (RGWDirectory::existKey(key))
-		RGWDirectory::delKey(key);
+//	if (RGWDirectory::existKey(key))
+//		RGWDirectory::delKey(key);
 
 	return setKey(key, ptr);
 	
@@ -433,7 +434,7 @@ int RGWObjectDirectory::setKey(string key, cache_obj *ptr){
 /* the horse function to add a new key to the directory
  */
 int RGWBlockDirectory::setKey(string key, cache_block *ptr){
-	ldout(cct,10) <<"block after connect" << key <<dendl;
+	ldout(cct,10) <<__func__<<" key " << key <<dendl;
 //	cpp_redis::client client;
 //	client.connect("192.168.32.103", 7000);
 
@@ -441,8 +442,6 @@ int RGWBlockDirectory::setKey(string key, cache_block *ptr){
 	vector<string> options;
 	string hosts;
 
-	ldout(cct,10) << __func__ << "before"<< key<< " "<<ptr->block_id  <<dendl;
-	
 	stringstream ss;
 	for(size_t i = 0; i < ptr->hosts_list.size(); ++i)
 	{
@@ -455,12 +454,13 @@ int RGWBlockDirectory::setKey(string key, cache_block *ptr){
 	//creating a list of key's properties
 	list.push_back(make_pair("key", key));
 	list.push_back(make_pair("owner", ptr->c_obj.owner));
-//	list.push_back(make_pair("hosts", hosts));
+	list.push_back(make_pair("hosts", hosts));
 	list.push_back(make_pair("size", to_string(ptr->size_in_bytes)));
-//	list.push_back(make_pair("etag", ptr->etag));
 	list.push_back(make_pair("bucket_name", ptr->c_obj.bucket_name));
 	list.push_back(make_pair("obj_name", ptr->c_obj.obj_name));
 	list.push_back(make_pair("block_id", to_string(ptr->block_id)));
+	list.push_back(make_pair("lastAccessTime", timeToString(ptr->lastAccessTime)));
+	list.push_back(make_pair("accessCount", to_string(ptr->freq)));
 
 
 	client.hmset(key, list, [](cpp_redis::reply &reply){
@@ -468,7 +468,6 @@ int RGWBlockDirectory::setKey(string key, cache_block *ptr){
 
 	// synchronous commit, no timeout
 	client.sync_commit();
-	ldout(cct,10) << __func__ << "setValueafter" << dendl;
 	return 0;
 
 }
@@ -557,7 +556,7 @@ int RGWObjectDirectory::getValue(cache_obj *ptr){
 	ptr->bucket_name = bucket_name;
 	ptr->obj_name = obj_name;
 	ptr->home_location = stringToHome(home_location);
-	ldout(cct,10) <<"after connect" << size << bucket_name << obj_name<< owner<<etag <<dendl;
+//	ldout(cct,10) <<"after connect" << size << bucket_name << obj_name<< owner<<etag <<dendl;
 	// synchronous commit, no timeout
 //	client.sync_commit();
 	return 0;
@@ -571,6 +570,7 @@ int RGWObjectDirectory::getValue(cache_obj *ptr){
 int RGWBlockDirectory::getValue(cache_block *ptr){
 
     string key = buildIndex(ptr->c_obj.bucket_name, ptr->c_obj.obj_name, ptr->block_id);
+    ldout(cct,10) << __func__ << " key " << key<< " obj name "<< ptr->c_obj.obj_name <<dendl;
     //delete the existing key,
     //to update an existing key, updateValue() should be used
     if (RGWDirectory::existKey(key)){
@@ -581,10 +581,9 @@ int RGWBlockDirectory::getValue(cache_block *ptr){
     string etag;
     string bucket_name;
     string obj_name;
-	string block_id;
+    string block_id;
+    string freq;
 
-	cpp_redis::client client;
-	client.connect("192.168.32.103", 7000);
 
 	//fields will be filled by the redis hmget functoin
 	std::vector<std::string> fields;
@@ -592,35 +591,29 @@ int RGWBlockDirectory::getValue(cache_block *ptr){
 	fields.push_back("owner");
 	fields.push_back("hosts");
 	fields.push_back("size");
-	fields.push_back("etag");
 	fields.push_back("bucket_name");
 	fields.push_back("obj_name");
 	fields.push_back("block_id");
+	fields.push_back("accessCount");
+//	fields.push_back("etag");
 
-	client.hmget(key, fields, [&key, &owner, &hosts, &size, &etag, &bucket_name, &obj_name, &block_id](cpp_redis::reply &reply){
-/*
-	      key = reply.as_string()[0];
-	      owner = reply.as_string()[1];
-	      hosts = reply.as_string()[2];
-	      size = reply.as_string()[3];
-	      etag = reply.as_string()[4];
-  	      bucket_name = reply.as_string()[5];
-	      obj_name = reply.as_string()[6];
-	      block_id = reply.as_string()[7];
-*/
+	client.hmget(key, fields, [&key, &owner, &hosts, &size, &bucket_name, &obj_name, &block_id, &freq](cpp_redis::reply &reply){
+	
 	auto arr = reply.as_array();
-      	key     = arr[0].as_string();
-      	owner     = arr[1].as_string();
-      	hosts     = arr[2].as_string();
-      	size     = arr[3].as_string();
-      	etag     = arr[4].as_string();
-      	bucket_name     = arr[5].as_string();
-      	obj_name     = arr[6].as_string();
-      	block_id     = arr[7].as_string();
+      	key = arr[0].as_string();
+      	owner = arr[1].as_string();
+      	hosts = arr[2].as_string();
+      	size = arr[3].as_string();
+      	bucket_name = arr[4].as_string();
+      	obj_name = arr[5].as_string();
+      	block_id  = arr[6].as_string();
+      	freq = arr[7].as_string();
 
 	});
 
 
+	client.sync_commit();
+	
 	stringstream sloction(hosts);
 	string tmp;
 
@@ -632,13 +625,15 @@ int RGWBlockDirectory::getValue(cache_block *ptr){
 		ptr->hosts_list.push_back(tmp);
 
 	ptr->size_in_bytes = stoull(size);
-	ptr->etag = etag;
 	ptr->c_obj.bucket_name = bucket_name;
 	ptr->c_obj.obj_name = obj_name;
 	ptr->block_id = stoull(block_id);
+	
+	ptr->freq = stoull(freq);
 
 	// synchronous commit, no timeout
-	client.sync_commit();
+	//
+	return 0;
     }
     else
 	    return -1;

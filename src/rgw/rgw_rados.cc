@@ -6284,19 +6284,13 @@ struct get_obj_data {
   uint64_t offset; // next offset to write to client
   rgw::AioResultList completed; // completed read results, sorted by offset
   optional_yield yield;
-  cache_obj c_obj;
+//  cache_obj c_obj;
 
   /* datacache */
   int sequence;
   std::list<string> pending_key_list;
   void add_pending_key(std::string key);
   string get_pending_key();
-
-
-//  std::list<cache_block> pending_block_list;
-//  std::vector <cache_block> pending_block_list;
-//  void add_pending_block(cache_block c_block);
-//  cache_block get_pending_block();
 
   void add_pending_block(std::string oid, cache_block c_block);
   cache_block  get_pending_block(std::string oid);
@@ -6326,12 +6320,9 @@ struct get_obj_data {
       offset += bl.length();
       if(cct->_conf->rgw_datacache_enabled){
         string key = get_pending_key();
-        ldout(cct, 0) << "outside flush "<< key << dendl;
-//	cache_block *c_block;
-//	c_block.size_in_bytes = bl.length;
         cache_block c_block = get_pending_block(key); 	
-//	c_block = get_pending_block(key); 
         if (bl.length() == 0x400000){
+	  c_block.hosts_list.push_back(cct->_conf->host);
       	  store->put_data(key, bl, bl.length(), &c_block); 
         }
       }
@@ -9281,19 +9272,21 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
   op.read(read_ofs, read_len, nullptr, nullptr);
 
   d->add_pending_key(oid);
-//  d->c_obj = c_block.c_obj;
   //  datacache->retrieve_obj_info(&c_block, store);
 
-  int ret = -1;
+  int ret = blkDirectory->getValue(&c_block);
+  dout(10) << __func__   << "ret " << ret 
+	  << " host size " << c_block.hosts_list.size() 
+	  << " lastaccesstime " <<c_block.lastAccessTime << dendl;
   if (ret < 0){ // item does not exists
 	c_block.freq = 1;
+  	c_block.size_in_bytes = read_len;
 	}
   else{
 	c_block.freq += 1;
   }
-  c_block.size_in_bytes = read_len;
+
   d->add_pending_block(oid, c_block);
-  //d->add_pending_block(c_block);
 
   // read block from local ssd cache
   c_block.hosts_list.push_back("2");
@@ -9860,15 +9853,15 @@ int RGWRados::delete_cache_obj(RGWRados *store, string userid, string src_bucket
 // Cache operation
 
 int RGWRados::put_data(string key, bufferlist& bl, unsigned int len, cache_block *c_block){
-  dout(10) << __func__ << " local cache write "  << key << " " << c_block->size_in_bytes <<" " << c_block->block_id << c_block->c_obj.bucket_name <<dendl;
+  //dout(10) << __func__ << " local cache write "  << key << " " << c_block->size_in_bytes <<" " << c_block->block_id << c_block->c_obj.bucket_name <<dendl;
+  dout(10) << __func__ << " key "<< key <<dendl;
   datacache->put(bl,len,key, c_block); 
   return 0;
 }
 
 int RGWRados::test(cache_obj &ptr){
-  dout(10) << __func__ << " ugur cache write "  << dendl;
+  dout(10) << __func__ << dendl;
   objDirectory->getValue(&ptr);
-  dout(10) << __func__ << " ugur cache after "  << dendl;
   return 0;
 }
 

@@ -573,10 +573,8 @@ void DataCache::cache_aio_write_completion_cb(cacheAioWriteRequest *c){
   */
 
   time_t rawTime = time(NULL);
-//  c->c_block->c_obj.creationTime = mktime(gmtime(&rawTime));  
-  ldout(cct, 20) << __func__ << "before" << c->key  << " " << c->c_block.c_obj.bucket_name<< dendl;
+  c->c_block.lastAccessTime = mktime(gmtime(&rawTime));  
   int ret = blkDirectory->setValue(&(c->c_block));
-  ldout(cct, 20) << __func__ << "after"<< dendl;
 
   
   c->release(); 
@@ -590,7 +588,7 @@ void _cache_aio_write_completion_cb(sigval_t sigval) {
 }
 
 int DataCache::create_aio_write_request(bufferlist& bl, uint64_t len, std::string key, cache_block *c_b){
-  ldout(cct, 10) << __func__  << c_b->c_obj.bucket_name << dendl;
+  ldout(cct, 10) << __func__  << dendl;
   struct cacheAioWriteRequest *wr= new struct cacheAioWriteRequest(cct);
   int ret = 0;
   if (wr->create_io(bl, len, key) < 0) {
@@ -605,7 +603,6 @@ int DataCache::create_aio_write_request(bufferlist& bl, uint64_t len, std::strin
   wr->key = key;
   wr->priv_data = this;
   wr->c_block = *c_b;
-//  ldout(cct, 10) << __func__  << " cache_aio_re "<< wr->c_block->c_obj.bucket_name << dendl;
 
   if((ret= ::aio_write(wr->cb)) != 0) {
     ldout(cct, 0) << "Error: aio_write failed "<< ret << dendl;
@@ -621,8 +618,7 @@ done:
 
 }
 void DataCache::put(bufferlist& bl, uint64_t len, string obj_id, cache_block *c_block){
-  ldout(cct, 10) << __func__  << obj_id <<dendl;
-  
+  ldout(cct, 10) << __func__  <<dendl;
   cache_lock.lock(); 
   
   map<string, ChunkDataInfo *>::iterator iter = cache_map.find(obj_id);

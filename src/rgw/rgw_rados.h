@@ -33,6 +33,7 @@
 /*datacache*/
 #include <fcntl.h>
 #include <aio.h>
+#include <sw/redis++/redis++.h>
 #include <cpp_redis/cpp_redis>
 #include "rgw_cacherequest.h"
 #include "rgw_directory.h"
@@ -40,6 +41,7 @@
 /*datacache*/
 
 struct DataCache;
+class RGWDirectory;
 class RGWObjectDirectory; 
 class RGWBlockDirectory; 
 class RGWWatcher;
@@ -60,8 +62,6 @@ class RGWReshard;
 class RGWReshardWait;
 
 class RGWSysObjectCtx;
-class RGWDirectory;
-class RGWObjectDirectory;
 
 /* flags for put_obj_meta() */
 #define PUT_OBJ_CREATE      0x01

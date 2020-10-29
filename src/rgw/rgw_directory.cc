@@ -129,45 +129,67 @@ int RGWDirectory::setKey(string key, cache_obj *ptr){
 
 */
 
-int RGWDirectory::existKey(string key){
-	cpp_redis::client client;
-	client.connect("192.168.32.103", 7000);
+int RGWObjectDirectory::existKey(string key){
+	//cpp_redis::client client;
+	//client.connect("192.168.32.103", 7000);
 
 	int result = 0;
-    vector<string> keys;
-    keys.push_back(key);
+	vector<string> keys;
+	keys.push_back(key);
 
 	client.exists(keys, [&result](cpp_redis::reply &reply){
-//		auto arr = reply.as_array();
 		result = reply.as_integer();
-//		result = arr[0].as_integer();
 	});
 	client.sync_commit();	
 	return result;
 }
 
-/* updatinh the directory value of host_list
- * its input is a host which has a copy of the data
- * and bucket_name, obj_name and chunk_id in *ptr
- */
-int RGWObjectDirectory::updateHostsList(cache_obj *ptr){
+int RGWBlockDirectory::existKey(string key){
+	//cpp_redis::client client;
+	//client.connect("192.168.32.103", 7000);
 
+	int result = 0;
+	vector<string> keys;
+	keys.push_back(key);
+
+	client.exists(keys, [&result](cpp_redis::reply &reply){
+		result = reply.as_integer();
+	});
+	client.sync_commit();	
+	return result;
+}
+
+
+/* updatinh a specific field in a key in the directory
+ */
+int RGWObjectDirectory::updateField(cache_obj *ptr, string field){
+	/*
 	cache_obj tmpObj;
 	
 	//we need to build the key to find the object in the directory
 	tmpObj.bucket_name = ptr->bucket_name;
 	tmpObj.obj_name = ptr->obj_name;
+	*/
 
-	string key = buildIndex(&tmpObj);
+	string key = buildIndex(ptr);
+	vector<pair<string, string>> list;
+	string hosts;
 
-		//getting old values from the directory
-	if (getValue(&tmpObj) == 0){
+	stringstream ss;
+	for(size_t i = 0; i < ptr->hosts_list.size(); ++i)
+	{
+		if(i != 0)
+			ss << "_";
+		ss << ptr->hosts_list[i];
+	}
+	hosts = ss.str();
+	list.push_back(make_pair(field, hosts));
 
-		//updating the desired field
-		tmpObj.hosts_list = ptr->hosts_list;
 
-		//updating the directory value 
-		setKey(key, &tmpObj);
+	//if (getValue(&tmpObj) == 0){
+	if (existKey(key)){
+		client.hmset(key, list, [](cpp_redis::reply &reply){
+		});
 	}
 	else
 		return -1;
@@ -175,129 +197,43 @@ int RGWObjectDirectory::updateHostsList(cache_obj *ptr){
 	
 }
 
-/* updatinh the directory value of host_list
- * its input is a host which has a copy of the data
- * and bucket_name, obj_name and chunk_id in *ptr
- */
-int RGWObjectDirectory::updateHomeLocation(cache_obj *ptr){
+int RGWBlockDirectory::updateField(cache_block *ptr, string field){
 
-	cache_obj tmpObj;
-	
-	//we need to build the key to find the object in the directory
-	tmpObj.bucket_name = ptr->bucket_name;
-	tmpObj.obj_name = ptr->obj_name;
-
-	string key = buildIndex(&tmpObj);
-
-	//getting old values from the directory
-	if (getValue(&tmpObj) == 0){
-
-		//updating the desired field
-		tmpObj.home_location = ptr->home_location;
-
-		//updating the directory value 
-		setKey(key, &tmpObj);
-	}
-	else
-		return -1;
-	return 0;
-	
-}
-
-
-
-int RGWBlockDirectory::updateHostsList(cache_block *ptr){
-
-	cache_block tmpObj;
-	
-	//we need to build the key to find the object in the directory
 	string bucket_name = ptr->c_obj.bucket_name;
 	string obj_name = ptr->c_obj.obj_name;
 	uint64_t block_id = ptr->block_id;
 
 	string key = buildIndex(bucket_name, obj_name, block_id);
+	vector<pair<string, string>> list;
+	string hosts;
 
-	//getting old values from the directory
-	if (getValue(&tmpObj) == 0){
+	stringstream ss;
+	for(size_t i = 0; i < ptr->hosts_list.size(); ++i)
+	{
+		if(i != 0)
+			ss << "_";
+		ss << ptr->hosts_list[i];
+	}
+	hosts = ss.str();
+	list.push_back(make_pair(field, hosts));
 
-		//updating the desired field
-		tmpObj.hosts_list = ptr->hosts_list;
 
-		//updating the directory value 
-		setKey(key, &tmpObj);
+	//if (getValue(&tmpObj) == 0){
+	if (existKey(key)){
+		client.hmset(key, list, [](cpp_redis::reply &reply){
+		});
 	}
 	else
 		return -1;
 	return 0;
-	
 }
 
-
-
-/* updatinh the directory value of acl_obj
- * its input is a new acl of the object
- * and bucket_name, obj_name and chunk_id in *ptr
- */
-int RGWObjectDirectory::updateACL(cache_obj *ptr){
-	string acl = ptr->acl;
-	time_t aclTimeStamp = ptr->aclTimeStamp;
-
-	cache_obj tmpObj;
-	
-	//we need to build the key to find the object in the directory
-	tmpObj.bucket_name = ptr->bucket_name;
-	tmpObj.obj_name = ptr->obj_name;
-
-	string key = buildIndex(&tmpObj);
-
-	//getting old values from the directory
-	if (getValue(&tmpObj) == 0){
-
-		tmpObj.acl = acl;
-		tmpObj.aclTimeStamp = aclTimeStamp;
-
-		//updating the directory value 
-		setKey(key, &tmpObj);
-	}
-	else
-		return -1;
-	return 0;
-	
-}
-
-/* updatinh the directory value of lastAccessTime
- * its input is object's ceph::real_time last access time 
- * and bucket_name, obj_name and chunk_id in *ptr
- */
-int RGWObjectDirectory::updateLastAcessTime(cache_obj *ptr){
-
-	cache_obj tmpObj;
-	
-	//we need to build the key to find the object in the directory
-	tmpObj.bucket_name = ptr->bucket_name;
-	tmpObj.obj_name = ptr->obj_name;
-
-	string key = buildIndex(&tmpObj);
-
-	//getting old values from the directory
-	if (getValue(&tmpObj) == 0){
-
-		tmpObj.lastAccessTime = ptr->lastAccessTime;
-
-		//updating the directory value 
-		setKey(key, &tmpObj);
-	}
-	else
-		return -1;
-	return 0;
-	
-}
 
 int RGWObjectDirectory::delValue(cache_obj *ptr){
     string key = buildIndex(ptr);
 	int result = 0;
 
-	result += RGWDirectory::delKey(key);
+	result += delKey(key);
 	return result;
 }
 
@@ -305,17 +241,27 @@ int RGWBlockDirectory::delValue(cache_block *ptr){
     string key = buildIndex(ptr->c_obj.bucket_name, ptr->c_obj.obj_name, ptr->block_id);
 	int result = 0;
 
-	result += RGWDirectory::delKey(key);
+	result += delKey(key);
 	return result;
 }
 
-int RGWDirectory::delKey(string key){
+int RGWObjectDirectory::delKey(string key){
 	int result = 0;
-    vector<string> keys;
-    keys.push_back(key);
+	vector<string> keys;
+	keys.push_back(key);
 
-	cpp_redis::client client;
-	client.connect("192.168.32.103", 7000);
+	client.del(keys, [&result](cpp_redis::reply &reply){
+		auto arr = reply.as_array();
+		result = arr[0].as_integer();
+	});
+	return result;
+}
+
+
+int RGWBlockDirectory::delKey(string key){
+	int result = 0;
+	vector<string> keys;
+	keys.push_back(key);
 
 	client.del(keys, [&result](cpp_redis::reply &reply){
 		auto arr = reply.as_array();
@@ -359,7 +305,7 @@ int RGWObjectDirectory::setValue(cache_obj *ptr){
 int RGWBlockDirectory::setValue(cache_block *ptr){
 
 	//creating the index based on bucket_name, obj_name, and chunk_id
-    string key = buildIndex(ptr->c_obj.bucket_name, ptr->c_obj.obj_name, ptr->block_id);
+	string key = buildIndex(ptr->c_obj.bucket_name, ptr->c_obj.obj_name, ptr->block_id);
 
 	//delete the existing key, 
 	//to update an existing key, updateValue() should be used
@@ -573,7 +519,7 @@ int RGWBlockDirectory::getValue(cache_block *ptr){
     ldout(cct,10) << __func__ << " key " << key<< " obj name "<< ptr->c_obj.obj_name <<dendl;
     //delete the existing key,
     //to update an existing key, updateValue() should be used
-    if (RGWDirectory::existKey(key)){
+    if (existKey(key)){
 
     string owner;
     string hosts;
@@ -654,8 +600,8 @@ vector<pair<vector<string>, time_t>> RGWObjectDirectory::get_aged_keys(time_t st
 	string startTime = timeToString(startTime_t);
 	string endTime = timeToString(endTime_t);
 
-	cpp_redis::client client;
-	client.connect("192.168.32.103", 7000);
+	//cpp_redis::client client;
+	//client.connect("192.168.32.103", 7000);
 
 	std::string dirKey = "keyObjectDirectory";
 	client.zrangebyscore(dirKey, startTime, endTime, true, [&key, &time, &list](cpp_redis::reply &reply){

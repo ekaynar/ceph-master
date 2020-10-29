@@ -163,6 +163,7 @@ endif()
 
 add_library(rgw_common OBJECT ${librgw_common_srcs})
 add_library(cpp_redis OBJECT ${CPP_REDIS_LIBRARIES})
+add_library(redis++ OBJECT ${REDIS_PLUS_PLUS_LIB})
 
 target_include_directories(rgw_common SYSTEM PUBLIC "services")
 target_include_directories(rgw_common PUBLIC "${CMAKE_SOURCE_DIR}/src/dmclock/support/src")
@@ -331,7 +332,7 @@ target_link_libraries(radosgw-admin ${rgw_libs} librados
   cls_log_client cls_timeindex_client
   cls_version_client cls_user_client
   global ${FCGI_LIBRARY} ${LIB_RESOLV}
-  ${CURL_LIBRARIES} ${EXPAT_LIBRARIES} ${BLKID_LIBRARIES} ${CPP_REDIS_LIBRARIES})
+  ${CURL_LIBRARIES} ${EXPAT_LIBRARIES} ${BLKID_LIBRARIES} ${CPP_REDIS_LIBRARIES} ${REDIS_PLUS_PLUS_LIB})
 install(TARGETS radosgw-admin DESTINATION bin)
 
 set(radosgw_es_srcs

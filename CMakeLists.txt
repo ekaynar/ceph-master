@@ -169,6 +169,18 @@ if(WITH_XFS)
   set(HAVE_LIBXFS ${XFS_FOUND})
 endif()
 
+option(WITH_REDIS_PLUS_PLUS "REDIS_PLUS_PLUS is here" ON)
+if(WITH_REDIS_PLUS_PLUS)
+  find_package(redis_plus_plus)
+  set(HAVE_LIBREDIS_PLUS_PLUS ${REDIS_PLUS_PLUS_FOUND})
+endif()
+
+option(WITH_HIREDIS "HIREDIS is here" ON)
+if(WITH_HIREDIS)
+  find_package(hiredis)
+  set(HAVE_LIBHIREDIS ${HIREDIS_FOUND})
+endif()
+
 option(WITH_CPP_REDIS "CPP_REDIS is here" ON)
 if(WITH_CPP_REDIS)
   find_package(cpp_redis)

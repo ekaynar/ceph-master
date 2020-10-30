@@ -347,7 +347,7 @@ int AtomicObjectProcessor::complete(size_t accounted_size,
     cacheObj.aclTimeStamp = mktime(gmtime(&rawTime)); //FIXME
    
     r = store->getRados()->objDirectory->setValue(&cacheObj);
-    r = store->getRados()->objDirectory->existKey("test");
+    //r = store->getRados()->objDirectory->existKey("test");
     /* datacache */
     }
 

@@ -2,6 +2,7 @@
 
 #include <errno.h>
 #include <cpp_redis/cpp_redis>
+#include <sw/redis++/redis++.h>
 #include "rgw_directory.h"
 #include <string>
 #include <iostream>
@@ -10,6 +11,8 @@
 #include <vector>
 #include <list>
 #define dout_subsys ceph_subsys_rgw
+
+using namespace sw::redis;
 
 inline const string BoolToString(bool b)
 {	
@@ -132,6 +135,21 @@ int RGWDirectory::setKey(string key, cache_obj *ptr){
 int RGWObjectDirectory::existKey(string key){
 	//cpp_redis::client client;
 	//client.connect("192.168.32.103", 7000);
+
+    // Create an Redis object, which is movable but NOT copyable.
+    auto redis = Redis("tcp://192.168.32.103:7000");
+
+    // ***** STRING commands *****
+
+    redis.set("key", "val");
+    auto val = redis.get("key");    // val is of type OptionalString. See 'API Reference' section for details.
+    if (val) {
+        // Dereference val to get the returned value of std::string type.
+        std::cout << *val << std::endl;
+    }   // else key doesn't exist.
+
+
+	ldout(cct,10) <<"AMIN REDIS PLUS: val is: " << val <<dendl;
 
 	int result = 0;
 	vector<string> keys;

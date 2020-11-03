@@ -1,12 +1,11 @@
 
 # <------------ add redis-plus-plus dependency -------------->
 # NOTE: this should be *sw* NOT *redis++*
-find_path(REDIS_PLUS_PLUS_INCLUDE_DIR sw)
-#NO_DEFAULT_PATH PATHS
-#  /usr/local/lib
-#  /usr/local/include
-#  /usr/local/include/sw
-#)
+find_path(REDIS_PLUS_PLUS_INCLUDE_DIR sw NO_DEFAULT_PATH PATHS
+  /usr/local/lib
+  /usr/local/include
+  /usr/local/include/sw
+)
 
 #target_include_directories(target PUBLIC ${REDIS_PLUS_PLUS_HEADER})
 

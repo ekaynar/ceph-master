@@ -135,7 +135,7 @@ int RGWDirectory::setKey(string key, cache_obj *ptr){
 int RGWObjectDirectory::existKey(string key){
 	//cpp_redis::client client;
 	//client.connect("192.168.32.103", 7000);
-/*
+
     // Create an Redis object, which is movable but NOT copyable.
     auto redis = Redis("tcp://192.168.32.103:7000");
 
@@ -150,7 +150,7 @@ int RGWObjectDirectory::existKey(string key){
 
 
 	ldout(cct,10) <<"AMIN REDIS PLUS: val is: " << val <<dendl;
-*/
+
 	int result = 0;
 	vector<string> keys;
 	keys.push_back(key);

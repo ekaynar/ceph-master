@@ -1,12 +1,11 @@
 
 
 # <------------ add hiredis dependency --------------->
-find_path(HIREDIS_INCLUDE_DIR hiredis)
-#NO_DEFAULT_PATH PATHS
-#  /usr/local/lib
-#  /usr/local/include
-#  /usr/local/include/hiredis
-#)
+find_path(HIREDIS_INCLUDE_DIR hiredis NO_DEFAULT_PATH PATHS
+  /usr/local/lib
+  /usr/local/include
+  /usr/local/include/hiredis
+)
 
 set(HIREDIS_LIBRARY_PATH /usr/local/lib)
 find_library(LIBHIREDIS NAMES hiredis ${HIREDIS_LIBRARY_PATH})

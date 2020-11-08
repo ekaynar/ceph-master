@@ -346,8 +346,7 @@ int AtomicObjectProcessor::complete(size_t accounted_size,
     cacheObj.acl = "ugur_acl_test"; //FIXME
     cacheObj.aclTimeStamp = mktime(gmtime(&rawTime)); //FIXME
    
-    r = store->getRados()->objDirectory->setValue(&cacheObj);
-    //r = store->getRados()->objDirectory->existKey("test");
+    r = store->getRados()->objDirectory->setKey(&cacheObj);
     /* datacache */
     }
 

@@ -1,7 +1,7 @@
 
 
 # <------------ add hiredis dependency --------------->
-find_path(HIREDIS_INCLUDE_DIR hiredis NO_DEFAULT_PATH PATHS
+find_path(HIREDIS_INCLUDE_DIR hiredis.h NO_DEFAULT_PATH PATHS
   /usr/local/lib
   /usr/local/include
   /usr/local/include/hiredis

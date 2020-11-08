@@ -9274,7 +9274,7 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
   d->add_pending_key(oid);
   //  datacache->retrieve_obj_info(&c_block, store);
 
-  int ret = blkDirectory->getValue(&c_block);
+  int ret = blkDirectory->getKey(&c_block);
   if (ret < 0){ // item does not exists
 	c_block.freq = 1;
   	c_block.size_in_bytes = read_len;
@@ -9858,7 +9858,7 @@ int RGWRados::put_data(string key, bufferlist& bl, unsigned int len, cache_block
 
 int RGWRados::test(cache_obj &ptr){
   dout(10) << __func__ << dendl;
-  objDirectory->getValue(&ptr);
+  objDirectory->getKey(&ptr);
   return 0;
 }
 

@@ -425,7 +425,7 @@ void DataCache::submit_remote_req(struct RemoteRequest *c){
 
 void DataCache::retrieve_block_info(cache_block* c_block, RGWRados *store){
   ldout(cct, 0) << __func__ <<dendl;
-  int ret = store->blkDirectory->getValue(c_block);
+  int ret = store->blkDirectory->getKey(c_block);
 }
 
 
@@ -574,7 +574,7 @@ void DataCache::cache_aio_write_completion_cb(cacheAioWriteRequest *c){
 
   time_t rawTime = time(NULL);
   c->c_block.lastAccessTime = mktime(gmtime(&rawTime));  
-  int ret = blkDirectory->setValue(&(c->c_block));
+  int ret = blkDirectory->setKey(&(c->c_block));
 
   
   c->release(); 

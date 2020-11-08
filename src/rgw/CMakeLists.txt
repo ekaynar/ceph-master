@@ -163,6 +163,8 @@ endif()
 
 add_library(rgw_common OBJECT ${librgw_common_srcs})
 #add_library(cpp_redis OBJECT ${CPP_REDIS_LIBRARIES})
+#add_library(hiredis_vip OBJECT ${HIREDIS_VIP_LIBRARIES})
+#add_library(hiredis-vip OBJECT ${HIREDIS_VIP_LIBRARIES})
 #add_library(redis++ OBJECT ${REDIS_PLUS_PLUS_LIB})
 
 target_include_directories(rgw_common SYSTEM PUBLIC "services")
@@ -225,7 +227,11 @@ add_dependencies(rgw_a civetweb_h)
 
 target_compile_definitions(rgw_a PUBLIC "-DCLS_CLIENT_HIDE_IOCTX")
 target_include_directories(rgw_a PUBLIC "${CMAKE_SOURCE_DIR}/src/dmclock/support/src")
+link_directories("/usr/local/lib")
+target_include_directories(rgw_a PUBLIC ${HIREDIS_HEADER})
+target_include_directories(rgw_a PUBLIC ${REDIS_PLUS_PLUS_HEADER})
 target_include_directories(rgw_a SYSTEM PUBLIC "../rapidjson/include")
+
 
 if(WITH_RADOSGW_AMQP_ENDPOINT)
   find_package(RabbitMQ REQUIRED)
@@ -235,6 +241,8 @@ if(WITH_RADOSGW_KAFKA_ENDPOINT)
 endif()
 
 target_link_libraries(rgw_a
+  #PUBLIC ${HIREDIS_LIB} ${CPP_REDIS_LIBRARIES} ${HIREDIS_VIP_LIBRARIES} ${REDIS_PLUS_PLUS_LIB} hiredis hiredis_vip cpp_redis
+  PUBLIC ${HIREDIS_VIP_LIBRARIES} hiredis_vip
   PRIVATE
   librados cls_otp_client cls_lock_client cls_rgw_client cls_refcount_client
   cls_log_client cls_timeindex_client cls_version_client cls_cmpomap_client
@@ -243,14 +251,6 @@ target_link_libraries(rgw_a
   ${EXPAT_LIBRARIES}
   ${OPENLDAP_LIBRARIES} ${CRYPTO_LIBS}
   OATH::OATH)
-
-target_include_directories(rgw_a PUBLIC ${HIREDIS_HEADER})
-target_include_directories(rgw_a PUBLIC ${REDIS_PLUS_PLUS_HEADER})
-
-link_directories("/usr/local/lib")
-target_link_libraries(rgw_a PUBLIC hiredis)
-target_link_libraries(rgw_a PUBLIC redis++)
-
 
 if(WITH_CURL_OPENSSL)
   # used by rgw_http_client_curl.cc
@@ -263,7 +263,8 @@ endif()
 
 
 
-set(rgw_libs rgw_a)
+#set(rgw_libs hiredis cpp_redis hiredis_vip rgw_a)
+set(rgw_libs hiredis_vip rgw_a)
 if(WITH_RADOSGW_AMQP_ENDPOINT)
   # used by rgw_amqp.cc
   list(APPEND rgw_libs RabbitMQ::RabbitMQ)
@@ -308,7 +309,8 @@ target_include_directories(radosgw SYSTEM PUBLIC "../rapidjson/include")
 
 target_link_libraries(radosgw
   PRIVATE ${rgw_libs} rgw_schedulers
-  PUBLIC dmclock::dmclock
+  #PUBLIC ${HIREDIS_LIB} ${CPP_REDIS_LIBRARIES} ${HIREDIS_VIP_LIBRARIES} ${REDIS_PLUS_PLUS_LIB} dmclock::dmclock cpp_redis hiredis_vip hiredis
+  PUBLIC ${HIREDIS_VIP_LIBRARIES} dmclock::dmclock hiredis_vip
 )
 if(WITH_RADOSGW_BEAST_FRONTEND)
   target_link_libraries(rgw_schedulers PUBLIC spawn)
@@ -337,12 +339,13 @@ set(radosgw_admin_srcs
   rgw_admin.cc
   rgw_orphan.cc)
 add_executable(radosgw-admin ${radosgw_admin_srcs})
-target_link_libraries(radosgw-admin ${rgw_libs} librados
+#target_link_libraries(radosgw-admin ${HIREDIS_LIB} ${HIREDIS_VIP_LIBRARIES} ${CPP_REDIS_LIBRARIES} ${REDIS_PLUS_PLUS_LIB} ${rgw_libs} librados
+target_link_libraries(radosgw-admin ${HIREDIS_VIP_LIBRARIES} ${rgw_libs} librados
   cls_rgw_client cls_otp_client cls_lock_client cls_refcount_client
   cls_log_client cls_timeindex_client
   cls_version_client cls_user_client
   global ${FCGI_LIBRARY} ${LIB_RESOLV}
-  ${CURL_LIBRARIES} ${EXPAT_LIBRARIES} ${BLKID_LIBRARIES} ${CPP_REDIS_LIBRARIES} ${REDIS_PLUS_PLUS_LIB})
+  ${CURL_LIBRARIES} ${EXPAT_LIBRARIES} ${BLKID_LIBRARIES})
 install(TARGETS radosgw-admin DESTINATION bin)
 
 set(radosgw_es_srcs
@@ -378,6 +381,10 @@ set(librgw_srcs
   librgw.cc
   rgw_file.cc)
 add_library(rgw SHARED ${librgw_srcs})
+
+target_include_directories(rgw PUBLIC ${HIREDIS_HEADER})
+target_include_directories(rgw PUBLIC ${REDIS_PLUS_PLUS_HEADER})
+
 target_link_libraries(rgw
   PRIVATE
   ${rgw_libs}
@@ -394,8 +401,9 @@ target_link_libraries(rgw
   ${LIB_RESOLV}
   ${CURL_LIBRARIES}
   ${EXPAT_LIBRARIES}
-  ${CPP_REDIS_LIBRARIES} ${REDIS_PLUS_PLUS_LIB}
   PUBLIC
+  #${CPP_REDIS_LIBRARIES} ${REDIS_PLUS_PLUS_LIB}
+  ${HIREDIS_VIP_LIBRARIES}
   dmclock::dmclock)
 
 if(WITH_RADOSGW_AMQP_ENDPOINT)

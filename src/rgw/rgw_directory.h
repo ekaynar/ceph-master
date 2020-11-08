@@ -6,8 +6,9 @@
 #include <sys/types.h>
 #include <sstream>
 #include "rgw_common.h"
-#include <sw/redis++/redis++.h>
-#include <cpp_redis/cpp_redis>
+//#include <sw/redis++/redis++.h>
+//#include <cpp_redis/cpp_redis>
+#include <hiredis-vip/hircluster.h>
 #include <string>
 #include <iostream>
 #include <vector>
@@ -32,26 +33,28 @@ public:
 
 	RGWObjectDirectory() {}
 	virtual ~RGWObjectDirectory() { cout << "RGWObject Directory is destroyed!";}
-	cpp_redis::client client;
+    redisClusterContext *cc;
 	void init(CephContext *_cct) {
-      		cct = _cct;
-		client.connect(cct->_conf->rgw_directory_address, cct->_conf->rgw_directory_port);
-    	}
+      	cct = _cct;
+		cc = redisClusterContextInit();
+
+        //redisClusterSetOptionAddNodes(cc, "192.168.0.92:7000,192.168.0.92:7001,192.168.0.92:7002");
+        redisClusterSetOptionAddNodes(cc, "192.168.0.92:7000");
+        redisClusterSetOptionRouteUseSlots(cc);
+        redisClusterConnect2(cc);
+        if(cc == NULL || cc->err)
+            return;
+    }
 
 	int existKey(string key);
-	int delKey(string key);
-	int setValue(cache_obj *ptr);
-	int getValue(cache_obj *ptr);
-	int updateField(cache_obj *ptr, string field);
-	//int updateHostsList(cache_obj *ptr);
-	//int updateHomeLocation(cache_obj *ptr);
-	//int updateACL(cache_obj *ptr);
-	//int updateLastAcessTime(cache_obj *ptr);
-	int delValue(cache_obj *ptr);
-	vector<pair<vector<string>, time_t>> get_aged_keys(time_t startTime, time_t endTime);
+
+	int setKey(cache_obj *ptr);
+	int getKey(cache_obj *ptr);
+	int updateField(cache_obj *ptr, string field, string value);
+	int delKey(cache_obj *ptr);
+//	vector<pair<vector<string>, time_t>> get_aged_keys(time_t startTime, time_t endTime);
 
 private:
-	int setKey(string key, cache_obj *ptr);
 	string buildIndex(cache_obj *ptr);
 	
 };
@@ -61,23 +64,28 @@ public:
 
 	RGWBlockDirectory() {}
 	virtual ~RGWBlockDirectory() { cout << "RGWBlock Directory is destroyed!";}
-	cpp_redis::client client;
+    redisClusterContext *cc;
 	void init(CephContext *_cct) {
 		cct = _cct;
-		client.connect(cct->_conf->rgw_directory_address, cct->_conf->rgw_directory_port);
+    	cc = redisClusterContextInit();
+
+        //redisClusterSetOptionAddNodes(cc, "192.168.0.92:7000,192.168.0.92:7001,192.168.0.92:7002");
+        redisClusterSetOptionAddNodes(cc, "192.168.0.92:7000");
+        redisClusterSetOptionRouteUseSlots(cc);
+        redisClusterConnect2(cc);
+        if(cc == NULL || cc->err)
+            return;
+
 	}
 	
 	int existKey(string key);
-	int delKey(string key);
-	int setValue(cache_block *ptr);
-	int getValue(cache_block *ptr);
-	int updateField(cache_block *ptr, string field);
-	//int updateHostsList(cache_block *ptr);
-	int delValue(cache_block *ptr);
+	int setKey(cache_block *ptr);
+	int getKey(cache_block *ptr);
+	int updateField(cache_block *ptr, string field, string value);
+	int delKey(cache_block *ptr);
 
 private:
-	int setKey(string key, cache_block *ptr);
-	string buildIndex(string bucket_name, string obj_name, uint64_t block_id);
+	string buildIndex(cache_block *ptr);
 	
 };
 

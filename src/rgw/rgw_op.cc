@@ -8241,8 +8241,8 @@ bool compare_acls(){return true;}
 
 bool RGWGetObj::cache_authorize(cache_obj &c_obj, string requester){
   bool allow =  false;
-//  int op_ret = objectDirectory.getValue(&c_obj);
-  //int op_ret = store->getRados()->objDirectory.getValue(&c_obj);
+//  int op_ret = objectDirectory.getKey(&c_obj);
+  //int op_ret = store->getRados()->objDirectory.getKey(&c_obj);
 //  int op_ret = 0;
   c_obj.owner = requester;
 
@@ -8288,7 +8288,7 @@ void RGWGetObj::cache_execute()
   
 //  if (c_obj.size_in_bytes <=0)
 //    return;
-//  int op = store->getRados()->objDirectory->getValue(&c_obj);
+//  int op = store->getRados()->objDirectory->getKey(&c_obj);
   int op = store->getRados()->test(c_obj);
 //  c_obj.size_in_bytes =41943040; 
  /*if(op < 0 or c_obj.size_in_bytes <=0 ){

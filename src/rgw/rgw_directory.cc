@@ -1,9 +1,8 @@
-
-
 #include <errno.h>
-#include <cpp_redis/cpp_redis>
-#include <sw/redis++/redis++.h>
+//#include <cpp_redis/cpp_redis>
+//#include <sw/redis++/redis++.h>
 #include "rgw_directory.h"
+#include <hiredis-vip/hircluster.h>
 #include <string>
 #include <iostream>
 #include <sstream>
@@ -12,7 +11,6 @@
 #include <list>
 #define dout_subsys ceph_subsys_rgw
 
-using namespace sw::redis;
 
 inline const string BoolToString(bool b)
 {	
@@ -117,333 +115,201 @@ string timeToString(time_t time)
 	return time_s;
 }
 
-/* this function should be implemented in their own respected classes */
-/*
-int RGWDirectory::getValue(cache_obj *ptr){
-	cout << "wrong function!";
-	return -1;
-}
-
-
-int RGWDirectory::setKey(string key, cache_obj *ptr){
-	cout << "wrong function!";
-	return -1;
-}
-
-*/
 
 int RGWObjectDirectory::existKey(string key){
-	//cpp_redis::client client;
-	//client.connect("192.168.32.103", 7000);
+    int result = 0;
+    redisReply *reply = (redisReply *)redisClusterCommand(cc, "exists %s", key);
+    if(reply == NULL)
+    {
+	    ldout(cct,10) <<"REDIS Object Key exists function: " << cc->errstr <<dendl;
+        return -1;
+    }
+    
+    result = reply->integer;
+    freeReplyObject(reply);
+    return result;
 
-    // Create an Redis object, which is movable but NOT copyable.
-    auto redis = Redis("tcp://192.168.32.103:7000");
-
-    // ***** STRING commands *****
-
-    redis.set("key", "val");
-    auto val = redis.get("key");    // val is of type OptionalString. See 'API Reference' section for details.
-    if (val) {
-        // Dereference val to get the returned value of std::string type.
-        std::cout << *val << std::endl;
-    }   // else key doesn't exist.
-
-
-	ldout(cct,10) <<"AMIN REDIS PLUS: val is: " << val <<dendl;
-
-	int result = 0;
-	vector<string> keys;
-	keys.push_back(key);
-
-	client.exists(keys, [&result](cpp_redis::reply &reply){
-		result = reply.as_integer();
-	});
-	client.sync_commit();	
-	return result;
 }
+
 
 int RGWBlockDirectory::existKey(string key){
-	//cpp_redis::client client;
-	//client.connect("192.168.32.103", 7000);
-
-	int result = 0;
-	vector<string> keys;
-	keys.push_back(key);
-
-	client.exists(keys, [&result](cpp_redis::reply &reply){
-		result = reply.as_integer();
-	});
-	client.sync_commit();	
-	return result;
+    int result = 0;
+    redisReply *reply = (redisReply *)redisClusterCommand(cc, "exists %s", key);
+    if(reply == NULL)
+    {
+	    ldout(cct,10) <<"REDIS Block Key exists function: " << cc->errstr <<dendl;
+        return -1;
+    }
+    
+    result = reply->integer;
+    freeReplyObject(reply);
+    return result;
 }
 
 
-/* updatinh a specific field in a key in the directory
- */
-int RGWObjectDirectory::updateField(cache_obj *ptr, string field){
-	/*
-	cache_obj tmpObj;
-	
-	//we need to build the key to find the object in the directory
-	tmpObj.bucket_name = ptr->bucket_name;
-	tmpObj.obj_name = ptr->obj_name;
-	*/
+int RGWObjectDirectory::updateField(cache_obj *ptr, string field, string value){
 
 	string key = buildIndex(ptr);
-	vector<pair<string, string>> list;
-	string hosts;
 
-	stringstream ss;
-	for(size_t i = 0; i < ptr->hosts_list.size(); ++i)
-	{
-		if(i != 0)
-			ss << "_";
-		ss << ptr->hosts_list[i];
-	}
-	hosts = ss.str();
-	list.push_back(make_pair(field, hosts));
-
-
-	//if (getValue(&tmpObj) == 0){
-	if (existKey(key)){
-		client.hmset(key, list, [](cpp_redis::reply &reply){
-		});
-	}
-	else
+	if (!existKey(key))
 		return -1;
-	return 0;
+
+    redisReply *reply = (redisReply *)redisClusterCommand(cc, "hmset %s %s %s", key, field, value);
+    if(reply == NULL)
+    {
+	    ldout(cct,10) <<"REDIS Object UPDATE: error is: " << cc->errstr <<dendl;
+        return -1;
+    }
+
+    freeReplyObject(reply);
+
+	return 1;
 	
 }
 
-int RGWBlockDirectory::updateField(cache_block *ptr, string field){
+int RGWBlockDirectory::updateField(cache_block *ptr, string field, string value){
 
-	string bucket_name = ptr->c_obj.bucket_name;
-	string obj_name = ptr->c_obj.obj_name;
-	uint64_t block_id = ptr->block_id;
+	string key = buildIndex(ptr);
 
-	string key = buildIndex(bucket_name, obj_name, block_id);
-	vector<pair<string, string>> list;
-	string hosts;
-
-	stringstream ss;
-	for(size_t i = 0; i < ptr->hosts_list.size(); ++i)
-	{
-		if(i != 0)
-			ss << "_";
-		ss << ptr->hosts_list[i];
-	}
-	hosts = ss.str();
-	list.push_back(make_pair(field, hosts));
-
-
-	//if (getValue(&tmpObj) == 0){
-	if (existKey(key)){
-		client.hmset(key, list, [](cpp_redis::reply &reply){
-		});
-	}
-	else
+	if (!existKey(key))
 		return -1;
-	return 0;
+
+    redisReply *reply = (redisReply *)redisClusterCommand(cc, "hmset %s %s %s", key, field, value);
+    if(reply == NULL)
+    {
+	    ldout(cct,10) <<"REDIS Block UPDATE: error is: " << cc->errstr <<dendl;
+        return -1;
+    }
+
+    freeReplyObject(reply);
+
+	return 1;
 }
 
-
-int RGWObjectDirectory::delValue(cache_obj *ptr){
+int RGWObjectDirectory::delKey(cache_obj *ptr){
     string key = buildIndex(ptr);
-	int result = 0;
+    redisReply *reply = (redisReply *)redisClusterCommand(cc, "del %s", key);
+    if(reply == NULL)
+    {
+	    ldout(cct,10) <<"REDIS Object Delete key: error is: " << cc->errstr <<dendl;
+        return -1;
+    }
 
-	result += delKey(key);
-	return result;
+    freeReplyObject(reply);
+
+	return 1;
 }
 
-int RGWBlockDirectory::delValue(cache_block *ptr){
-    string key = buildIndex(ptr->c_obj.bucket_name, ptr->c_obj.obj_name, ptr->block_id);
-	int result = 0;
+int RGWBlockDirectory::delKey(cache_block *ptr){
+    string key = buildIndex(ptr);
+    redisReply *reply = (redisReply *)redisClusterCommand(cc, "del %s", key);
+    if(reply == NULL)
+    {
+	    ldout(cct,10) <<"REDIS Block Delete key: error is: " << cc->errstr <<dendl;
+        return -1;
+    }
 
-	result += delKey(key);
-	return result;
+    freeReplyObject(reply);
+
+	return 1;
 }
 
-int RGWObjectDirectory::delKey(string key){
-	int result = 0;
-	vector<string> keys;
-	keys.push_back(key);
-
-	client.del(keys, [&result](cpp_redis::reply &reply){
-		auto arr = reply.as_array();
-		result = arr[0].as_integer();
-	});
-	return result;
-}
-
-
-int RGWBlockDirectory::delKey(string key){
-	int result = 0;
-	vector<string> keys;
-	keys.push_back(key);
-
-	client.del(keys, [&result](cpp_redis::reply &reply){
-		auto arr = reply.as_array();
-		result = arr[0].as_integer();
-	});
-	return result;
-}
-
-/* builds the index for the directory
- * based on bucket_name, obj_name, and chunk_id
- */
 string RGWObjectDirectory::buildIndex(cache_obj *ptr){
-	return ptr->bucket_name + "_" + ptr->obj_name;
+    std::stringstream ss;
+    ss << ptr->lastAccessTime;
+    std::string ts = ss.str();
+
+	return ptr->bucket_name + "_" + ptr->obj_name + ":" + ts;
 }
 
-/* builds the index for the directory
- * based on bucket_name, obj_name, chunk_id, and etag
- */
-string RGWBlockDirectory::buildIndex(string bucket_name, string obj_name, uint64_t block_id){
-	return bucket_name + "_" + obj_name + "_" + to_string(block_id);
+string RGWBlockDirectory::buildIndex(cache_block *ptr){
+    std::stringstream ss;
+    ss << ptr->lastAccessTime;
+    std::string ts = ss.str();
+
+	return ptr->c_obj.bucket_name + "_" + ptr->c_obj.obj_name + "_" + to_string(ptr->block_id) + ":" + ts;
 }
 
 
-/* adding a key to the directory
- * if the key exists, it will be deleted and then the new value be added
- */
-int RGWObjectDirectory::setValue(cache_obj *ptr){
+int RGWObjectDirectory::setKey(cache_obj *ptr){
 
 	//creating the index based on bucket_name, obj_name, and chunk_id
 	string key = buildIndex(ptr);
 
-	//delete the existing key, 
-	//to update an existing key, updateValue() should be used
-//	if (RGWDirectory::existKey(key))
-//		RGWDirectory::delKey(key);
+	string hosts;
+	stringstream ss;
+	for(size_t i = 0; i < ptr->hosts_list.size(); ++i)
+	{
+		if(i != 0)
+			ss << "_";
+		ss << ptr->hosts_list[i];
+	}
+	hosts = ss.str();
 
-	return setKey(key, ptr);
+    string fields;
+	//creating a list of key's properties
+	fields = " key " +  key +" owner " + ptr->owner + " obj_acl " +  ptr->acl + 
+	            " aclTimeStamp " + timeToString(ptr->aclTimeStamp) + " hosts " + hosts +
+	            " dirty " + BoolToString(ptr->dirty) + " size " + to_string(ptr->size_in_bytes) +
+            	" creationTime " + timeToString(ptr->creationTime) + " lastAccessTime " + timeToString(ptr->lastAccessTime) +
+            	" etag " + ptr->etag + " backendProtocol " + protocolToString(ptr->backendProtocol) +
+	            " bucket_name " + ptr->bucket_name + " obj_name " + ptr->obj_name + 
+            	" home_location " + homeToString(ptr->home_location);
+
+
+
+
+    redisReply *reply = (redisReply *)redisClusterCommand(cc, "hmset %s %s", key, fields);
+    if(reply == NULL)
+    {
+	    ldout(cct,10) <<"REDIS Object set Key: error is: " << cc->errstr <<dendl;
+        return -1;
+    }
+
+    freeReplyObject(reply);
+
+	return 1;
 	
 }
 
-int RGWBlockDirectory::setValue(cache_block *ptr){
+int RGWBlockDirectory::setKey(cache_block *ptr){
 
 	//creating the index based on bucket_name, obj_name, and chunk_id
-	string key = buildIndex(ptr->c_obj.bucket_name, ptr->c_obj.obj_name, ptr->block_id);
+	string key = buildIndex(ptr);
 
-	//delete the existing key, 
-	//to update an existing key, updateValue() should be used
-//	if (RGWDirectory::existKey(key))
-//		RGWDirectory::delKey(key);
+	string hosts;
+	stringstream ss;
+	for(size_t i = 0; i < ptr->hosts_list.size(); ++i)
+	{
+		if(i != 0)
+			ss << "_";
+		ss << ptr->hosts_list[i];
+	}
+	hosts = ss.str();
 
-	return setKey(key, ptr);
+    string fields;
+	//creating a list of key's properties
+	fields = " key " +  key +" owner " + ptr->c_obj.owner + " hosts " + hosts +
+	            " size " + to_string(ptr->size_in_bytes) + " bucket_name " + ptr->c_obj.bucket_name +
+                " obj_name " + ptr->c_obj.obj_name + " block_id " +  to_string(ptr->block_id) + 
+            	" lastAccessTime " + timeToString(ptr->lastAccessTime) + " accessCount " + to_string(ptr->freq);
+
+    redisReply *reply = (redisReply *)redisClusterCommand(cc, "hmset %s %s", key, fields);
+    if(reply == NULL)
+    {
+	    ldout(cct,10) <<"REDIS Block set Key: error is: " << cc->errstr <<dendl;
+        return -1;
+    }
+
+    freeReplyObject(reply);
+
+	return 1;
 	
 }
  
-/* the horse function to add a new key to the directory
- */
-int RGWObjectDirectory::setKey(string key, cache_obj *ptr){
-//	cpp_redis::client client;
-//	client.connect("192.168.32.103", 7000);
 
-	vector<pair<string, string>> list;
-	vector<string> keys;
-	multimap<string, string> timeKey;
-	vector<string> options;
-	string hosts;
-
-	stringstream ss;
-	for(size_t i = 0; i < ptr->hosts_list.size(); ++i)
-	{
-		if(i != 0)
-			ss << "_";
-		ss << ptr->hosts_list[i];
-	}
-	hosts = ss.str();
-
-	//creating a list of key's properties
-	list.push_back(make_pair("key", key));
-	list.push_back(make_pair("owner", ptr->owner));
-	list.push_back(make_pair("obj_acl", ptr->acl));
-	list.push_back(make_pair("aclTimeStamp", timeToString(ptr->aclTimeStamp)));
-	list.push_back(make_pair("hosts", hosts));
-	list.push_back(make_pair("dirty", BoolToString(ptr->dirty)));
-	list.push_back(make_pair("size", to_string(ptr->size_in_bytes)));
-	list.push_back(make_pair("creationTime", timeToString(ptr->creationTime)));
-	list.push_back(make_pair("lastAccessTime", timeToString(ptr->lastAccessTime)));
-	list.push_back(make_pair("etag", ptr->etag));
-	list.push_back(make_pair("backendProtocol", protocolToString(ptr->backendProtocol)));
-	list.push_back(make_pair("bucket_name", ptr->bucket_name));
-	list.push_back(make_pair("obj_name", ptr->obj_name));
-	list.push_back(make_pair("home_location", homeToString(ptr->home_location)));
-
-	   ldout(cct,10) <<"after connect" << timeToString(ptr->lastAccessTime)<<dendl;
-	//creating a key entry
-	keys.push_back(key);
-
-	//making key and time a pair
-	timeKey.emplace(timeToString(ptr->creationTime),key);
-
-	client.hmset(key, list, [](cpp_redis::reply &reply){
-	});
-
-	client.rpush("objectDirectory", keys, [](cpp_redis::reply &reply){
-	});
-
-	//this will be used for aging policy
-	client.zadd("keyObjectDirectory", options, timeKey, [](cpp_redis::reply &reply){
-	});
-
-	// synchronous commit, no timeout
-	client.sync_commit();
-
-	return 0;
-
-}
-
-/* the horse function to add a new key to the directory
- */
-int RGWBlockDirectory::setKey(string key, cache_block *ptr){
-	ldout(cct,10) <<__func__<<" key " << key <<dendl;
-//	cpp_redis::client client;
-//	client.connect("192.168.32.103", 7000);
-
-	vector<pair<string, string>> list;
-	vector<string> options;
-	string hosts;
-
-	stringstream ss;
-	for(size_t i = 0; i < ptr->hosts_list.size(); ++i)
-	{
-		if(i != 0)
-			ss << "_";
-		ss << ptr->hosts_list[i];
-	}
-	hosts = ss.str();
-
-	//creating a list of key's properties
-	list.push_back(make_pair("key", key));
-	list.push_back(make_pair("owner", ptr->c_obj.owner));
-	list.push_back(make_pair("hosts", hosts));
-	list.push_back(make_pair("size", to_string(ptr->size_in_bytes)));
-	list.push_back(make_pair("bucket_name", ptr->c_obj.bucket_name));
-	list.push_back(make_pair("obj_name", ptr->c_obj.obj_name));
-	list.push_back(make_pair("block_id", to_string(ptr->block_id)));
-	list.push_back(make_pair("lastAccessTime", timeToString(ptr->lastAccessTime)));
-	list.push_back(make_pair("accessCount", to_string(ptr->freq)));
-
-
-	client.hmset(key, list, [](cpp_redis::reply &reply){
-	});
-
-	// synchronous commit, no timeout
-	client.sync_commit();
-	return 0;
-
-}
-
-int RGWObjectDirectory::getValue(cache_obj *ptr){
+int RGWObjectDirectory::getKey(cache_obj *ptr){
     string key = buildIndex(ptr);
-
-     ldout(cct,10) << __func__ << "getValue" << dendl;
-    //delete the existing key,
-    //to update an existing key, updateValue() should be used
-    //if (RGWDirectory::existKey(key))i
-    //{
     string owner;
     string obj_acl;
     string aclTimeStamp;
@@ -458,47 +324,39 @@ int RGWObjectDirectory::getValue(cache_obj *ptr){
     string obj_name;
     string home_location;
 
-//	cpp_redis::client client;
-//	client.connect("192.168.32.103", 7000);
+    //ldout(cct,10) << __func__ << "getKey" << dendl;
 	
-	//fields will be filled by the redis hmget functoin
-	std::vector<std::string> fields;
-	fields.push_back("key");
-	fields.push_back("owner");
-	fields.push_back("obj_acl");
-	fields.push_back("aclTimeStamp");
-	fields.push_back("hosts");
-	fields.push_back("dirty");
-	fields.push_back("size");
-	fields.push_back("creationTime");
-	fields.push_back("lastAccessTime");
-	fields.push_back("etag");
-	fields.push_back("backendProtocol");
-	fields.push_back("bucket_name");
-	fields.push_back("obj_name");
-	fields.push_back("home_location");
+    string fields = string("key ") + " owner " + " obj_acl " + " aclTimeStamp " + " hosts " +
+	            " dirty " + " size " + " creationTime " + " lastAccessTime " +
+            	" etag " + " backendProtocol " + " bucket_name " + " obj_name " + 
+            	" home_location ";
 
+    redisReply *reply = (redisReply *)redisClusterCommand(cc, "hmget %s %s", key, fields);
+    if(reply == NULL)
+    {
+	    ldout(cct,10) <<"REDIS Object get Key: error is: " << cc->errstr <<dendl;
+        return -1;
+    }
 
-	client.hmget(key, fields, [&key, &owner, &obj_acl, &aclTimeStamp, &hosts, &dirty, &size, &creationTime, &lastAccessTime, &etag, &backendProtocol, &bucket_name, &obj_name, &home_location](cpp_redis::reply& reply){
-		auto arr = reply.as_array();
-	      	key = arr[0].as_string();
-	      	owner = arr[1].as_string();
-	      	obj_acl = arr[2].as_string();
-	      	aclTimeStamp = arr[3].as_string();
-	      	hosts = arr[4].as_string();
-	      	dirty = arr[5].as_string();
-	      	size = arr[6].as_string();
-	      	creationTime  = arr[7].as_string();
-	      	lastAccessTime = arr[8].as_string();
-	      	etag = arr[9].as_string();
-	      	backendProtocol = arr[10].as_string();
-	      	bucket_name = arr[11].as_string();
-	      	obj_name = arr[12].as_string();
-	      	home_location = arr[13].as_string();
-	
-	});
+    if (reply->type == REDIS_REPLY_ARRAY) {
+        key = reply->element[0]->str; 
+        owner = reply->element[1]->str; 
+        obj_acl = reply->element[2]->str; 
+        aclTimeStamp = reply->element[3]->str; 
+        hosts = reply->element[4]->str; 
+        dirty = reply->element[5]->str; 
+        size = reply->element[6]->str; 
+        creationTime = reply->element[7]->str; 
+        lastAccessTime = reply->element[8]->str; 
+        etag = reply->element[9]->str; 
+        backendProtocol = reply->element[10]->str; 
+        bucket_name = reply->element[11]->str; 
+        obj_name = reply->element[12]->str; 
+        home_location = reply->element[13]->str;
+    }
 
-	client.sync_commit();
+    freeReplyObject(reply);
+
 	stringstream sloction(hosts);
 	string tmp;
 
@@ -521,23 +379,14 @@ int RGWObjectDirectory::getValue(cache_obj *ptr){
 	ptr->obj_name = obj_name;
 	ptr->home_location = stringToHome(home_location);
 //	ldout(cct,10) <<"after connect" << size << bucket_name << obj_name<< owner<<etag <<dendl;
-	// synchronous commit, no timeout
-//	client.sync_commit();
-	return 0;
-	/*else {
-	ldout(cct,10) <<"after connect not exist" << size << bucket_name << obj_name<< owner<<etag <<dendl;
-	return -1;
-	}*/
+	return 1;
 }
 
 
-int RGWBlockDirectory::getValue(cache_block *ptr){
+int RGWBlockDirectory::getKey(cache_block *ptr){
 
-    string key = buildIndex(ptr->c_obj.bucket_name, ptr->c_obj.obj_name, ptr->block_id);
-    ldout(cct,10) << __func__ << " key " << key<< " obj name "<< ptr->c_obj.obj_name <<dendl;
-    //delete the existing key,
-    //to update an existing key, updateValue() should be used
-    if (existKey(key)){
+    string key = buildIndex(ptr);
+    //ldout(cct,10) << __func__ << " key " << key<< " obj name "<< ptr->c_obj.obj_name <<dendl;
 
     string owner;
     string hosts;
@@ -548,36 +397,37 @@ int RGWBlockDirectory::getValue(cache_block *ptr){
     string block_id;
     string freq;
 
-
-	//fields will be filled by the redis hmget functoin
-	std::vector<std::string> fields;
-	fields.push_back("key");
-	fields.push_back("owner");
-	fields.push_back("hosts");
-	fields.push_back("size");
-	fields.push_back("bucket_name");
-	fields.push_back("obj_name");
-	fields.push_back("block_id");
-	fields.push_back("accessCount");
-//	fields.push_back("etag");
-
-	client.hmget(key, fields, [&key, &owner, &hosts, &size, &bucket_name, &obj_name, &block_id, &freq](cpp_redis::reply &reply){
+    //ldout(cct,10) << __func__ << "getKey" << dendl;
 	
-	auto arr = reply.as_array();
-      	key = arr[0].as_string();
-      	owner = arr[1].as_string();
-      	hosts = arr[2].as_string();
-      	size = arr[3].as_string();
-      	bucket_name = arr[4].as_string();
-      	obj_name = arr[5].as_string();
-      	block_id  = arr[6].as_string();
-      	freq = arr[7].as_string();
+    string fields = string("key ") + " owner " + " hosts " +
+	            " size " + " bucket_name " + " obj_name " + 
+            	" block_id " + " accessCount ";
 
-	});
+    redisReply *reply = (redisReply *)redisClusterCommand(cc, "hmget %s %s", key, fields);
+    if(reply == NULL)
+    {
+	    ldout(cct,10) <<"REDIS Object get Key: error is: " << cc->errstr <<dendl;
+        return -1;
+    }
 
+    if (reply->type == REDIS_REPLY_ARRAY) {
+        key = reply->element[0]->str; 
+        owner = reply->element[1]->str; 
+        hosts = reply->element[2]->str; 
+        size = reply->element[3]->str; 
+        bucket_name = reply->element[4]->str; 
+        obj_name = reply->element[5]->str; 
+        block_id = reply->element[6]->str; 
+        freq = reply->element[7]->str;
+    }
+    else
+    {
+	    ldout(cct,10) <<"REDIS Block get Key: field is not array " <<dendl;
+        return -1;
+    }
 
-	client.sync_commit();
-	
+    freeReplyObject(reply);
+
 	stringstream sloction(hosts);
 	string tmp;
 
@@ -595,31 +445,20 @@ int RGWBlockDirectory::getValue(cache_block *ptr){
 	
 	ptr->freq = stoull(freq);
 
-	// synchronous commit, no timeout
-	//
-	return 0;
-    }
-    else
-	    return -1;
-    return 0;
+	return 1;
 }
 
 
-/* returns all the keys between startTime and endTime 
- * as a vector of <bucket_name, object_name, chunk_id, owner, creationTime> vectors
- */
-vector<pair<vector<string>, time_t>> RGWObjectDirectory::get_aged_keys(time_t startTime_t, time_t endTime_t){
+vector<pair<vector<string>, time_t>> RGWObjectDirectory::get_aged_keys(time_t searchTime){
 	vector<pair<string, string>> list;
 	vector<pair<vector<string>, time_t>> keys; //return aged keys
 	string key;
 	string time;
 	int rep_size = 0;
 
-	string startTime = timeToString(startTime_t);
-	string endTime = timeToString(endTime_t);
-
-	//cpp_redis::client client;
-	//client.connect("192.168.32.103", 7000);
+    std::stringstream ss;
+    ss << ptr->lastAccessTime;
+    std::string searchTime = ss.str();
 
 	std::string dirKey = "keyObjectDirectory";
 	client.zrangebyscore(dirKey, startTime, endTime, true, [&key, &time, &list](cpp_redis::reply &reply){
@@ -664,5 +503,5 @@ vector<pair<vector<string>, time_t>> RGWObjectDirectory::get_aged_keys(time_t st
 	return keys;
 }
 
-
+*/
 

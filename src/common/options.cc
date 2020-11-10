@@ -7009,11 +7009,27 @@ std::vector<Option> get_rgw_options() {
     .set_description("rgw datacache path"),
 
 
-    Option("rgw_directory_address", Option::TYPE_STR, Option::LEVEL_ADVANCED)
+    Option("rgw_directory_address1", Option::TYPE_STR, Option::LEVEL_ADVANCED)
     .set_default("127.0.0.1")
     .set_description("rgw directory address"),
 
-    Option("rgw_directory_port", Option::TYPE_INT, Option::LEVEL_ADVANCED)
+    Option("rgw_directory_address2", Option::TYPE_STR, Option::LEVEL_ADVANCED)
+    .set_default("127.0.0.1")
+    .set_description("rgw directory address"),
+
+    Option("rgw_directory_address3", Option::TYPE_STR, Option::LEVEL_ADVANCED)
+    .set_default("127.0.0.1")
+    .set_description("rgw directory address"),
+
+    Option("rgw_directory_port1", Option::TYPE_INT, Option::LEVEL_ADVANCED)
+    .set_default(7000)
+    .set_description("rgw directory port"),
+
+    Option("rgw_directory_port2", Option::TYPE_INT, Option::LEVEL_ADVANCED)
+    .set_default(7000)
+    .set_description("rgw directory port"),
+
+    Option("rgw_directory_port3", Option::TYPE_INT, Option::LEVEL_ADVANCED)
     .set_default(7000)
     .set_description("rgw directory port"),
     

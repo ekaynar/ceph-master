@@ -8279,6 +8279,7 @@ void RGWGetObj::cache_execute()
   ldpp_dout(this, 10) << __func__  << dendl;
   c_obj.bucket_name = s->bucket_name;
   c_obj.obj_name = s->object.name;
+  //c_obj.creationTime = -1;
   c_obj.backendProtocol =  S3;
   RGWGetObj_CB cb(this);
   RGWGetObj_Filter* filter = (RGWGetObj_Filter *)&cb;

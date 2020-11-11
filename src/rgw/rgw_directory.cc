@@ -294,7 +294,7 @@ int RGWObjectDirectory::delValue(cache_obj *ptr){
 		result = arr[0].as_integer();
 	});
 	client.sync_commit();	
-	return result;
+	return result-1;
 }
 
 
@@ -311,7 +311,7 @@ int RGWBlockDirectory::delValue(cache_block *ptr){
 		result = arr[0].as_integer();
 	});
 	client.sync_commit();	
-	return result;
+	return result-1;
 }
 
 

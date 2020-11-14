@@ -8239,67 +8239,34 @@ void RGWDeleteBucketPublicAccessBlock::execute()
 //
 bool compare_acls(){return true;}
 
-bool RGWGetObj::cache_authorize(cache_obj &c_obj, string requester){
+bool RGWGetObj::cache_authorize(){
   bool allow =  false;
-//  int op_ret = objectDirectory.getValue(&c_obj);
-  //int op_ret = store->getRados()->objDirectory.getValue(&c_obj);
-//  int op_ret = 0;
-  c_obj.owner = requester;
+  c_obj.bucket_name = s->bucket_name;
+  c_obj.obj_name = s->object.name;
+  c_obj.backendProtocol =  S3;
+  c_obj.owner = s->user->get_info().user_id.id;
+  time_t now = time(0);
 
-// Object is in write-back cache
-  if (op_ret >= 0) {
-    time_t now = time(0);
-    c_obj.aclTimeStamp = now;
-
-    //ACLs are valid
-    if(difftime(now,c_obj.aclTimeStamp) < s->cct->_conf->cache_acl_timeout ){
-      allow = compare_acls();
-    }
-    //ACLS are expired
-    else{
-      store->getRados()->retrieve_obj_acls(c_obj);//retrieve acls, etag and object size in bytes from backend
-      allow = compare_acls();
-      if (allow){
-	//        objectDirectory.updateACL(c_obj,c_obj.acl);
-      }
-    }
-    return allow;
-  }
-
-  // Object not found in object cache, and it's size and acls retrieved from backend
-  else if (op_ret < 0){
-    store->getRados()->retrieve_obj_acls(c_obj);
-    allow = compare_acls();
-    return allow;
+  int op_ret = store->getRados()->objDirectory->getValue(&c_obj);
+  // Object not found in diretory cache, and it's size and acls retrieved from backend
+  if (op_ret < 0){
+	op_ret = store->getRados()->retrieve_obj_acls(c_obj);
+	if (op_ret < 0)
+      return false;
+    return compare_acls();
+	// objectDirectory.updateACL(c_obj,c_obj.acl);
+	// c_obj.aclTimeStamp = now;
+  } else { // Object is in write-back cache 
+	return compare_acls(); 
   }
 }
 
-void RGWGetObj::cache_execute()
-{
-  ldpp_dout(this, 10) << __func__  << dendl;
-  c_obj.bucket_name = s->bucket_name;
-  c_obj.obj_name = s->object.name;
-  //c_obj.creationTime = -1;
-  c_obj.backendProtocol =  S3;
+
+void RGWGetObj::cache_execute(){
+  ldpp_dout(this, 10) << __func__  << "object size:" <<  c_obj.size_in_bytes <<dendl;
   RGWGetObj_CB cb(this);
   RGWGetObj_Filter* filter = (RGWGetObj_Filter *)&cb;
-//  if(!cache_authorize(c_obj, s->user->get_info().user_id.id))
-
-//    return;
-  
-//  if (c_obj.size_in_bytes <=0)
-//    return;
-//  int op = store->getRados()->objDirectory->getValue(&c_obj);
-  int op = store->getRados()->test(c_obj);
-//  c_obj.size_in_bytes =41943040; 
- /*if(op < 0 or c_obj.size_in_bytes <=0 ){
-	ldpp_dout(this, 10) << __func__  << "error" << dendl; 
-	return;
-  }
-*/
-  ldpp_dout(this, 10) << __func__  <<  c_obj.size_in_bytes << dendl;
   s->obj_size = c_obj.size_in_bytes;
-
   this->total_len = c_obj.size_in_bytes;
   
   int64_t ofs_x, end_x;
@@ -8312,8 +8279,5 @@ void RGWGetObj::cache_execute()
   op_ret = read_op.read(ofs_x, end_x, filter, c_obj, s->yield); 
   if (op_ret >= 0)
     op_ret = filter->flush();
-
   return;
 }
-
-

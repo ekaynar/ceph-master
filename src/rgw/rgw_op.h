@@ -192,6 +192,7 @@ public:
   virtual void execute() = 0;
   /*datacache*/
   virtual void cache_execute() {}  
+  virtual bool cache_authorize() {return true;}  
   cache_obj c_obj;
 //  RGWObjectDirectory objectDirectory;
   /*datacache*/
@@ -347,7 +348,7 @@ public:
   void pre_exec() override;
   void execute() override;
   void cache_execute() override; // datacache
-  bool cache_authorize(cache_obj &c_obj, string requester); // datacache
+  bool cache_authorize() override; // datacache
   int parse_range();
   int read_user_manifest_part(
     rgw_bucket& bucket,

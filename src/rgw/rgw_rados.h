@@ -1312,7 +1312,6 @@ public:
 
   /* datacache */
   int put_data(string key, bufferlist& bl, unsigned int len, cache_block *c_block);
-  int test(cache_obj &ptr);
   using iterate_cache_obj_cb = int (*)(cache_block& c_block, off_t, off_t, off_t, void*, RGWRados *store); 
   int iterate_obj(cache_obj& c_obj, off_t ofs, off_t end, uint64_t max_chunk_size, iterate_cache_obj_cb cb, void *arg, optional_yield y, RGWRados *store);
   int get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_t read_ofs, off_t read_len,  void *arg, RGWRados *store);

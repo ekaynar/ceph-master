@@ -617,6 +617,30 @@ done:
 
 
 }
+bool DataCache::get(string oid) {
+
+  ldout(cct, 0) << __func__ << "key:"<< oid << dendl;
+  bool exist = false;
+  string location = cct->_conf->rgw_datacache_path + "/"+ oid;
+  cache_lock.lock();
+  map<string, ChunkDataInfo*>::iterator iter = cache_map.find(oid);
+  if (!(iter == cache_map.end())){
+        // check inside cache whether file exists or not!!!! then make exist true;
+        struct ChunkDataInfo *chdo = iter->second;
+        if(access(location.c_str(), F_OK ) != -1 ) { // file exists
+                exist = true;
+        }
+        else{
+                cache_map.erase(oid);
+                exist = false;
+        }
+  }
+
+  cache_lock.unlock();
+  return exist;
+}
+
+
 void DataCache::put(bufferlist& bl, uint64_t len, string obj_id, cache_block *c_block){
   ldout(cct, 10) << __func__  <<dendl;
   cache_lock.lock(); 

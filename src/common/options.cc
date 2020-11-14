@@ -7000,6 +7000,10 @@ std::vector<Option> get_rgw_options() {
     .add_see_also("rgw_dmclock_metadata_wgt")
     .add_see_also("rgw_dmclock_metadata_lim"),
 
+    Option("rgw_cache_size", Option::TYPE_INT, Option::LEVEL_ADVANCED)
+    .set_default(1073741824)
+    .set_description("rgw local read cache capacity"),
+
     Option("rgw_datacache_enabled", Option::TYPE_BOOL, Option::LEVEL_ADVANCED)
     .set_default(false)
     .set_description("enabling rgw datacache"),
@@ -7021,18 +7025,10 @@ std::vector<Option> get_rgw_options() {
     .set_default("127.0.0.1")
     .set_description("rgw directory address"),
 
-    Option("rgw_directory_port1", Option::TYPE_INT, Option::LEVEL_ADVANCED)
+    Option("rgw_directory_port", Option::TYPE_INT, Option::LEVEL_ADVANCED)
     .set_default(7000)
     .set_description("rgw directory port"),
 
-    Option("rgw_directory_port2", Option::TYPE_INT, Option::LEVEL_ADVANCED)
-    .set_default(7000)
-    .set_description("rgw directory port"),
-
-    Option("rgw_directory_port3", Option::TYPE_INT, Option::LEVEL_ADVANCED)
-    .set_default(7000)
-    .set_description("rgw directory port"),
-    
     Option("aging_interval", Option::TYPE_INT, Option::LEVEL_ADVANCED)
     .set_default(5)
     .set_description("rgw wb datacache aging internval"),

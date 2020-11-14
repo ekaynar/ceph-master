@@ -99,6 +99,11 @@ int rgw_process_authenticated(RGWHandler_REST * const handler,
   ldpp_dout(op, 2) << "rgw_process_authenticated" << dendl;
    if ( (strcmp("get_obj",op->name()) == 0) && (s->cct->_conf->rgw_datacache_enabled) ){
     if ( (OP_GET == s->op) ) {
+	  ret = op->cache_authorize();
+	  ldpp_dout(op, 2) << "get backend acls " << ret << dendl;
+	  if (!(ret)) {
+		s->err.http_ret = 404; //not found 401 not authorize
+		return -1;}
       ldpp_dout(op, 2) << "executing" << dendl;
       op->cache_execute(); 
       ldpp_dout(op, 2) << "completing" << dendl;

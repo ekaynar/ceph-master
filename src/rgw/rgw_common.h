@@ -2459,7 +2459,7 @@ struct cache_obj {
 
 struct cache_block {
   cache_obj c_obj;
-  //uint64_t offset; // s3 obj offset
+  uint64_t offset; // s3 obj offset
   uint64_t block_id; // rados obj block id
   uint64_t size_in_bytes; // block size_in_bytes
   string etag; //etag for s3 object

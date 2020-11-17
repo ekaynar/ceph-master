@@ -342,12 +342,12 @@ int RGWObjectDirectory::setValue(cache_obj *ptr){
   list.push_back(make_pair("key", key));
   list.push_back(make_pair("owner", ptr->owner));
   list.push_back(make_pair("obj_acl", ptr->acl));
-  list.push_back(make_pair("aclTimeStamp", timeToString(ptr->aclTimeStamp)));
+  list.push_back(make_pair("aclTimeStamp", to_string(ptr->aclTimeStamp)));
   list.push_back(make_pair("hosts", hosts));
   list.push_back(make_pair("dirty", BoolToString(ptr->dirty)));
   list.push_back(make_pair("size", to_string(ptr->size_in_bytes)));
-  list.push_back(make_pair("creationTime", timeToString(ptr->creationTime)));
-  list.push_back(make_pair("lastAccessTime", timeToString(ptr->lastAccessTime)));
+  list.push_back(make_pair("creationTime", to_string(ptr->creationTime)));
+  list.push_back(make_pair("lastAccessTime", to_string(ptr->lastAccessTime)));
   list.push_back(make_pair("etag", ptr->etag));
   list.push_back(make_pair("backendProtocol", protocolToString(ptr->backendProtocol)));
   list.push_back(make_pair("bucket_name", ptr->bucket_name));
@@ -358,7 +358,7 @@ int RGWObjectDirectory::setValue(cache_obj *ptr){
   keys.push_back(key);
 
   //making key and time a pair
-  timeKey.emplace(timeToString(ptr->creationTime),key);
+  timeKey.emplace(to_string(ptr->creationTime),key);
 
   findClient(key, &client);
   client.hmset(key, list, [](cpp_redis::reply &reply){
@@ -375,6 +375,8 @@ int RGWObjectDirectory::setValue(cache_obj *ptr){
   return 0;
 
 }
+
+
 int RGWBlockDirectory::setValue(cache_block *ptr){
 
   //creating the index based on bucket_name, obj_name, and chunk_id
@@ -404,7 +406,7 @@ int RGWBlockDirectory::setValue(cache_block *ptr){
   list.push_back(make_pair("bucket_name", ptr->c_obj.bucket_name));
   list.push_back(make_pair("obj_name", ptr->c_obj.obj_name));
   list.push_back(make_pair("block_id", to_string(ptr->block_id)));
-  list.push_back(make_pair("lastAccessTime", timeToString(ptr->lastAccessTime)));
+  list.push_back(make_pair("lastAccessTime", to_string(ptr->lastAccessTime)));
   list.push_back(make_pair("accessCount", to_string(ptr->freq)));
   findClient(key, &client);
   client.hmset(key, list, [](cpp_redis::reply &reply){
@@ -415,6 +417,42 @@ int RGWBlockDirectory::setValue(cache_block *ptr){
   return 0;
 
 }
+
+int RGWObjectDirectory::setTTL(cache_obj *ptr, int seconds){
+
+  int result;
+  cpp_redis::client client;
+  string key = buildIndex(ptr);
+
+  findClient(key, &client);
+  client.expire(key, seconds,  [&result](cpp_redis::reply& reply){
+      result = reply.as_integer();
+  });
+  // synchronous commit, no timeout
+  client.sync_commit();
+
+  return result-1;
+
+}
+
+int RGWBlockDirectory::setTTL(cache_block *ptr, int seconds){
+
+  int result;
+  cpp_redis::client client;
+  string key = buildIndex(ptr);
+
+  findClient(key, &client);
+  client.expire(key, seconds,  [&result](cpp_redis::reply& reply){
+      result = reply.as_integer();
+  });
+  // synchronous commit, no timeout
+  client.sync_commit();
+
+  return result-1;
+
+}
+
+
 
 int RGWObjectDirectory::getValue(cache_obj *ptr){
 
@@ -495,7 +533,7 @@ int RGWObjectDirectory::getValue(cache_obj *ptr){
   //passing the values to the requester
   ptr->owner = owner;
   ptr->acl = obj_acl;
-  ptr->aclTimeStamp = stringToTime(aclTimeStamp);
+  ptr->aclTimeStamp = stoi(aclTimeStamp);
 
   //host1_host2_host3_...
   while(getline(sloction, tmp, '_'))
@@ -503,8 +541,8 @@ int RGWObjectDirectory::getValue(cache_obj *ptr){
 
   ptr->dirty = StringToBool(dirty);
   ptr->size_in_bytes = stoull(size);
-  ptr->creationTime = stringToTime(creationTime);
-  ptr->lastAccessTime = stringToTime(lastAccessTime);
+  ptr->creationTime = stoi(creationTime);
+  ptr->lastAccessTime = stoi(lastAccessTime);
   ptr->etag = etag;
   ptr->backendProtocol = stringToProtocol(backendProtocol);
   ptr->bucket_name = bucket_name;
@@ -590,8 +628,8 @@ vector<pair<vector<string>, time_t>> RGWObjectDirectory::get_aged_keys(time_t st
   string time;
   int rep_size = 0;
 
-  string startTime = timeToString(startTime_t);
-  string endTime = timeToString(endTime_t);
+  string startTime = to_string(startTime_t);
+  string endTime = to_string(endTime_t);
 
   /*
      std::string dirKey = "keyObjectDirectory";
@@ -629,7 +667,7 @@ vector<pair<vector<string>, time_t>> RGWObjectDirectory::get_aged_keys(time_t st
   vTmp.push_back(owner);
 
   //creationTime and return value
-  keys.push_back(make_pair(vTmp, stringToTime(list[i].second)));
+  keys.push_back(make_pair(vTmp, stoi(list[i].second)));
 
   }
 

@@ -50,6 +50,7 @@ public:
 	int getValue(cache_obj *ptr);
 	int updateField(cache_obj *ptr, string field, string value);
 	int delValue(cache_obj *ptr);
+	int setTTL(cache_obj *ptr, int seconds);
 	vector<pair<vector<string>, time_t>> get_aged_keys(time_t startTime_t, time_t endTime_t);
 
 private:
@@ -74,6 +75,7 @@ public:
 	int getValue(cache_block *ptr);
 	int updateField(cache_block *ptr, string field, string value);
 	int delValue(cache_block *ptr);
+	int setTTL(cache_block *ptr, int seconds);
 
 private:
 	string buildIndex(cache_block *ptr);

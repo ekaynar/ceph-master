@@ -565,17 +565,15 @@ void DataCache::cache_aio_write_completion_cb(cacheAioWriteRequest *c){
   cache_lock.unlock();
   
   /*update free size*/
-  /*eviction_lock.Lock();
+  eviction_lock.lock();
   free_data_cache_size -= c->cb->aio_nbytes;
   outstanding_write_size -=  c->cb->aio_nbytes;
   lru_insert_head(chunk_info);
-  eviction_lock.Unlock();
-  */
-
+  eviction_lock.unlock();
+  
   time_t rawTime = time(NULL);
   c->c_block.lastAccessTime = mktime(gmtime(&rawTime));  
   int ret = blkDirectory->setValue(&(c->c_block));
-
   
   c->release(); 
 
@@ -625,24 +623,64 @@ bool DataCache::get(string oid) {
   cache_lock.lock();
   map<string, ChunkDataInfo*>::iterator iter = cache_map.find(oid);
   if (!(iter == cache_map.end())){
-        // check inside cache whether file exists or not!!!! then make exist true;
-        struct ChunkDataInfo *chdo = iter->second;
-        if(access(location.c_str(), F_OK ) != -1 ) { // file exists
-                exist = true;
-        }
-        else{
-                cache_map.erase(oid);
-                exist = false;
-        }
+     // check inside cache whether file exists or not!!!! then make exist true;
+     struct ChunkDataInfo *chdo = iter->second;
+     if(access(location.c_str(), F_OK ) != -1 ) { // file exists
+ 	  exist = true;
+ 	  /* LRU */
+ 	  eviction_lock.lock();
+ 	  lru_remove(chdo);
+ 	  lru_insert_head(chdo);
+ 	  eviction_lock.unlock();
+     } else { /*LRU*/
+	  cache_map.erase(oid);
+	  lru_remove(chdo);
+      exist = false;
+ 	  eviction_lock.lock();
+ 	  free_data_cache_size += chdo->size;
+ 	  eviction_lock.unlock();
+     }
   }
-
   cache_lock.unlock();
   return exist;
 }
 
+size_t DataCache::lru_eviction(){
+
+  int n_entries = 0;
+  size_t freed_size = 0;
+  ChunkDataInfo *del_entry;
+  string del_oid, location;
+ 
+  eviction_lock.lock();
+  del_entry = tail;
+  lru_remove(del_entry);
+  eviction_lock.unlock();
+
+  cache_lock.lock();
+  n_entries = cache_map.size();
+  if (n_entries <= 0){
+    cache_lock.unlock();
+    return -1;
+  }
+  del_oid = del_entry->obj_id;
+  map<string, ChunkDataInfo*>::iterator iter = cache_map.find(del_entry->obj_id);
+  if (iter != cache_map.end()) {
+    cache_map.erase(del_oid); // oid
+  }
+  cache_lock.unlock();
+  freed_size = del_entry->size;
+  free(del_entry);
+  location = cct->_conf->rgw_datacache_path + "/" + del_oid; /*replace tmp with the correct path from config file*/
+  remove(location.c_str());
+  return freed_size;
+
+}
 
 void DataCache::put(bufferlist& bl, uint64_t len, string obj_id, cache_block *c_block){
-  ldout(cct, 10) << __func__  <<dendl;
+  ldout(cct, 10) << __func__  <<" oid:" << obj_id <<dendl;
+  int ret = 0;
+  uint64_t freed_size = 0, _free_data_cache_size = 0, _outstanding_write_size = 0;
   cache_lock.lock(); 
   
   map<string, ChunkDataInfo *>::iterator iter = cache_map.find(obj_id);
@@ -655,22 +693,40 @@ void DataCache::put(bufferlist& bl, uint64_t len, string obj_id, cache_block *c_
   std::list<std::string>::iterator it = std::find(outstanding_write_list.begin(), outstanding_write_list.end(),obj_id);
   if (it != outstanding_write_list.end()) {
     cache_lock.unlock();
-    ldout(cct, 5) << "Warning: write is already issued, no re-write, obj_id="<< obj_id << dendl;
+    ldout(cct, 10) << "Warning: write is already issued, no re-write, obj_id="<< obj_id << dendl;
     return;
   }
 
   outstanding_write_list.push_back(obj_id);
   cache_lock.unlock();
+  
+  eviction_lock.lock();
+  _free_data_cache_size = free_data_cache_size;
+  _outstanding_write_size = outstanding_write_size;
+  eviction_lock.unlock();
 
+  while (len >= (_free_data_cache_size - _outstanding_write_size + freed_size)){
+    ldout(cct, 20) << "Datacache Eviction r=" << ret << dendl;
+    ret = lru_eviction();
+    if(ret < 0)
+      return;
+    freed_size += ret;
+  }
 
-  int ret = create_aio_write_request(bl, len, obj_id, c_block);
+  ret = create_aio_write_request(bl, len, obj_id, c_block);
   if (ret < 0) {
     cache_lock.lock();
     outstanding_write_list.remove(obj_id);
     cache_lock.unlock();
-    ldout(cct, 0) << "Error: create_aio_write_request is failed"  << ret << dendl;
+    ldout(cct, 10) << "Error: create_aio_write_request is failed"  << ret << dendl;
     return;
   }
+  
+   eviction_lock.lock();
+   free_data_cache_size += freed_size;
+   outstanding_write_size += len;
+   eviction_lock.unlock();
+
 }
 
 static size_t _remote_req_cb(void *ptr, size_t size, size_t nmemb, void* param) {

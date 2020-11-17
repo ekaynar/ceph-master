@@ -368,7 +368,8 @@ struct DataCache {
     ~DataCache() {}
     void retrieve_block_info(cache_block* c_block, RGWRados *store);
     void submit_remote_req(struct RemoteRequest *c);
-    void put(bufferlist& bl, uint64_t len, string obj_id, cache_block* c_block);
+    size_t lru_eviction();
+	void put(bufferlist& bl, uint64_t len, string obj_id, cache_block* c_block);
     bool get(string oid);
     int create_aio_write_request(bufferlist& bl, uint64_t len, std::string obj_id, cache_block* c_block);
     void cache_aio_write_completion_cb(cacheAioWriteRequest *c);
@@ -379,8 +380,6 @@ struct DataCache {
       cct = _cct;
       free_data_cache_size = cct->_conf->rgw_cache_size;
       capacity = cct->_conf->rgw_cache_size;
-      //free_data_cache_size = (cct->_conf->rgw_cache_size == -1) ? 17179869184 : cct->_conf->rgw_cache_size;
-      //capacity = (cct->_conf->rgw_cache_size == -1) ? 17179869184 : cct->_conf->rgw_cache_size;
       path = cct->_conf->rgw_datacache_path;
       tp = new CacheThreadPool(cct->_conf->cache_threadpool_size);
       head = NULL;

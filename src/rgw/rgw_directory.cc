@@ -322,6 +322,7 @@ int RGWObjectDirectory::setValue(cache_obj *ptr){
 
   cpp_redis::client client;
   string key = buildIndex(ptr);
+  string result;
 
   vector<pair<string, string>> list;
   vector<string> keys;
@@ -361,8 +362,11 @@ int RGWObjectDirectory::setValue(cache_obj *ptr){
   timeKey.emplace(to_string(ptr->creationTime),key);
 
   findClient(key, &client);
-  client.hmset(key, list, [](cpp_redis::reply &reply){
-      });
+  client.hmset(key, list, [&result](cpp_redis::reply &reply){
+	  result = reply.as_string();
+  });
+
+
 
   // synchronous commit, no timeout
   client.sync_commit();
@@ -371,8 +375,10 @@ int RGWObjectDirectory::setValue(cache_obj *ptr){
   //clientzadd("keyObjectDirectory", options, timeKey, [](cpp_redis::reply &reply){
   //});
 
-
-  return 0;
+  if (result.find("OK") != std::string::npos)
+	return 0;
+  else
+	return -1;
 
 }
 
@@ -382,6 +388,7 @@ int RGWBlockDirectory::setValue(cache_block *ptr){
   //creating the index based on bucket_name, obj_name, and chunk_id
   string key = buildIndex(ptr);
   cpp_redis::client client;
+  string result;
 
   //ldout(cct,10) <<__func__<<" key " << key <<dendl;
 
@@ -409,12 +416,16 @@ int RGWBlockDirectory::setValue(cache_block *ptr){
   list.push_back(make_pair("lastAccessTime", to_string(ptr->lastAccessTime)));
   list.push_back(make_pair("accessCount", to_string(ptr->freq)));
   findClient(key, &client);
-  client.hmset(key, list, [](cpp_redis::reply &reply){
-      });
+  client.hmset(key, list, [&result](cpp_redis::reply &reply){
+	  result = reply.as_string();
+  });
 
   // synchronous commit, no timeout
   client.sync_commit();
-  return 0;
+  if (result.find("OK") != std::string::npos)
+	return 0;
+  else
+	return -1;
 
 }
 

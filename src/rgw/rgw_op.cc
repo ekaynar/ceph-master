@@ -8245,7 +8245,6 @@ bool RGWGetObj::cache_authorize(){
   c_obj.obj_name = s->object.name;
   c_obj.backendProtocol =  S3;
   c_obj.owner = s->user->get_info().user_id.id;
-  time_t now = time(0);
 
   int op_ret = store->getRados()->objDirectory->getValue(&c_obj);
   // Object not found in diretory cache, and it's size and acls retrieved from backend

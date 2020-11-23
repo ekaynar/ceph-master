@@ -324,6 +324,21 @@ struct cacheAioWriteRequest{
   }
 };
 
+struct ObjectDataInfo : public LRUObject {
+  CephContext *cct;
+  uint64_t size;
+  string obj_id;
+  bool complete;
+  struct ObjectDataInfo *lru_prev;
+  struct ObjectDataInfo *lru_next;
+  cache_obj *c_obj;
+  
+  ObjectDataInfo(): size(0) {}
+  void set_ctx(CephContext *_cct) {cct = _cct;}
+  void dump(Formatter *f) const;
+  static void generate_test_instances(list<ObjectDataInfo*>& o);
+};
+
 struct ChunkDataInfo : public LRUObject {
   CephContext *cct;
   uint64_t size;
@@ -335,33 +350,31 @@ struct ChunkDataInfo : public LRUObject {
   struct ChunkDataInfo *lru_next;
 
   ChunkDataInfo(): size(0) {}
-
-  void set_ctx(CephContext *_cct) {
-    cct = _cct;
-  }
-
+  void set_ctx(CephContext *_cct) {cct = _cct;}
   void dump(Formatter *f) const;
   static void generate_test_instances(list<ChunkDataInfo*>& o);
 };
 
 struct DataCache {
   private:
+    std::map<string, ObjectDataInfo*> write_cache_map;
     std::map<string, ChunkDataInfo*> cache_map;
     std::list<string> outstanding_write_list;
-    uint64_t capacity;
     CephContext *cct;
     std::string path;
+    uint64_t free_data_cache_size;
+    uint64_t outstanding_write_size;
     CacheThreadPool *tp;
+    ceph::mutex obj_cache_lock = ceph::make_mutex("DataCache::obj_cache_lock");
     ceph::mutex cache_lock = ceph::make_mutex("DataCache::cache_lock");
     ceph::mutex eviction_lock = ceph::make_mutex("DataCache::eviction_lock");
     RGWBlockDirectory *blkDirectory;
+    RGWObjectDirectory *objDirectory;
 
-    uint64_t free_data_cache_size;
-    uint64_t outstanding_write_size;
     struct ChunkDataInfo *head;
     struct ChunkDataInfo *tail;
-
-
+    struct ObjectDataInfo *obj_head;
+    struct ObjectDataInfo *obj_tail;
 
   public:
     DataCache() ;
@@ -369,26 +382,35 @@ struct DataCache {
     void retrieve_block_info(cache_block* c_block, RGWRados *store);
     void submit_remote_req(struct RemoteRequest *c);
     size_t lru_eviction();
+	int evict_from_directory(string key);
 	void put(bufferlist& bl, uint64_t len, string obj_id, cache_block* c_block);
+	void put_obj(cache_obj* c_obj);
     bool get(string oid);
-    int create_aio_write_request(bufferlist& bl, uint64_t len, std::string obj_id, cache_block* c_block);
+	int create_aio_write_request(bufferlist& bl, uint64_t len, std::string obj_id, cache_block* c_block);
     void cache_aio_write_completion_cb(cacheAioWriteRequest *c);
-    size_t remove_read_cache_entry(cache_block& c_block);
     size_t get_used_pool_capacity(string pool_name, RGWRados *store);
-    void start_cache_aging(RGWRados *store);
-    void init(CephContext *_cct) {
+    
+	void init_writecache_aging(RGWRados *store);
+    void timer_start(RGWRados *store, uint64_t interval);
+    void age_object(RGWRados *store, uint64_t interval);
+	void init(CephContext *_cct) {
       cct = _cct;
       free_data_cache_size = cct->_conf->rgw_cache_size;
-      capacity = cct->_conf->rgw_cache_size;
       path = cct->_conf->rgw_datacache_path;
       tp = new CacheThreadPool(cct->_conf->cache_threadpool_size);
       head = NULL;
       tail = NULL;
+      obj_head = NULL;
+      obj_tail = NULL;
     }
     void set_block_directory(RGWBlockDirectory *_blkDirectory){
 	blkDirectory = _blkDirectory;
     }
-        void lru_insert_head(struct ChunkDataInfo *o) {
+    void set_object_directory(RGWObjectDirectory *_objDirectory){
+	objDirectory = _objDirectory;
+    }
+    
+	void lru_insert_head(struct ChunkDataInfo *o) {
         o->lru_next = head;
         o->lru_prev = NULL;
         if (head) {
@@ -419,6 +441,29 @@ struct DataCache {
                 head = o->lru_next;
         o->lru_next = o->lru_prev = NULL;
      }
+
+	  void obj_lru_insert_head(struct ObjectDataInfo *o) {
+        o->lru_next = obj_head;
+        o->lru_prev = NULL;
+        if (obj_head) {
+                obj_head->lru_prev = o;
+        } else {
+                obj_tail = o;
+        }
+        obj_head = o;
+    }
+    void obj_lru_remove(struct ObjectDataInfo *o) {
+        if (o->lru_next)
+                o->lru_next->lru_prev = o->lru_prev;
+        else
+                obj_tail = o->lru_prev;
+        if (o->lru_prev)
+                o->lru_prev->lru_next = o->lru_next;
+        else
+                obj_head = o->lru_next;
+        o->lru_next = o->lru_prev = NULL;
+     }
+
 };
 
 #endif

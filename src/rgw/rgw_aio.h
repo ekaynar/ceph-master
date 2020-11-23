@@ -97,7 +97,7 @@ class Aio {
   static OpFunc librados_op(librados::ObjectWriteOperation&& op,
                             optional_yield y);
   /* datacache */
-  static OpFunc cache_op(librados::ObjectReadOperation&& op, optional_yield y, off_t obj_ofs, off_t read_ofs, uint64_t read_len);
+  static OpFunc cache_op(librados::ObjectReadOperation&& op, optional_yield y, off_t obj_ofs, off_t read_ofs, uint64_t read_len, string location);
   static OpFunc remote_op(librados::ObjectReadOperation&& op, optional_yield y, off_t obj_ofs, off_t read_ofs, uint64_t read_len, string location, RemoteRequest *c);
 };
 

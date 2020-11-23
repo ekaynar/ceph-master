@@ -1101,14 +1101,15 @@ int RGWRados::init_rados()
 
   cr_registry = crs.release();
   if (use_datacache){
-  datacache = new DataCache();
-  datacache->init(cct);
-  objDirectory = new RGWObjectDirectory();
-  objDirectory->init(cct);
-  blkDirectory = new RGWBlockDirectory();		
-  blkDirectory->init(cct);
-  datacache->set_block_directory(blkDirectory);
-
+	datacache = new DataCache();
+	datacache->init(cct);
+	objDirectory = new RGWObjectDirectory();
+	objDirectory->init(cct);
+	blkDirectory = new RGWBlockDirectory();		
+	blkDirectory->init(cct);
+	datacache->set_block_directory(blkDirectory);
+	datacache->set_object_directory(objDirectory);
+	datacache->init_writecache_aging(this);
   }
   return ret;
 }
@@ -6322,8 +6323,8 @@ struct get_obj_data {
         string key = get_pending_key();
         cache_block c_block = get_pending_block(key); 	
         if (bl.length() == 0x400000){
-	  c_block.hosts_list.push_back(cct->_conf->host);
-	  store->put_data(key, bl, bl.length(), &c_block); 
+		  c_block.hosts_list.push_back(cct->_conf->host);
+		  store->put_data(key, bl, bl.length(), &c_block); 
         }
       }
       int r = client_cb->handle_data(bl, 0, bl.length());
@@ -9273,20 +9274,20 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
 
   d->add_pending_key(oid);
   c_block.size_in_bytes = read_len;
-  
+  int ret = 0;  
   // read block from local ssd cache
   if (datacache->get(oid)){
 	dout(10) << __func__   << "HIT local read cache, key:" << oid<< dendl; 
     rgw_pool pool("default.rgw.buckets.data");
     rgw_raw_obj read_obj1(pool,oid);
     auto obj1 = d->store->svc.rados->obj(read_obj1);
-    int ret = obj1.open();
-    auto completed = d->aio->get(obj1, rgw::Aio::cache_op(std::move(op) , d->yield, obj_ofs, read_ofs, read_len), cost, id);
+    ret = obj1.open();
+    auto completed = d->aio->get(obj1, rgw::Aio::cache_op(std::move(op) , d->yield, obj_ofs, read_ofs, read_len, cct->_conf->rgw_datacache_path), cost, id);
     return d->flush(std::move(completed));
   } else {
-	int ret = blkDirectory->getValue(&c_block);
-    
-	if (ret == 0) { // read from remote cache
+	ret = blkDirectory->getValue(&c_block);
+	if(false){
+	//if (ret == 0) { // read from remote cache
 	  dout(10) << __func__   << "HIT remote cache, key:" << oid<< dendl; 
 	  rgw_user user_id(c_block.c_obj.owner);
 	  string dest="";
@@ -9297,21 +9298,22 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
 	  rgw_pool pool("default.rgw.buckets.data");
 	  rgw_raw_obj read_obj1(pool,oid);
 	  auto obj1 = d->store->svc.rados->obj(read_obj1);
-	  int r = obj1.open();
+	  ret = obj1.open();
 	  auto completed = d->aio->get(obj1, rgw::Aio::remote_op(std::move(op) , d->yield, obj_ofs, read_ofs, read_len, dest, c), cost, id);
 	  datacache->submit_remote_req(c);
 	  return d->flush(std::move(completed));
 
 	} else if(c_block.c_obj.home_location == 0) { // read from write-back cache
 	  dout(10) << __func__   << "HIT write cache, key:" << oid<< dendl; 
+	  c_block.access_count = 0;
 	  d->add_pending_block(oid, c_block);
 	  rgw_raw_obj read_obj;
-	  int r = retrieve_oid(c_block.c_obj, read_obj, obj_ofs, d->yield);
+	  ret = retrieve_oid(c_block.c_obj, read_obj, obj_ofs, d->yield);
 	  auto obj = d->store->svc.rados->obj(read_obj);
-	  r = obj.open();
-	  if (r < 0) {
+	  ret = obj.open();
+	  if (ret < 0) {
     	ldout(cct, 4) << "failed to open rados context for " << read_obj << dendl;
-	    return r; }
+	    return ret; }
 	  auto completed = d->aio->get(obj, rgw::Aio::librados_op(std::move(op), d->yield), cost, id);
 	  return d->flush(std::move(completed));
     
@@ -9325,7 +9327,7 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
     rgw_pool pool("default.rgw.buckets.data");
     rgw_raw_obj read_obj1(pool,oid);
     auto obj1 = d->store->svc.rados->obj(read_obj1);
-    int r  = obj1.open();
+    ret  = obj1.open();
     auto completed = d->aio->get(obj1, rgw::Aio::remote_op(std::move(op) , d->yield, obj_ofs, read_ofs, read_len, cct->_conf->backend_url, c), cost, id);
     datacache->submit_remote_req(c);
     return d->flush(std::move(completed));
@@ -9738,19 +9740,19 @@ set_err_state:
 
 }
 
-int RGWRados::copy_remote(RGWRados *store, cache_obj& c_obj){
-
+int RGWRados::copy_remote(RGWRados *store, cache_obj* c_obj){
+   ldout(cct, 0) << __func__ << "key bucket " << c_obj->bucket_name << c_obj->owner <<dendl;
   // Get S3 Credentials of the user
   RGWAccessKey accesskey;
-  int ret = get_s3_credentials(store, c_obj.owner, c_obj.accesskey);
+  int ret = get_s3_credentials(store, c_obj->owner, accesskey);
   RGWBucketInfo src_bucket_info;
   RGWBucketInfo dest_bucket_info;
   RGWObjectCtx obj_ctx(this->store);
-  map<string, bufferlist> dest_attrs;
+  //map<string, bufferlist> dest_attrs;
   map<string, bufferlist> src_attrs;
   const string src_tenant_name = "";
-  const string src_bucket_name = c_obj.bucket_name;
-  const string src_obj_name = c_obj.obj_name;
+  const string src_bucket_name = c_obj->bucket_name;
+  const string src_obj_name = c_obj->obj_name;
   string url ="http://" + cct->_conf->backend_url;
   string etag;
 
@@ -9758,26 +9760,29 @@ int RGWRados::copy_remote(RGWRados *store, cache_obj& c_obj){
   ret = get_bucket_info(&svc, src_tenant_name, src_bucket_name, src_bucket_info, NULL, null_yield, &src_attrs);
   rgw_obj src_obj(src_bucket_info.bucket, src_obj_name);
   dest_bucket_info = src_bucket_info;
-  dest_attrs = src_attrs;
+  //dest_attrs = src_attrs;
   rgw_bucket dest_bucket = dest_bucket_info.bucket;
-  rgw_obj dest_obj(dest_bucket, src_obj_name);
   uint64_t obj_size;
 
   /*Create Bucket*/
   param_vec_t bucket_headers;
-  //  bucket_headers.push_back(pair<string, string>("Content-Length", "0"));
+  //bucket_headers.push_back(pair<string, string>("Content-Length", "0"));
   RGWRESTStreamS3PutObj *bucket_wr = new RGWRESTStreamS3PutObj(cct, "PUT", url, &bucket_headers, NULL, host_style);
+
   const string s_bucket_name = "";
   map<string, bufferlist> bucket_attrs;
-  rgw_obj dest_bucket_obj(dest_bucket, s_bucket_name);
+  rgw_obj dest_bucket_obj(dest_bucket, "");
   ret = bucket_wr->put_obj_init(accesskey, dest_bucket_obj, 0, bucket_attrs, true);
   if (ret < 0) {
+	 ldout(cct, 20) << __func__<< "error " << ret << dendl;
     delete bucket_wr;
   }
   ret = bucket_wr->complete_request(&etag, nullptr);
-
+  if (ret < 0)
+	return -1;
+  
   /*Create Object*/
-  ldout(cct, 20) << "ugur flush object: " << src_obj_name << dendl;
+  ldout(cct, 20) << __func__<< "bucket and obj_name: " << src_obj_name << dendl;
   RGWRados::Object src_op_target(store, src_bucket_info, obj_ctx, src_obj);
   RGWRados::Object::Read read_op(&src_op_target);
   read_op.params.attrs = &src_attrs;
@@ -9788,11 +9793,14 @@ int RGWRados::copy_remote(RGWRados *store, cache_obj& c_obj){
   RGWObjState *astate = NULL;
   //  ret = store->get_obj_state(&obj_ctx, src_bucket_info, src_obj, &astate, NULL);
   ret =  get_obj_state(&obj_ctx, src_bucket_info, src_obj, &astate, false, null_yield);
+  rgw_obj dest_obj(dest_bucket, src_obj_name);
+  ldout(cct, 20) << __func__<< "bucket and obj_namei size: " <<  std::to_string(astate->size) << dendl;
   param_vec_t headers;
   headers.push_back(pair<string, string>("Content-Length", std::to_string(astate->size)));
   RGWRESTStreamS3PutObj *wr = new RGWRESTStreamS3PutObj(cct, "PUT", url, &headers, NULL, host_style);
   ret = wr->put_obj_init(accesskey, dest_obj, astate->size, src_attrs, true);
   if (ret < 0) {
+    ldout(cct, 20) << __func__<< "put_obj_init : " <<  ret << dendl;
     delete wr;
   }
 
@@ -9814,15 +9822,15 @@ int RGWRados::copy_remote(RGWRados *store, cache_obj& c_obj){
 
 
 
-int RGWRados::delete_cache_obj(RGWRados *store, string userid, string src_bucket_name, string src_obj_name){
-  dout(10) << __func__ << " bucket_name " << src_bucket_name << " ,object_name "<< src_obj_name <<dendl;
+int RGWRados::delete_writecache_obj(RGWRados *store, cache_obj* c_obj){
+  dout(10) << __func__ << " bucket_name " << c_obj->bucket_name << " ,object_name "<< c_obj->obj_name <<dendl;
   RGWObjectCtx obj_ctx(this->store);
   RGWBucketInfo src_bucket_info;
   const string src_tenant_name = "";
   map<string, bufferlist> src_attrs;
-  rgw_user user_id(userid);
-  int ret = store->get_bucket_info(&svc, src_tenant_name, src_bucket_name, src_bucket_info, NULL, null_yield, &src_attrs);
-  rgw_obj src_obj(src_bucket_info.bucket, src_obj_name);
+  rgw_user user_id(c_obj->owner);
+  int ret = store->get_bucket_info(&svc, src_tenant_name, c_obj->bucket_name, src_bucket_info, NULL, null_yield, &src_attrs);
+  rgw_obj src_obj(src_bucket_info.bucket, c_obj->obj_name);
   //Check here whether object exists or not
   ///* check if obj exists, read orig attrs */
   RGWRados::Object src_op_target(store, src_bucket_info, obj_ctx, src_obj);
@@ -9844,7 +9852,7 @@ int RGWRados::delete_cache_obj(RGWRados *store, string userid, string src_bucket
 // Cache operation
 int RGWRados::put_data(string key, bufferlist& bl, unsigned int len, cache_block *c_block){
   dout(10) << __func__ << " key "<< key <<dendl;
-  datacache->put(bl,len,key, c_block); 
+//  datacache->put(bl,len,key, c_block); 
   return 0;
 }
 

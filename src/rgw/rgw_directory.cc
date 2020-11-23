@@ -250,6 +250,20 @@ int RGWBlockDirectory::existKey(string key,cpp_redis::client *client){
   return result;
 }
 
+int RGWBlockDirectory::updateField(string key, string field, string value){
+
+  vector<pair<string, string>> list;
+  list.push_back(make_pair(field, value));
+  cpp_redis::client client;
+
+  findClient(key, &client);
+  client.hmset(key, list, [](cpp_redis::reply &reply){
+      });
+  client.sync_commit();
+
+  return 0;
+}
+
 int RGWObjectDirectory::updateField(cache_obj *ptr, string field, string value){
 
   vector<pair<string, string>> list;
@@ -284,24 +298,32 @@ int RGWObjectDirectory::delValue(cache_obj *ptr){
 
   int result = 0;
   vector<string> keys;
-
   cpp_redis::client client;
   string key = buildIndex(ptr);
   keys.push_back(key);
   findClient(key, &client);
   client.del(keys, [&result](cpp_redis::reply &reply){
-      auto arr = reply.as_array();
-      result = arr[0].as_integer();
+      result = reply.as_integer();
       });
   client.sync_commit();	
   return result-1;
 }
 
+int RGWBlockDirectory::getHosts(string key, string hosts){
+  cpp_redis::client client;
+  findClient(key, &client);
+  client.hget(key, "hosts", [&hosts](cpp_redis::reply &reply){
+	if(!reply.is_null())
+	  hosts = reply.as_string();
+  });
+  client.sync_commit();
+  return 0;
+}
 
 int RGWBlockDirectory::delValue(cache_block *ptr){
   int result = 0;
   vector<string> keys;
-
+  
   cpp_redis::client client;
   string key = buildIndex(ptr);
   keys.push_back(key);
@@ -314,6 +336,31 @@ int RGWBlockDirectory::delValue(cache_block *ptr){
   return result-1;
 }
 
+int RGWBlockDirectory::updateAccessCount(string key){
+  int result = 0;
+  int incr = 1;
+  cpp_redis::client client;
+  findClient(key, &client);
+  client.hincrby(key, "accessCount", incr,  [&result](cpp_redis::reply &reply){
+      result = reply.as_integer();
+      });
+  client.sync_commit();
+  return result-1;
+
+}
+
+int RGWBlockDirectory::delValue(string key){
+  int result = 0;
+  vector<string> keys;
+  cpp_redis::client client;
+  keys.push_back(key);
+  findClient(key, &client);
+  client.del(keys, [&result](cpp_redis::reply &reply){
+      result = reply.as_integer();
+      });
+  client.sync_commit();
+  return result-1;
+}
 
 /* adding a key to the directory
  * if the key exists, it will be deleted and then the new value be added
@@ -390,7 +437,7 @@ int RGWBlockDirectory::setValue(cache_block *ptr){
   cpp_redis::client client;
   string result;
 
-  //ldout(cct,10) <<__func__<<" key " << key <<dendl;
+  ldout(cct,10) <<__func__<<" key " << key <<dendl;
 
   vector<pair<string, string>> list;
   vector<string> options;
@@ -414,7 +461,7 @@ int RGWBlockDirectory::setValue(cache_block *ptr){
   list.push_back(make_pair("obj_name", ptr->c_obj.obj_name));
   list.push_back(make_pair("block_id", to_string(ptr->block_id)));
   list.push_back(make_pair("lastAccessTime", to_string(ptr->lastAccessTime)));
-  list.push_back(make_pair("accessCount", to_string(ptr->freq)));
+  list.push_back(make_pair("accessCount", to_string(ptr->access_count)));
   findClient(key, &client);
   client.hmset(key, list, [&result](cpp_redis::reply &reply){
 	  result = reply.as_string();
@@ -422,6 +469,7 @@ int RGWBlockDirectory::setValue(cache_block *ptr){
 
   // synchronous commit, no timeout
   client.sync_commit();
+  ldout(cct,10) <<__func__<<" we set key " << key <<dendl;
   if (result.find("OK") != std::string::npos)
 	return 0;
   else
@@ -576,7 +624,7 @@ int RGWBlockDirectory::getValue(cache_block *ptr){
   string bucket_name;
   string obj_name;
   string block_id;
-  string freq;
+  string access_count;
   int key_exist = 0;
   std::vector<std::string> fields;
   fields.push_back("key");
@@ -588,7 +636,7 @@ int RGWBlockDirectory::getValue(cache_block *ptr){
   fields.push_back("block_id");
   fields.push_back("accessCount");
 
-  client.hmget(key, fields, [&key, &owner, &hosts, &size, &bucket_name, &obj_name, &block_id, &freq, &key_exist](cpp_redis::reply &reply){
+  client.hmget(key, fields, [&key, &owner, &hosts, &size, &bucket_name, &obj_name, &block_id, &access_count, &key_exist](cpp_redis::reply &reply){
 	auto arr = reply.as_array();
 	if (arr[0].is_null()) {
 	  key_exist = -1;
@@ -600,7 +648,7 @@ int RGWBlockDirectory::getValue(cache_block *ptr){
 	  bucket_name = arr[4].as_string();
 	  obj_name = arr[5].as_string();
 	  block_id  = arr[6].as_string();
-	  freq = arr[7].as_string();
+	  access_count = arr[7].as_string();
 	  }
   });
   
@@ -624,7 +672,7 @@ int RGWBlockDirectory::getValue(cache_block *ptr){
   ptr->c_obj.bucket_name = bucket_name;
   ptr->c_obj.obj_name = obj_name;
   ptr->block_id = stoull(block_id);
-  ptr->freq = stoull(freq);
+  ptr->access_count = stoull(access_count);
   return 0;
 }
 

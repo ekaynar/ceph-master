@@ -128,12 +128,12 @@ Aio::OpFunc aio_abstract(Op&& op, boost::asio::io_context& context,
 }
 
 template <typename Op>
-Aio::OpFunc cache_aio_abstract(Op&& op, off_t obj_ofs, off_t read_ofs, uint64_t  read_len) {
-  return [op = std::move(op), obj_ofs, read_ofs, read_len] (Aio* aio, AioResult& r) mutable{
+Aio::OpFunc cache_aio_abstract(Op&& op, off_t obj_ofs, off_t read_ofs, uint64_t  read_len, string location) {
+  return [op = std::move(op), obj_ofs, read_ofs, read_len, location] (Aio* aio, AioResult& r) mutable{
   auto& ref = r.obj.get_ref();
   auto cs = new (&r.user_data) cache_state(aio, r);
   cs->c = new LocalRequest();
-  cs->c->prepare_op(ref.obj.oid, &r.data, read_len, obj_ofs, read_ofs, cache_aio_cb, aio, &r);
+  cs->c->prepare_op(ref.obj.oid, &r.data, read_len, obj_ofs, read_ofs, cache_aio_cb, aio, &r, location);
   int ret = cs->submit_op(cs->c);
   if ( ret < 0 ) {
       r.result = -1;
@@ -155,13 +155,13 @@ Aio::OpFunc remote_aio_abstract(Op&& op, off_t obj_ofs, off_t read_ofs, uint64_t
 
 #endif // HAVE_BOOST_CONTEXT
 template <typename Op>
-Aio::OpFunc cache_aio_abstract(Op&& op, optional_yield y, off_t obj_ofs, off_t read_ofs, uint64_t read_len) {
+Aio::OpFunc cache_aio_abstract(Op&& op, optional_yield y, off_t obj_ofs, off_t read_ofs, uint64_t read_len, string location) {
   static_assert(std::is_base_of_v<librados::ObjectOperation, std::decay_t<Op>>);
   static_assert(!std::is_lvalue_reference_v<Op>);
   static_assert(!std::is_const_v<Op>);
 
   #ifdef HAVE_BOOST_CONTEXT
-  return cache_aio_abstract(std::forward<Op>(op),obj_ofs, read_ofs, read_len);
+  return cache_aio_abstract(std::forward<Op>(op),obj_ofs, read_ofs, read_len, location);
   #endif
 }
 
@@ -201,8 +201,8 @@ Aio::OpFunc Aio::librados_op(librados::ObjectWriteOperation&& op,
 }
 
 /* datacache */
-Aio::OpFunc Aio::cache_op(librados::ObjectReadOperation&& op, optional_yield y, off_t obj_ofs, off_t read_ofs, uint64_t read_len) {
-    return cache_aio_abstract(std::move(op), y, obj_ofs, read_ofs, read_len);
+Aio::OpFunc Aio::cache_op(librados::ObjectReadOperation&& op, optional_yield y, off_t obj_ofs, off_t read_ofs, uint64_t read_len, string location) {
+    return cache_aio_abstract(std::move(op), y, obj_ofs, read_ofs, read_len, location);
 }
 
 Aio::OpFunc Aio::remote_op(librados::ObjectReadOperation&& op, optional_yield y, off_t obj_ofs, off_t read_ofs, uint64_t read_len, string dest,  RemoteRequest *c) {

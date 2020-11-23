@@ -40,7 +40,7 @@ struct LocalRequest : public CacheRequest{
   LocalRequest() :  CacheRequest(), paiocb(NULL) {}
   ~LocalRequest(){}
 
-  int prepare_op(std::string key,  bufferlist *bl, int read_len, int ofs, int read_ofs, void (*f)(sigval_t), rgw::Aio* aio, rgw::AioResult* r) {
+  int prepare_op(std::string key,  bufferlist *bl, int read_len, int ofs, int read_ofs, void (*f)(sigval_t), rgw::Aio* aio, rgw::AioResult* r, string location) {
     this->r = r;	
     this->aio = aio;
     this->bl = bl;
@@ -48,7 +48,7 @@ struct LocalRequest : public CacheRequest{
     this->key = key;
     this->read_len = read_len;
     this->stat = EINPROGRESS;	
-    std::string loc = "/tmp/" + key;
+    std::string loc = location+ "/" + key;
     struct aiocb *cb = new struct aiocb;
     memset(cb, 0, sizeof(struct aiocb));
     cb->aio_fildes = ::open(loc.c_str(), O_RDONLY);
@@ -111,7 +111,7 @@ struct RemoteRequest : public CacheRequest{
   RGWRados *store;
   CephContext *cct;
   rgw_obj obj;
-  RemoteRequest(rgw_obj& _obj, cache_block* _c_block, RGWRados* _store, CephContext* _cct) :  CacheRequest() , stat(-1), obj(_obj), c_block(_c_block), store(_store), cct(_cct){
+  RemoteRequest(rgw_obj& _obj, cache_block* _c_block, RGWRados* _store, CephContext* _cct) :  CacheRequest() , stat(-1), c_block(_c_block), store(_store), cct(_cct), obj(_obj){
     }
 
   ~RemoteRequest(){}

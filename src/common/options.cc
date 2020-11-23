@@ -7029,9 +7029,9 @@ std::vector<Option> get_rgw_options() {
     .set_default(7000)
     .set_description("rgw directory port"),
 
-    Option("aging_interval", Option::TYPE_INT, Option::LEVEL_ADVANCED)
+    Option("aging_interval_in_minutes", Option::TYPE_INT, Option::LEVEL_ADVANCED)
     .set_default(5)
-    .set_description("rgw wb datacache aging internval"),
+    .set_description("rgw write cache aging interval in minutes"),
 
     Option("backend_url", Option::TYPE_STR, Option::LEVEL_ADVANCED)
     .set_default("localhost:8000")

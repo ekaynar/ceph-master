@@ -416,7 +416,7 @@ ObjectCache::~ObjectCache()
 
 /* datacache */
 
-DataCache::DataCache() : cct(NULL), capacity(0){}
+DataCache::DataCache() : cct(NULL), free_data_cache_size(0), outstanding_write_size (0){}
 
 void DataCache::submit_remote_req(struct RemoteRequest *c){
   ldout(cct, 0) << "submit_remote_req" <<dendl;
@@ -430,18 +430,72 @@ void DataCache::retrieve_block_info(cache_block* c_block, RGWRados *store){
 
 
 
-void retrieve_aged_objList(RGWRados *store, string start_time, string end_time){
-  //  ldout(cct, 0) << __func__ <<dendl;
-  vector<vector<string>> object_list;
-  //  object_list = store->objDirectory.get_aged_keys(start_time, end_time);
+void DataCache::age_object(RGWRados *store, uint64_t interval) {
+  ldout(cct, 0) << __func__ <<dendl;
+  
+  while(true){
+	if ( write_cache_map.size() <= 0)
+	  break;
+    ldout(cct, 0) << __func__ << "key1 "<<dendl;
+	ObjectDataInfo *del_entry;
+	del_entry = obj_tail;
+    ldout(cct, 0) << __func__ << "key2 "<<dendl;
+	string del_oid = del_entry->obj_id;
+    ldout(cct, 0) << __func__ << "key3 "<<dendl;
+	int r = 0;
+	time_t now = time(NULL); 
+	double diff = difftime(now, del_entry->c_obj->creationTime);
+    ldout(cct, 0) << __func__ << "key "<< del_entry->c_obj->creationTime <<dendl;
+	// copy aged item to backend
+	if (diff < double(interval)) {
+	  r = store->copy_remote(store, del_entry->c_obj); 
+	  ldout(cct, 0) << __func__ << "copy remoteoid:" << del_oid << dendl;
+	  if (r < 0)	
+		r = store->copy_remote(store, del_entry->c_obj); 
+	  //Delete item from writeback_cache
+//	  r = objDirectory->delValue(del_entry->c_obj);
+//	  r = store->delete_writecache_obj(store, del_entry->c_obj);
+	  ldout(cct, 0) << __func__ << "deleted remoteoid:" << del_oid << dendl;
+
+	  // delete object from writecache LRU list
+	  obj_cache_lock.lock();
+	  obj_lru_remove(del_entry);
+	  map<string, ObjectDataInfo*>::iterator iter = write_cache_map.find(del_oid);
+	  if (iter != write_cache_map.end()) 
+		write_cache_map.erase(del_oid); // oid
+	  obj_cache_lock.unlock();
+	} else {
+	  ldout(cct, 0) << __func__ << "copy remoteoid:" << del_oid << dendl;
+	  break;
+	}
+  }
+  return ;
 }
 
 
+void DataCache::timer_start(RGWRados *store, uint64_t interval)
+{
+  std::thread([store, interval,this]() {
+      while (true){
+		ldout(cct, 0) << __func__ << interval << dendl;
+		this->age_object(store, interval);
+		std::this_thread::sleep_for(std::chrono::minutes(interval));
+      }
+      }).detach();
+}
+
+
+void DataCache::init_writecache_aging(RGWRados *store){
+  ldout(cct, 0) << __func__ <<dendl;
+ // timer_start(store, cct->_conf->aging_interval_in_minutes);
+
+}
 
 size_t DataCache::get_used_pool_capacity(string pool_name, RGWRados *store){
 
   ldout(cct, 0) << __func__ <<dendl;
   size_t used_capacity = 0;
+/*
   librados::Rados *rados = store->get_rados_handle();
   list<string> vec;
   int r = rados->pool_list(vec);
@@ -455,67 +509,9 @@ size_t DataCache::get_used_pool_capacity(string pool_name, RGWRados *store){
   for (map<string,librados::pool_stat_t>::iterator i = stats.begin();i != stats.end(); ++i) {
     const char *pool_name = i->first.c_str();
     librados::pool_stat_t& s = i->second;
-  }
+  }*/
   return used_capacity; //return used size
 }
-
-
-void timer_start(RGWRados *store, int interval)
-{
-  time_t rawTime = time(NULL);
-  string end_time = asctime(gmtime(&rawTime));
-  rawTime = rawTime - (60 * interval);
-  string start_time = asctime(gmtime(&rawTime));
-  std::thread([store, interval, &start_time, &end_time]() {
-      while (true)
-      {
-      //	    std::vector<std::pair<std::string, std::string>> object_list;
-      vector<vector<string>> object_list;
-      retrieve_aged_objList(store, start_time, end_time); 
-      /*	    for (const auto& c_obj : object_list){ //FIXME : iterate over aged objects
-      //	    store->copy_remote(store, c_obj); //aging function
-      }
-      */          std::this_thread::sleep_for(std::chrono::minutes(interval));
-      start_time = end_time;
-      time_t rawTime = time(NULL);
-      end_time = asctime(gmtime(&rawTime));
-      }
-      }).detach();
-}
-
-
-void DataCache::start_cache_aging(RGWRados *store){
-  ldout(cct, 0) << __func__ <<dendl;
-  timer_start(store,cct->_conf->aging_interval);
-}
-
-size_t DataCache::remove_read_cache_entry(cache_block& c_block){
-
-  string oid = c_block.c_obj.bucket_name+"_"+c_block.c_obj.obj_name+"_" + std::to_string(c_block.block_id);
-  /*
-  ChunkDataInfo *del_entry;
-  cache_lock.lock();
-
-  int n_entries = cache_map.size();
-  if (n_entries <= 0){
-    cache_lock.unlock();
-    return -1;
-  }
-  
-  map<string, ChunkDataInfo*>::iterator iter = cache_map.begin();
-  string del_oid = iter->first;
-
-  cache_map.erase(del_oid); 
-  cache_lock.unlock();
-*/
-  string location = cct->_conf->rgw_datacache_path + "/"+ c_block.c_obj.bucket_name+"_"+c_block.c_obj.obj_name+"_" + std::to_string(c_block.block_id);
-  if(access(location.c_str(), F_OK ) != -1 ) { 
-    remove(location.c_str());
-    return c_block.size_in_bytes;
-  }
-  return 0;
-}
-
 
 
 int cacheAioWriteRequest::create_io(bufferlist& bl, uint64_t len, string key) {
@@ -573,8 +569,9 @@ void DataCache::cache_aio_write_completion_cb(cacheAioWriteRequest *c){
   
   time_t rawTime = time(NULL);
   c->c_block.lastAccessTime = mktime(gmtime(&rawTime));  
+  c->c_block.access_count = 0;
   int ret = blkDirectory->setValue(&(c->c_block));
-  
+  ldout(cct, 20) << __func__ <<"key:" <<c->key << " ret:"<< ret <<dendl; 
   c->release(); 
 
 }
@@ -619,6 +616,7 @@ bool DataCache::get(string oid) {
 
   ldout(cct, 0) << __func__ << "key:"<< oid << dendl;
   bool exist = false;
+  int ret = 0;
   string location = cct->_conf->rgw_datacache_path + "/"+ oid;
   cache_lock.lock();
   map<string, ChunkDataInfo*>::iterator iter = cache_map.find(oid);
@@ -631,8 +629,10 @@ bool DataCache::get(string oid) {
  	  eviction_lock.lock();
  	  lru_remove(chdo);
  	  lru_insert_head(chdo);
+	  ret = blkDirectory->updateAccessCount(oid);
  	  eviction_lock.unlock();
      } else { /*LRU*/
+	  ret = evict_from_directory(oid);
 	  cache_map.erase(oid);
 	  lru_remove(chdo);
       exist = false;
@@ -643,6 +643,33 @@ bool DataCache::get(string oid) {
   }
   cache_lock.unlock();
   return exist;
+}
+
+int DataCache::evict_from_directory(string key){
+   /*update directory*/
+    string hosts;
+    int ret = blkDirectory->getHosts(key, hosts);
+    stringstream sloction(hosts);
+    string tmp;
+    stringstream ss;
+    vector<string> hosts_list;
+    size_t i = 0;
+    while(getline(sloction, tmp, '_')){
+      if (tmp != cct->_conf->host){
+        hosts_list.push_back(tmp);
+        if(i != 0)
+          ss << "_";
+        ss << tmp;
+        i+=1;
+      }
+    }
+    hosts = ss.str();
+	if (hosts_list.size() <= 0){
+      ret = blkDirectory->delValue(key);
+    } else {
+      ret = blkDirectory->updateField(key, "host_list", hosts);
+    }
+	return 0;
 }
 
 size_t DataCache::lru_eviction(){
@@ -666,8 +693,10 @@ size_t DataCache::lru_eviction(){
   del_oid = del_entry->obj_id;
   map<string, ChunkDataInfo*>::iterator iter = cache_map.find(del_entry->obj_id);
   if (iter != cache_map.end()) {
-    cache_map.erase(del_oid); // oid
+    int ret = evict_from_directory(del_oid);
+	cache_map.erase(del_oid); // oid
   }
+
   cache_lock.unlock();
   freed_size = del_entry->size;
   free(del_entry);
@@ -677,12 +706,41 @@ size_t DataCache::lru_eviction(){
 
 }
 
+void DataCache::put_obj(cache_obj* c_obj){
+  ldout(cct, 10) << __func__  <<" oid:" << c_obj->bucket_name <<dendl;
+  string obj_id = c_obj->bucket_name +"_"+c_obj->bucket_name;
+  obj_cache_lock.lock();
+  map<string, ObjectDataInfo*>::iterator iter = write_cache_map.find(obj_id);
+  if (!(iter == write_cache_map.end())){
+	struct ObjectDataInfo *chdo = iter->second;
+	obj_lru_remove(chdo);
+	chdo->c_obj = c_obj;
+	obj_lru_insert_head(chdo);
+  }
+  else{
+	ObjectDataInfo *obj_info = NULL;
+	cache_obj *nco = new cache_obj();
+	nco->bucket_name = c_obj->bucket_name;
+	nco->obj_name = c_obj->obj_name;
+	nco->etag = c_obj->etag;
+	nco->owner = c_obj->owner;
+	nco->creationTime = c_obj->creationTime;
+	obj_info = new ObjectDataInfo;
+	obj_info->obj_id = obj_id;
+	obj_info->c_obj = nco;
+	obj_info->set_ctx(cct);
+	write_cache_map.insert(pair<string, ObjectDataInfo*>(obj_id, obj_info));
+	obj_lru_insert_head(obj_info);
+  }
+  obj_cache_lock.unlock();
+}
+
 void DataCache::put(bufferlist& bl, uint64_t len, string obj_id, cache_block *c_block){
   ldout(cct, 10) << __func__  <<" oid:" << obj_id <<dendl;
   int ret = 0;
   uint64_t freed_size = 0, _free_data_cache_size = 0, _outstanding_write_size = 0;
+
   cache_lock.lock(); 
-  
   map<string, ChunkDataInfo *>::iterator iter = cache_map.find(obj_id);
   if (iter != cache_map.end()) {
     cache_lock.unlock();
@@ -704,9 +762,10 @@ void DataCache::put(bufferlist& bl, uint64_t len, string obj_id, cache_block *c_
   _free_data_cache_size = free_data_cache_size;
   _outstanding_write_size = outstanding_write_size;
   eviction_lock.unlock();
-
+  
+  ldout(cct, 20) << __func__ << "key: "<<obj_id<< "len: "<< len << "free_data_cache_size: "<<free_data_cache_size << "_:"<< free_data_cache_size << "outstanding_write_size  "<< outstanding_write_size << "_ " << _outstanding_write_size << dendl;
   while (len >= (_free_data_cache_size - _outstanding_write_size + freed_size)){
-    ldout(cct, 20) << "Datacache Eviction r=" << ret << dendl;
+    ldout(cct, 20) << "Datacache Eviction r=" << ret << "key"<<obj_id <<dendl;
     ret = lru_eviction();
     if(ret < 0)
       return;

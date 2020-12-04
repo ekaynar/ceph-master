@@ -9310,12 +9310,12 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
 	  c_block.access_count = 0;
 	  d->add_pending_block(oid, c_block);
 	  rgw_raw_obj read_obj;
-	  ret = retrieve_oid(c_block.c_obj, read_obj, obj_ofs, d->yield);
+	  int r = retrieve_oid(c_block.c_obj, read_obj, obj_ofs, d->yield);
 	  auto obj = d->store->svc.rados->obj(read_obj);
-	  ret = obj.open();
-	  if (ret < 0) {
+	  r = obj.open();
+	  if (r < 0) {
     	ldout(cct, 4) << "failed to open rados context for " << read_obj << dendl;
-	    return ret; }
+	    return r; }
 	  auto completed = d->aio->get(obj, rgw::Aio::librados_op(std::move(op), d->yield), cost, id);
 	  return d->flush(std::move(completed));
     

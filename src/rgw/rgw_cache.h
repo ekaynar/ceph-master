@@ -389,7 +389,6 @@ struct DataCache {
     std::map<string, ObjectDataInfo*> write_cache_map;
     std::map<string, ChunkDataInfo*> cache_map;
     std::list<string> outstanding_write_list;
-    std::list<ObjectDataInfo*> aging_list;
 	CephContext *cct;
     std::string path;
     uint64_t free_data_cache_size;

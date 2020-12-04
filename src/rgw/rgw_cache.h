@@ -31,10 +31,13 @@
 #include "include/lru.h"
 // #include <mutex> 
 // #include "common/RWLock.h"
-struct DataCache;
+struct cache_obj;
+class CopyRemoteS3Object;
 class CacheThreadPool;
 struct RemoteRequest;
+struct ObjectDataInfo;
 class RemoteS3Request;
+struct DataCache;
 /*datacache*/
 
 
@@ -273,6 +276,32 @@ class CacheThreadPool {
 };
 
 
+
+class CopyRemoteS3Object : public Task {
+   public:
+    CopyRemoteS3Object(CephContext *_cct, RGWRados *_store, cache_obj *_c_obj) : Task(), cct(_cct), store(_store), c_obj(_c_obj) {
+      pthread_mutex_init(&qmtx,0);
+      pthread_cond_init(&wcond, 0);
+    }
+    ~CopyRemoteS3Object() {
+      pthread_mutex_destroy(&qmtx);
+      pthread_cond_destroy(&wcond);
+    }
+    virtual void run();
+	virtual void set_handler(void *handle) {
+      curl_handle = (CURL *)handle;
+    }
+ private:
+	int submit_http_put_request_s3();
+ private:
+    pthread_mutex_t qmtx;
+    pthread_cond_t wcond;
+    CephContext *cct;
+	RGWRados *store;
+    cache_obj *c_obj;
+    CURL *curl_handle;
+};
+
 class RemoteS3Request : public Task {
   public:
     RemoteS3Request(RemoteRequest *_req, CephContext *_cct) : Task(), req(_req), cct(_cct) {
@@ -360,11 +389,13 @@ struct DataCache {
     std::map<string, ObjectDataInfo*> write_cache_map;
     std::map<string, ChunkDataInfo*> cache_map;
     std::list<string> outstanding_write_list;
-    CephContext *cct;
+    std::list<ObjectDataInfo*> aging_list;
+	CephContext *cct;
     std::string path;
     uint64_t free_data_cache_size;
     uint64_t outstanding_write_size;
     CacheThreadPool *tp;
+    CacheThreadPool *aging_tp;
     ceph::mutex obj_cache_lock = ceph::make_mutex("DataCache::obj_cache_lock");
     ceph::mutex cache_lock = ceph::make_mutex("DataCache::cache_lock");
     ceph::mutex eviction_lock = ceph::make_mutex("DataCache::eviction_lock");
@@ -375,6 +406,7 @@ struct DataCache {
     struct ChunkDataInfo *tail;
     struct ObjectDataInfo *obj_head;
     struct ObjectDataInfo *obj_tail;
+	
 
   public:
     DataCache() ;
@@ -392,12 +424,12 @@ struct DataCache {
     
 	void init_writecache_aging(RGWRados *store);
     void timer_start(RGWRados *store, uint64_t interval);
-    void age_object(RGWRados *store, uint64_t interval);
 	void init(CephContext *_cct) {
       cct = _cct;
       free_data_cache_size = cct->_conf->rgw_cache_size;
       path = cct->_conf->rgw_datacache_path;
       tp = new CacheThreadPool(cct->_conf->cache_threadpool_size);
+      aging_tp = new CacheThreadPool(cct->_conf->cache_aging_threadpool_size);
       head = NULL;
       tail = NULL;
       obj_head = NULL;

@@ -118,6 +118,10 @@ public:
                     map<string, bufferlist>& attrs, bool send, RGWRESTStreamS3PutObj **req);
   int complete_request(RGWRESTStreamS3PutObj *req, string& etag, ceph::real_time *mtime);
 
+
+  int put_obj_async(const rgw_user& uid, rgw_obj& obj, uint64_t obj_size,
+                    map<string, bufferlist>& attrs, bool send, RGWRESTStreamS3PutObj **req, string url, RGWAccessKey& akey);
+
   struct get_obj_params {
     rgw_user uid;
     req_info *info{nullptr};

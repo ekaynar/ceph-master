@@ -1247,7 +1247,9 @@ OPTION(aging_interval_in_minutes, OPT_INT) // rgw write cache aging interval in 
 OPTION(backend_url, OPT_STR) // url for backend data lake
 OPTION(cache_acl_timeout, OPT_INT) // timeout window for acls of cached object
 OPTION(max_remote_retries, OPT_INT) // maximum retry count for remote cache requests
+OPTION(max_aging_retries, OPT_INT) // maximum retry count for remote aging requests
 OPTION(cache_threadpool_size ,OPT_INT) // cache threadpool size for remote requests
+OPTION(cache_aging_threadpool_size ,OPT_INT) // cache threadpool size for aging objects to remote storage
 OPTION(rgw_cache_size ,OPT_INT) // rgw local read cache capacity
 OPTION(rgw_directory_address1 ,OPT_STR) // cache directory address 
 OPTION(rgw_directory_address2 ,OPT_STR) // cache directory address 

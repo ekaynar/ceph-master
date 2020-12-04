@@ -28,6 +28,7 @@ void cache_aio_cb(sigval_t sigval){
   LocalRequest *c = static_cast<LocalRequest *>(sigval.sival_ptr);
   int status = c->status();
   if (status == ECANCELED) {
+  std::cout << "ERROR: cache_aio_cb "<< c->key <<"\n";
   c->r->result = -1;
   c->aio->put(*(c->r));
   return;
@@ -46,7 +47,9 @@ struct cache_state {
 
   int submit_op(LocalRequest *cc){
     int ret = 0;
+	std::cout << "submit_op aio_read"<< cc->key <<"\n";
     if((ret = ::aio_read(cc->paiocb)) != 0) {
+	std::cout << "ERROR: aio_read ::aio_read"<< ret <<"\n";
     return ret; }
     return ret;
   }
@@ -136,6 +139,7 @@ Aio::OpFunc cache_aio_abstract(Op&& op, off_t obj_ofs, off_t read_ofs, uint64_t 
   cs->c->prepare_op(ref.obj.oid, &r.data, read_len, obj_ofs, read_ofs, cache_aio_cb, aio, &r, location);
   int ret = cs->submit_op(cs->c);
   if ( ret < 0 ) {
+	std::cout << "ERROR: submit_op :"<< cs->c->key <<"\n";
       r.result = -1;
       cs->aio->put(r);
   }

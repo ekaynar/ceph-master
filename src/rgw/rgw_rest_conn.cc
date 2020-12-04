@@ -158,6 +158,23 @@ int RGWRESTConn::put_obj_async(const rgw_user& uid, rgw_obj& obj, uint64_t obj_s
   return 0;
 }
 
+int RGWRESTConn::put_obj_async(const rgw_user& uid, rgw_obj& obj, uint64_t obj_size,
+                               map<string, bufferlist>& attrs, bool send,
+                               RGWRESTStreamS3PutObj **req, string url, RGWAccessKey& akey)
+{
+  param_vec_t headers;
+  RGWRESTStreamS3PutObj *wr = new RGWRESTStreamS3PutObj(cct, "PUT", url, &headers, NULL, host_style);
+  wr->set_send_length(obj_size);
+  int ret = wr->put_obj_init(akey, obj, obj_size, attrs, send);
+  if (ret < 0) {
+    delete wr;
+    return ret;
+  }
+  *req = wr;
+  return 0;
+
+}
+
 int RGWRESTConn::complete_request(RGWRESTStreamS3PutObj *req, string& etag, real_time *mtime)
 {
   int ret = req->complete_request(&etag, mtime);

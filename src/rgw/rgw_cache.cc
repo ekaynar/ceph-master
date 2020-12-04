@@ -430,64 +430,57 @@ void DataCache::retrieve_block_info(cache_block* c_block, RGWRados *store){
 
 
 
-void DataCache::age_object(RGWRados *store, uint64_t interval) {
-  ldout(cct, 0) << __func__ <<dendl;
-  
-  while(true){
-	if ( write_cache_map.size() <= 0)
-	  break;
-    ldout(cct, 0) << __func__ << "key1 "<<dendl;
-	ObjectDataInfo *del_entry;
-	del_entry = obj_tail;
-    ldout(cct, 0) << __func__ << "key2 "<<dendl;
-	string del_oid = del_entry->obj_id;
-    ldout(cct, 0) << __func__ << "key3 "<<dendl;
-	int r = 0;
-	time_t now = time(NULL); 
-	double diff = difftime(now, del_entry->c_obj->creationTime);
-    ldout(cct, 0) << __func__ << "key "<< del_entry->c_obj->creationTime <<dendl;
-	// copy aged item to backend
-	if (diff < double(interval)) {
-	  r = store->copy_remote(store, del_entry->c_obj); 
-	  ldout(cct, 0) << __func__ << "copy remoteoid:" << del_oid << dendl;
-	  if (r < 0)	
-		r = store->copy_remote(store, del_entry->c_obj); 
-	  //Delete item from writeback_cache
-//	  r = objDirectory->delValue(del_entry->c_obj);
-//	  r = store->delete_writecache_obj(store, del_entry->c_obj);
-	  ldout(cct, 0) << __func__ << "deleted remoteoid:" << del_oid << dendl;
-
-	  // delete object from writecache LRU list
-	  obj_cache_lock.lock();
-	  obj_lru_remove(del_entry);
-	  map<string, ObjectDataInfo*>::iterator iter = write_cache_map.find(del_oid);
-	  if (iter != write_cache_map.end()) 
-		write_cache_map.erase(del_oid); // oid
-	  obj_cache_lock.unlock();
-	} else {
-	  ldout(cct, 0) << __func__ << "copy remoteoid:" << del_oid << dendl;
-	  break;
-	}
-  }
-  return ;
-}
-
-
 void DataCache::timer_start(RGWRados *store, uint64_t interval)
 {
-  std::thread([store, interval,this]() {
-      while (true){
-		ldout(cct, 0) << __func__ << interval << dendl;
-		this->age_object(store, interval);
-		std::this_thread::sleep_for(std::chrono::minutes(interval));
-      }
+  ldout(cct, 20) << __func__ << dendl;
+  std::thread([store, interval, this]() {
+		while(true){
+		  while (write_cache_map.size() != 0) {
+			time_t now = time(NULL);
+			ObjectDataInfo *del_entry;
+			del_entry = obj_tail;
+			cache_obj *d_obj = new cache_obj();
+			d_obj = del_entry->c_obj;
+			string del_oid = del_entry->obj_id;
+			double diff = difftime(now, del_entry->c_obj->creationTime);
+			if (diff < double(interval)) {
+			  aging_tp->addTask(new CopyRemoteS3Object(this->cct, store, del_entry->c_obj));
+		
+			  // delete object from writecache LRU list
+			  obj_cache_lock.lock();
+			  obj_lru_remove(del_entry);
+			  map<string, ObjectDataInfo*>::iterator iter = write_cache_map.find(del_oid);
+			  if (iter != write_cache_map.end())
+				write_cache_map.erase(del_oid); 
+			  obj_cache_lock.unlock();
+			} else { break; }}
+		  std::this_thread::sleep_for(std::chrono::minutes(interval));
+		}
       }).detach();
 }
 
+int CopyRemoteS3Object::submit_http_put_request_s3(){
+  int ret = store->copy_remote(store, c_obj);
+  return ret;
+}
+
+void CopyRemoteS3Object::run() {
+  int max_retries = cct->_conf->max_aging_retries;
+  int ret = 0;
+  for (int i=0; i<max_retries; i++ ){
+	if(!(ret = submit_http_put_request_s3())){
+	  ret = store->delete_writecache_obj(store, c_obj);
+	  return;
+	}
+
+	ldout(cct, 0) << "ERROR: " << __func__  << "(): remote s3 request for failed, obj=" << dendl;
+	return;
+  }
+}
 
 void DataCache::init_writecache_aging(RGWRados *store){
   ldout(cct, 0) << __func__ <<dendl;
- // timer_start(store, cct->_conf->aging_interval_in_minutes);
+  timer_start(store, cct->_conf->aging_interval_in_minutes);
 
 }
 

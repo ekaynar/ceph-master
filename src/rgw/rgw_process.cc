@@ -113,8 +113,6 @@ int rgw_process_authenticated(RGWHandler_REST * const handler,
 
   }
 
-
-
   ldpp_dout(op, 2) << "init permissions" << dendl;
   ret = handler->init_permissions(op);
   if (ret < 0) {

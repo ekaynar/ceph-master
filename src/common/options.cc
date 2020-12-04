@@ -7049,8 +7049,15 @@ std::vector<Option> get_rgw_options() {
     .set_default(32)
     .set_description("cache threadpool size for remote requests"),
 
+    Option("cache_aging_threadpool_size", Option::TYPE_INT, Option::LEVEL_ADVANCED)
+    .set_default(8)
+    .set_description("cache threadpool size for aging objects to storage"),
     
-    Option("rgw_dmclock_metadata_wgt", Option::TYPE_FLOAT, Option::LEVEL_ADVANCED)
+    Option("max_aging_retries", Option::TYPE_INT, Option::LEVEL_ADVANCED)
+    .set_default(5)
+    .set_description("cache threadpool size for aging objects to storage"),
+    
+	Option("rgw_dmclock_metadata_wgt", Option::TYPE_FLOAT, Option::LEVEL_ADVANCED)
     .set_default(500.0)
     .set_description("mclock weight for metadata requests")
     .add_see_also("rgw_dmclock_metadata_res")

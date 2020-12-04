@@ -24,7 +24,7 @@ class CacheRequest {
     uint64_t ofs;
     uint64_t read_ofs;
     uint64_t read_len;   
-    rgw::AioResult* r= nullptr;
+    rgw::AioResult* r =nullptr;
     std::string key;
     rgw::Aio* aio = nullptr;
     CacheRequest() :  sequence(0), stat(-1), bl(NULL), ofs(0),  read_ofs(0), read_len(0){};
@@ -97,6 +97,8 @@ struct LocalRequest : public CacheRequest{
 
   void finish(){
     bl->append((char*)paiocb->aio_buf, paiocb->aio_nbytes);
+	r->result = 0;
+    aio->put(*(r));
     release();
   }
 };

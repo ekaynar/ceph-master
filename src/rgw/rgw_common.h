@@ -2455,6 +2455,7 @@ struct cache_obj {
   time_t aclTimeStamp; // ACLs timestamp
   time_t creationTime; // Creation time of the S3 Object
   bool dirty;
+  bool intermediate;
 };
 
 struct cache_block {

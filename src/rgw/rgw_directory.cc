@@ -401,6 +401,7 @@ int RGWObjectDirectory::setValue(cache_obj *ptr){
   list.push_back(make_pair("bucket_name", ptr->bucket_name));
   list.push_back(make_pair("obj_name", ptr->obj_name));
   list.push_back(make_pair("home_location", homeToString(ptr->home_location)));
+  list.push_back(make_pair("intermediate", BoolToString(ptr->intermediate)));
 
   //creating a key entry
   keys.push_back(key);
@@ -535,6 +536,7 @@ int RGWObjectDirectory::getValue(cache_obj *ptr){
   string bucket_name;
   string obj_name;
   string home_location;
+  string intermediate;
   int key_exist = 0;
 
   //fields will be filled by the redis hmget functoin
@@ -553,9 +555,10 @@ int RGWObjectDirectory::getValue(cache_obj *ptr){
   fields.push_back("bucket_name");
   fields.push_back("obj_name");
   fields.push_back("home_location");
+  fields.push_back("intermediate");
 
 
-  client.hmget(key, fields, [&key, &owner, &obj_acl, &aclTimeStamp, &hosts, &dirty, &size, &creationTime, &lastAccessTime, &etag, &backendProtocol, &bucket_name, &obj_name, &home_location, &key_exist](cpp_redis::reply& reply){
+  client.hmget(key, fields, [&key, &owner, &obj_acl, &aclTimeStamp, &hosts, &dirty, &size, &creationTime, &lastAccessTime, &etag, &backendProtocol, &bucket_name, &obj_name, &home_location, &intermediate, &key_exist](cpp_redis::reply& reply){
 
       auto arr = reply.as_array();
       if (arr[0].is_null()){
@@ -576,6 +579,7 @@ int RGWObjectDirectory::getValue(cache_obj *ptr){
       bucket_name = arr[11].as_string();
       obj_name = arr[12].as_string();
       home_location = arr[13].as_string();
+      intermediate = arr[14].as_string();
       }
 
 
@@ -599,6 +603,7 @@ int RGWObjectDirectory::getValue(cache_obj *ptr){
     ptr->hosts_list.push_back(tmp);
 
   ptr->dirty = StringToBool(dirty);
+  ptr->intermediate = StringToBool(intermediate);
   ptr->size_in_bytes = stoull(size);
   ptr->creationTime = stoi(creationTime);
   ptr->lastAccessTime = stoi(lastAccessTime);

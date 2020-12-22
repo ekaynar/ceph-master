@@ -429,34 +429,63 @@ void DataCache::retrieve_block_info(cache_block* c_block, RGWRados *store){
 }
 
 
+void DataCache::copy_aged_obj(RGWRados *store, uint64_t interval){
+  ldout(cct, 20) << __func__ << dendl;
+  while (write_cache_map.size() != 0) {
+//	ldout(cct, 20) << __func__ << "map_size" << write_cache_map.size() << dendl;
+
+	ObjectDataInfo *del_entry;
+	del_entry = obj_tail;
+
+	// Check the object is intermediate data or not
+	cache_obj *c_obj = new cache_obj();
+	c_obj->bucket_name = del_entry->c_obj->bucket_name;
+	c_obj->obj_name = del_entry->c_obj->obj_name;
+	int ret = objDirectory->getValue(c_obj);
+	
+	if (ret == 0 && c_obj->intermediate == true){
+	  ldout(cct, 20) << __func__ << "intermediate" << dendl;
+	  obj_cache_lock.lock();
+	  obj_lru_remove(del_entry);
+	  obj_lru_insert_head(del_entry);
+	  obj_cache_lock.unlock();
+	} 
+	else {
+	  string del_oid = del_entry->obj_id;
+	  ldout(cct, 20) << __func__ << "not intermediate" << dendl;
+	  time_t now = time(NULL);
+	  double diff = difftime(now, del_entry->c_obj->creationTime);
+	  if (diff < double(interval)) {
+		aging_tp->addTask(new CopyRemoteS3Object(this->cct, store, c_obj));
+	//	aging_tp->addTask(new CopyRemoteS3Object(this->cct, store, del_entry->c_obj));
+			
+		obj_cache_lock.lock();
+        obj_lru_remove(del_entry);
+        map<string, ObjectDataInfo*>::iterator iter = write_cache_map.find(del_oid);
+
+        if (iter != write_cache_map.end())
+		  write_cache_map.erase(del_oid);
+        
+		obj_cache_lock.unlock(); 
+	  } else {
+		break;
+	  }
+	}
+
+  }
+}
+
+
 
 void DataCache::timer_start(RGWRados *store, uint64_t interval)
 {
   ldout(cct, 20) << __func__ << dendl;
   std::thread([store, interval, this]() {
-		while(true){
-		  while (write_cache_map.size() != 0) {
-			time_t now = time(NULL);
-			ObjectDataInfo *del_entry;
-			del_entry = obj_tail;
-			cache_obj *d_obj = new cache_obj();
-			d_obj = del_entry->c_obj;
-			string del_oid = del_entry->obj_id;
-			double diff = difftime(now, del_entry->c_obj->creationTime);
-			if (diff < double(interval)) {
-			  aging_tp->addTask(new CopyRemoteS3Object(this->cct, store, del_entry->c_obj));
-		
-			  // delete object from writecache LRU list
-			  obj_cache_lock.lock();
-			  obj_lru_remove(del_entry);
-			  map<string, ObjectDataInfo*>::iterator iter = write_cache_map.find(del_oid);
-			  if (iter != write_cache_map.end())
-				write_cache_map.erase(del_oid); 
-			  obj_cache_lock.unlock();
-			} else { break; }}
-		  std::this_thread::sleep_for(std::chrono::minutes(interval));
-		}
-      }).detach();
+  while(true){
+	this->copy_aged_obj(store, interval);
+	std::this_thread::sleep_for(std::chrono::minutes(interval));
+  }
+  }).detach();
 }
 
 int CopyRemoteS3Object::submit_http_put_request_s3(){
@@ -701,7 +730,7 @@ size_t DataCache::lru_eviction(){
 
 void DataCache::put_obj(cache_obj* c_obj){
   ldout(cct, 10) << __func__  <<" oid:" << c_obj->bucket_name <<dendl;
-  string obj_id = c_obj->bucket_name +"_"+c_obj->bucket_name;
+  string obj_id = c_obj->bucket_name +"_"+c_obj->obj_name;
   obj_cache_lock.lock();
   map<string, ObjectDataInfo*>::iterator iter = write_cache_map.find(obj_id);
   if (!(iter == write_cache_map.end())){
@@ -803,41 +832,37 @@ string RemoteS3Request::sign_s3_request(string HTTP_Verb, string uri, string dat
 }
 
 string RemoteS3Request::get_date(){
-  std::string zone=" GMT";
   time_t now = time(0);
-  char* dt = ctime(&now);
   tm *gmtm = gmtime(&now);
-  dt = asctime(gmtm);
-  std::string date(dt);
+  string date;
   char buffer[80];
   std::strftime(buffer,80,"%a, %d %b %Y %X %Z",gmtm);
-  puts(buffer);
   date = buffer;
   return date;
 }
 
 int RemoteS3Request::submit_http_get_request_s3(){
   string range = std::to_string(req->ofs + req->read_ofs)+ "-"+ std::to_string(req->ofs + req->read_ofs + req->read_len - 1);
-  ldout(cct, 10) << __func__  << " range " << range << dendl;
+ // ldout(cct, 10) << __func__  << " range " << range << dendl;
   CURLcode res;
   string uri = "/"+req->c_block->c_obj.bucket_name + "/" +req->c_block->c_obj.obj_name;
   string date = get_date();
+  ldout(cct, 10) << __func__  << " date " << date << dendl;
   string AWSAccessKeyId=req->c_block->c_obj.accesskey.id;
   string YourSecretAccessKeyID=req->c_block->c_obj.accesskey.key;
   string signature = sign_s3_request("GET", uri, date, YourSecretAccessKeyID, AWSAccessKeyId);
   string Authorization = "AWS "+ AWSAccessKeyId +":" + signature;
   string loc = req->dest + uri;
-  //string loc = req->c_block->host + uri;
   string auth="Authorization: " + Authorization;
   string timestamp="Date: " + date;
-  string user_agent="User-Agent: aws-sdk-java/1.7.4 Linux/3.10.0-514.6.1.el7.x86_64 OpenJDK_64-Bit_Server_VM/24.131-b00/1.7.0_131";
+//  string user_agent="User-Agent: aws-sdk-java/1.7.4 Linux/3.10.0-514.6.1.el7.x86_64 OpenJDK_64-Bit_Server_VM/24.131-b00/1.7.0_131";
   string content_type="Content-Type: application/x-www-form-urlencoded; charset=utf-8";
   curl_handle = curl_easy_init();
   if(curl_handle) {
     struct curl_slist *chunk = NULL;
     chunk = curl_slist_append(chunk, auth.c_str());
     chunk = curl_slist_append(chunk, timestamp.c_str());
-    chunk = curl_slist_append(chunk, user_agent.c_str());
+  //  chunk = curl_slist_append(chunk, user_agent.c_str());
     chunk = curl_slist_append(chunk, content_type.c_str());
     curl_easy_setopt(curl_handle, CURLOPT_RANGE, range.c_str());
     res = curl_easy_setopt(curl_handle, CURLOPT_HTTPHEADER, chunk); //set headers

@@ -8252,6 +8252,7 @@ bool RGWGetObj::cache_authorize(){
 	op_ret = store->getRados()->retrieve_obj_acls(c_obj);
 	if (op_ret < 0)
       return false;
+	int op_ret = store->getRados()->objDirectory->setValue(&c_obj);
     return compare_acls();
 	// objectDirectory.updateACL(c_obj,c_obj.acl);
 	// c_obj.aclTimeStamp = now;

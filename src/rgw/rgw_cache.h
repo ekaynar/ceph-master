@@ -420,7 +420,7 @@ struct DataCache {
 	int create_aio_write_request(bufferlist& bl, uint64_t len, std::string obj_id, cache_block* c_block);
     void cache_aio_write_completion_cb(cacheAioWriteRequest *c);
     size_t get_used_pool_capacity(string pool_name, RGWRados *store);
-    
+    void copy_aged_obj(RGWRados *store, uint64_t interval);
 	void init_writecache_aging(RGWRados *store);
     void timer_start(RGWRados *store, uint64_t interval);
 	void init(CephContext *_cct) {

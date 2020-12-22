@@ -9274,7 +9274,7 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
   op.read(read_ofs, read_len, nullptr, nullptr);
 
   d->add_pending_key(oid);
-  d->cache_enable = true;
+  d->cache_enable = false;
   c_block.size_in_bytes = read_len;
   int ret = 0;  
   // read block from local ssd cache
@@ -9288,8 +9288,8 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
     return d->flush(std::move(completed));
   } else {
 	ret = blkDirectory->getValue(&c_block);
-	if(false){
-	//if (ret == 0) { // read from remote cache
+//	if(false){
+	if (ret == 0) { // read from remote cache
 	  dout(10) << __func__   << "HIT remote cache, key:" << oid<< dendl; 
 	  rgw_user user_id(c_block.c_obj.owner);
 	  string dest="";
@@ -9793,16 +9793,17 @@ int RGWRados::copy_remote(RGWRados *store, cache_obj* c_obj){
   read_op.params.attrs = &src_attrs;
   read_op.params.obj_size = &obj_size;
   ret = read_op.prepare(null_yield);
-  if (ret < 0) { return -1;}
+  if (ret < 0)
+	 return ret;
   
   RGWRESTConn *conn = svc.zone->get_master_conn();
   RGWRESTStreamS3PutObj *wr;
   rgw_user user_id(c_obj->owner);
 
   ret = conn->put_obj_async(user_id, dest_obj, astate->size, src_attrs, true, &wr, url, accesskey);
-  if (ret < 0) {
+  if (ret < 0) 
     return ret;
-  }
+  
   ret = read_op.iterate(0, astate->size - 1, wr->get_out_cb(), null_yield);
   if (ret < 0) {
     delete wr;
@@ -9811,6 +9812,9 @@ int RGWRados::copy_remote(RGWRados *store, cache_obj* c_obj){
   ret = conn->complete_request(wr, etag, nullptr);
   if (ret < 0)
     return ret;
+
+  objDirectory->updateField(c_obj, "home_location", "dataLake");
+  objDirectory->updateField(c_obj, "intermediate", "false");
   return 0;
 }
 

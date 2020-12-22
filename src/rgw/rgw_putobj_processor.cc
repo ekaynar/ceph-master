@@ -338,6 +338,7 @@ int AtomicObjectProcessor::complete(size_t accounted_size,
     cacheObj.size_in_bytes = manifest.get_obj_size();
 
     cacheObj.dirty = true;
+    cacheObj.intermediate = false;
     cacheObj.etag = etag;
     time_t rawTime = time(NULL);
     cacheObj.creationTime =  mktime(gmtime(&rawTime));

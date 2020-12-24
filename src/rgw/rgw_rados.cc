@@ -9283,6 +9283,7 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
     rgw_pool pool("default.rgw.buckets.data");
     rgw_raw_obj read_obj1(pool,oid);
     auto obj1 = d->store->svc.rados->obj(read_obj1);
+	d->add_pending_block(oid, c_block);
     ret = obj1.open();
     auto completed = d->aio->get(obj1, rgw::Aio::cache_op(std::move(op) , d->yield, obj_ofs, read_ofs, read_len, cct->_conf->rgw_datacache_path), cost, id);
     return d->flush(std::move(completed));

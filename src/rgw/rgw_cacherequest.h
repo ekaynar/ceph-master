@@ -27,7 +27,7 @@ class CacheRequest {
     rgw::AioResult* r = nullptr;
     std::string key;
     rgw::Aio* aio = nullptr;
-    CacheRequest() :  sequence(0), stat(-1), bl(NULL), ofs(0),  read_ofs(0), read_len(0){};
+    CacheRequest() :  sequence(0), stat(-1), bl(nullptr), ofs(0),  read_ofs(0), read_len(0){};
     virtual ~CacheRequest(){};
     virtual void release()=0;
     virtual void cancel_io()=0;
@@ -40,7 +40,7 @@ struct LocalRequest : public CacheRequest{
   LocalRequest() :  CacheRequest(), paiocb(NULL) {}
   ~LocalRequest(){}
 
-  int prepare_op(std::string key,  bufferlist *bl, int read_len, int ofs, int read_ofs, void (*f)(sigval_t), rgw::Aio* aio, rgw::AioResult* r, string location) {
+  int prepare_op(std::string key,  bufferlist *bl, int read_len, int ofs, int read_ofs, void(*f)(sigval_t), rgw::Aio* aio, rgw::AioResult* r, string& location) {
     this->r = r;	
     this->aio = aio;
     this->bl = bl;
@@ -61,7 +61,7 @@ struct LocalRequest : public CacheRequest{
     cb->aio_sigevent.sigev_notify = SIGEV_THREAD;
     cb->aio_sigevent.sigev_notify_function = f ;
     cb->aio_sigevent.sigev_notify_attributes = NULL;
-    cb->aio_sigevent.sigev_value.sival_ptr = (void*)this;
+    cb->aio_sigevent.sigev_value.sival_ptr = this;
     this->paiocb = cb;
     return 0;
   }
@@ -69,11 +69,11 @@ struct LocalRequest : public CacheRequest{
   void release (){
     lock.lock();
     free((void *)paiocb->aio_buf);
-    paiocb->aio_buf = NULL;
+    paiocb->aio_buf = nullptr;
     ::close(paiocb->aio_fildes);
-    free(paiocb);
+    delete(paiocb);
     lock.unlock();
-    delete this;
+//    delete this;
   }  
 
   void cancel_io(){
@@ -87,8 +87,8 @@ struct LocalRequest : public CacheRequest{
     if (stat != EINPROGRESS) {
       lock.unlock();
       if (stat == ECANCELED){
-	release();
-	return ECANCELED;
+    	//release();
+	  return ECANCELED;
       }}
     stat = aio_error(paiocb);
     lock.unlock();
@@ -97,7 +97,7 @@ struct LocalRequest : public CacheRequest{
 
   void finish(){
     bl->append((char*)paiocb->aio_buf, paiocb->aio_nbytes);
-    release();
+	release();
   }
 };
 

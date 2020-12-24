@@ -568,8 +568,8 @@ done:
 }
 
 
-void DataCache::cache_aio_write_completion_cb(cacheAioWriteRequest *c){
-  ChunkDataInfo  *chunk_info = NULL;
+void DataCache::cache_aio_write_completion_cb(cacheAioWriteRequest* c){
+  ChunkDataInfo  *chunk_info = nullptr;
   
   ldout(cct, 20) << __func__ << dendl;
   

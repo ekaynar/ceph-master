@@ -9276,17 +9276,18 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
   d->add_pending_key(oid);
   d->cache_enable = true;
   c_block.size_in_bytes = read_len;
+  d->add_pending_block(oid, c_block);
   int ret = 0;  
   // read block from local ssd cache
   if (datacache->get(oid)){
 	dout(10) << __func__   << "HIT local read cache, key:" << oid<< dendl; 
     rgw_pool pool("default.rgw.buckets.data");
     rgw_raw_obj read_obj1(pool,oid);
-    auto obj1 = d->store->svc.rados->obj(read_obj1);
-	d->add_pending_block(oid, c_block);
-    ret = obj1.open();
-    auto completed = d->aio->get(obj1, rgw::Aio::cache_op(std::move(op) , d->yield, obj_ofs, read_ofs, read_len, cct->_conf->rgw_datacache_path), cost, id);
-    return d->flush(std::move(completed));
+    auto obj = d->store->svc.rados->obj(read_obj1);
+    ret = obj.open();
+    auto completed = d->aio->get(obj, rgw::Aio::cache_op(std::move(op) , d->yield, obj_ofs, read_ofs, read_len, cct->_conf->rgw_datacache_path), cost, id);
+    //return d->flush(std::move(completed));
+	return d->drain();
   } else {
 	ret = blkDirectory->getValue(&c_block);
 //	if(false){
@@ -9309,7 +9310,7 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
 	} else if(c_block.c_obj.home_location == 0) { // read from write-back cache
 	  dout(10) << __func__   << "HIT write cache, key:" << oid<< dendl; 
 	  c_block.access_count = 0;
-	  d->add_pending_block(oid, c_block);
+//	  d->add_pending_block(oid, c_block);
 	  rgw_raw_obj read_obj;
 	  int r = retrieve_oid(c_block.c_obj, read_obj, obj_ofs, d->yield);
 	  auto obj = d->store->svc.rados->obj(read_obj);

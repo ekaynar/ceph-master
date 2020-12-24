@@ -25,7 +25,7 @@ namespace rgw {
 namespace {
 
 void cache_aio_cb(sigval_t sigval){
-  LocalRequest *c = static_cast<LocalRequest *>(sigval.sival_ptr);
+  LocalRequest* c = static_cast<LocalRequest*>(sigval.sival_ptr);
   int status = c->status();
   if (status == ECANCELED) {
 	c->r->result = -1;
@@ -47,7 +47,8 @@ struct cache_state {
   int submit_op(LocalRequest *cc){
     int ret = 0;
     if((ret = ::aio_read(cc->paiocb)) != 0) {
-    return ret; }
+	  return ret;
+	 }
     return ret;
   }
 };

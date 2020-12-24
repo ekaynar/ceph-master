@@ -9274,7 +9274,7 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
   op.read(read_ofs, read_len, nullptr, nullptr);
 
   d->add_pending_key(oid);
-  d->cache_enable = false;
+  d->cache_enable = true;
   c_block.size_in_bytes = read_len;
   int ret = 0;  
   // read block from local ssd cache

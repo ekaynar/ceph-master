@@ -9312,7 +9312,6 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
 	  return d->flush(std::move(completed));
 
 	} else if(c_block.c_obj.home_location == 0) { // read from write-back cache
-	  d->add_pending_block(oid, c_block);
 	  dout(10) << __func__   << "HIT write cache, key:" << oid<< dendl; 
 	  c_block.access_count = 0;
 	  rgw_raw_obj read_obj;

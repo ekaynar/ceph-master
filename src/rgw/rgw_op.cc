@@ -8270,6 +8270,7 @@ void RGWGetObj::cache_execute(){
   RGWBucketInfo dest_bucket_info;
   RGWRados::Object op_target(store->getRados(), dest_bucket_info, *static_cast<RGWObjectCtx *>(s->obj_ctx), obj);
   RGWRados::Object::Read read_op(&op_target);
+  s->obj_size = c_obj.size_in_bytes;
 
   range_str = s->info.env->get("HTTP_RANGE");
   op_ret = init_common();
@@ -8279,7 +8280,6 @@ void RGWGetObj::cache_execute(){
      op_ret = read_op.range_to_ofs(s->obj_size, ofs, end);
      this->total_len = end - ofs + 1;
   } else{ 
-  	s->obj_size = c_obj.size_in_bytes;
   	this->total_len = c_obj.size_in_bytes;
   	ofs = 0;
   	end = c_obj.size_in_bytes - 1;

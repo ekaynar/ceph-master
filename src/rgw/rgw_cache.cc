@@ -852,7 +852,7 @@ int RemoteS3Request::submit_http_get_request_s3(){
   string YourSecretAccessKeyID=req->c_block->c_obj.accesskey.key;
   string signature = sign_s3_request("GET", uri, date, YourSecretAccessKeyID, AWSAccessKeyId);
   string Authorization = "AWS "+ AWSAccessKeyId +":" + signature;
-  string loc = req->dest + uri;
+  string loc = "http://" + req->dest + uri;
   string auth="Authorization: " + Authorization;
   string timestamp="Date: " + date;
   string user_agent="User-Agent: aws-sdk-java/1.7.4 Linux/3.10.0-514.6.1.el7.x86_64 OpenJDK_64-Bit_Server_VM/24.131-b00/1.7.0_131";

@@ -9281,10 +9281,11 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
   d->add_pending_key(oid);
   d->cache_enable = true;
   c_block.size_in_bytes = read_len;
-  d->add_pending_block(oid, c_block);
+//  d->add_pending_block(oid, c_block);
   int ret = 0;  
   // read block from local ssd cache
   if (datacache->get(oid)){
+	d->add_pending_block(oid, c_block);
     dout(10) << __func__   << "HIT local read cache, key:" << oid<< dendl; 
     rgw_pool pool("default.rgw.buckets.data");
     rgw_raw_obj read_obj1(pool,oid);
@@ -9301,6 +9302,7 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
 	  string dest= "http://" + c_block.hosts_list[0];
 	  rgw_bucket bucket;
 	  bucket.name = c_block.c_obj.bucket_name;
+	  d->add_pending_block(oid, c_block);
 	  rgw_obj src_obj(bucket, c_block.c_obj.obj_name); 
 	  RemoteRequest *c =  new RemoteRequest(src_obj, &c_block, store, cct);
 	  rgw_pool pool("default.rgw.buckets.data");
@@ -9315,6 +9317,7 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
 	  dout(10) << __func__   << "HIT write cache, key:" << oid<< dendl; 
 	  c_block.access_count = 0;
 	  rgw_raw_obj read_obj;
+	  d->add_pending_block(oid, c_block);
 	  int r = retrieve_oid(c_block.c_obj, read_obj, obj_ofs, d->yield);
 	  auto obj = d->store->svc.rados->obj(read_obj);
 	  r = obj.open();
@@ -9328,6 +9331,7 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
 	dout(10) << __func__   << "MISS cache layer, key:" << oid<< dendl; 
     rgw_user user_id(c_block.c_obj.owner);
     rgw_bucket bucket;
+	d->add_pending_block(oid, c_block);
     bucket.name = c_block.c_obj.bucket_name;
     rgw_obj src_obj(bucket, c_block.c_obj.obj_name);
     RemoteRequest *c =  new RemoteRequest(src_obj, &c_block, store, cct);

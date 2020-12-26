@@ -73,7 +73,7 @@ struct LocalRequest : public CacheRequest{
     ::close(paiocb->aio_fildes);
     delete(paiocb);
     lock.unlock();
-//    delete this;
+    delete this;
   }  
 
   void cancel_io(){

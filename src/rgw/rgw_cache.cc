@@ -593,7 +593,7 @@ void DataCache::cache_aio_write_completion_cb(cacheAioWriteRequest* c){
   c->c_block.lastAccessTime = mktime(gmtime(&rawTime));  
   c->c_block.access_count = 0;
   int ret = blkDirectory->setValue(&(c->c_block));
-  ldout(cct, 20) << __func__ <<"key:" <<c->key << " ret:"<< ret <<dendl; 
+//  ldout(cct, 20) << __func__ <<"key:" <<c->key << " ret:"<< ret <<dendl; 
   c->release(); 
 
 }
@@ -847,7 +847,7 @@ int RemoteS3Request::submit_http_get_request_s3(){
   CURLcode res;
   string uri = "/"+req->c_block->c_obj.bucket_name + "/" +req->c_block->c_obj.obj_name;
   string date = get_date();
-  ldout(cct, 10) << __func__  << " date " << date << dendl;
+  ldout(cct, 10) << __func__  << "ugur obj_key " << uri << dendl;
   string AWSAccessKeyId=req->c_block->c_obj.accesskey.id;
   string YourSecretAccessKeyID=req->c_block->c_obj.accesskey.key;
   string signature = sign_s3_request("GET", uri, date, YourSecretAccessKeyID, AWSAccessKeyId);
@@ -855,14 +855,14 @@ int RemoteS3Request::submit_http_get_request_s3(){
   string loc = req->dest + uri;
   string auth="Authorization: " + Authorization;
   string timestamp="Date: " + date;
-//  string user_agent="User-Agent: aws-sdk-java/1.7.4 Linux/3.10.0-514.6.1.el7.x86_64 OpenJDK_64-Bit_Server_VM/24.131-b00/1.7.0_131";
+  string user_agent="User-Agent: aws-sdk-java/1.7.4 Linux/3.10.0-514.6.1.el7.x86_64 OpenJDK_64-Bit_Server_VM/24.131-b00/1.7.0_131";
   string content_type="Content-Type: application/x-www-form-urlencoded; charset=utf-8";
   curl_handle = curl_easy_init();
   if(curl_handle) {
     struct curl_slist *chunk = NULL;
     chunk = curl_slist_append(chunk, auth.c_str());
     chunk = curl_slist_append(chunk, timestamp.c_str());
-  //  chunk = curl_slist_append(chunk, user_agent.c_str());
+    chunk = curl_slist_append(chunk, user_agent.c_str());
     chunk = curl_slist_append(chunk, content_type.c_str());
     curl_easy_setopt(curl_handle, CURLOPT_RANGE, range.c_str());
     res = curl_easy_setopt(curl_handle, CURLOPT_HTTPHEADER, chunk); //set headers
@@ -890,6 +890,7 @@ void RemoteS3Request::run() {
   int r = 0;
   for (int i=0; i<max_retries; i++ ){
     if(!(r = submit_http_get_request_s3())){
+	  //ldout(cct, 0) <<  __func__  << "remote get success"<<req->key << dendl;
       req->finish();
       return;
     }

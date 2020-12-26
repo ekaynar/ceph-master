@@ -470,7 +470,7 @@ int RGWBlockDirectory::setValue(cache_block *ptr){
 
   // synchronous commit, no timeout
   client.sync_commit();
-  ldout(cct,10) <<__func__<<" we set key " << key <<dendl;
+//  ldout(cct,10) <<__func__<<" we set key " << key <<dendl;
   if (result.find("OK") != std::string::npos)
 	return 0;
   else

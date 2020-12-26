@@ -8266,17 +8266,27 @@ void RGWGetObj::cache_execute(){
   ldpp_dout(this, 10) << __func__  << "object size:" <<  c_obj.size_in_bytes <<dendl;
   RGWGetObj_CB cb(this);
   RGWGetObj_Filter* filter = (RGWGetObj_Filter *)&cb;
-  s->obj_size = c_obj.size_in_bytes;
-  this->total_len = c_obj.size_in_bytes;
-  
-  int64_t ofs_x, end_x;
-  ofs_x = 0;
-  end_x = c_obj.size_in_bytes - 1;
-
+ 
   RGWBucketInfo dest_bucket_info;
   RGWRados::Object op_target(store->getRados(), dest_bucket_info, *static_cast<RGWObjectCtx *>(s->obj_ctx), obj);
   RGWRados::Object::Read read_op(&op_target);
-  op_ret = read_op.read(ofs_x, end_x, filter, c_obj, s->yield); 
+
+  range_str = s->info.env->get("HTTP_RANGE");
+  op_ret = init_common();
+  if (op_ret < 0)
+    return ;
+  if(range_str){
+     op_ret = read_op.range_to_ofs(s->obj_size, ofs, end);
+     this->total_len = end - ofs + 1;
+  } else{ 
+  	s->obj_size = c_obj.size_in_bytes;
+  	this->total_len = c_obj.size_in_bytes;
+  	ofs = 0;
+  	end = c_obj.size_in_bytes - 1;
+  }
+  
+  
+  op_ret = read_op.read(ofs, end, filter, c_obj, s->yield); 
   if (op_ret >= 0)
     op_ret = filter->flush();
   return;

@@ -418,7 +418,7 @@ ObjectCache::~ObjectCache()
 
 DataCache::DataCache() : cct(NULL), free_data_cache_size(0), outstanding_write_size (0){}
 
-void DataCache::submit_remote_req(struct RemoteRequest *c){
+void DataCache::submit_remote_req(RemoteRequest *c){
   ldout(cct, 0) << "submit_remote_req" <<dendl;
   tp->addTask(new RemoteS3Request(c, cct));
 }
@@ -572,7 +572,8 @@ void DataCache::cache_aio_write_completion_cb(cacheAioWriteRequest* c){
   ChunkDataInfo  *chunk_info = nullptr;
   
   ldout(cct, 20) << __func__ << dendl;
-  
+ ldout(cct, 10) << __func__  << " oid " << c->key << dendl; 
+
   cache_lock.lock();
   outstanding_write_list.remove(c->key);
   chunk_info = new ChunkDataInfo;
@@ -605,7 +606,7 @@ void _cache_aio_write_completion_cb(sigval_t sigval) {
 }
 
 int DataCache::create_aio_write_request(bufferlist& bl, uint64_t len, std::string key, cache_block *c_b){
-  ldout(cct, 10) << __func__  << dendl;
+  ldout(cct, 10) << __func__  << " oid " << c_b->c_obj.obj_name <<  " blockid "<<  c_b->block_id <<dendl;
   struct cacheAioWriteRequest *wr= new struct cacheAioWriteRequest(cct);
   int ret = 0;
   if (wr->create_io(bl, len, key) < 0) {
@@ -812,7 +813,9 @@ void DataCache::put(bufferlist& bl, uint64_t len, string obj_id, cache_block *c_
 
 static size_t _remote_req_cb(void *ptr, size_t size, size_t nmemb, void* param) {
   RemoteRequest *req = static_cast<RemoteRequest *>(param);
-  req->bl->append((char *)ptr, size*nmemb);
+//  req->bl->append((char *)ptr, size*nmemb);
+   req->s.append((char *)ptr, size*nmemb);
+  //lsubdout(g_ceph_context, rgw, 1) << __func__ << " data is written "<< " key " << req->key << " size " << size*nmemb  << dendl;
   return size*nmemb;
 }
 
@@ -835,21 +838,29 @@ string RemoteS3Request::get_date(){
   time_t now = time(0);
   tm *gmtm = gmtime(&now);
   string date;
-  char buffer[80];
-  std::strftime(buffer,80,"%a, %d %b %Y %X %Z",gmtm);
+  char buffer[128];
+  std::strftime(buffer,128,"%a, %d %b %Y %X %Z",gmtm);
   date = buffer;
   return date;
 }
 
+
 int RemoteS3Request::submit_http_get_request_s3(){
-  string range = std::to_string(req->ofs + req->read_ofs)+ "-"+ std::to_string(req->ofs + req->read_ofs + req->read_len - 1);
- // ldout(cct, 10) << __func__  << " range " << range << dendl;
+  int begin = req->ofs + req->read_ofs;
+  int end = req->ofs + req->read_ofs + req->read_len - 1;
+  std::string range = std::to_string(begin)+ "-"+ std::to_string(end);
+  //std::string range = std::to_string( (int)req->ofs + (int)(req->read_ofs))+ "-"+ std::to_string( (int)(req->ofs) + (int)(req->read_ofs) + (int)(req->read_len - 1));
+//  ldout(cct, 10) << __func__  << " key " << req->key << " range " << range  << dendl;
+  
   CURLcode res;
-  string uri = "/"+req->c_block->c_obj.bucket_name + "/" +req->c_block->c_obj.obj_name;
+  string uri = "/"+ req->path;;
+  //string uri = "/"+req->c_block->c_obj.bucket_name + "/" +req->c_block->c_obj.obj_name;
   string date = get_date();
-  ldout(cct, 10) << __func__  << "ugur obj_key " << uri << dendl;
-  string AWSAccessKeyId=req->c_block->c_obj.accesskey.id;
-  string YourSecretAccessKeyID=req->c_block->c_obj.accesskey.key;
+   
+  //string AWSAccessKeyId=req->c_block->c_obj.accesskey.id;
+  //string YourSecretAccessKeyID=req->c_block->c_obj.accesskey.key;
+  string AWSAccessKeyId=req->ak;
+  string YourSecretAccessKeyID=req->sk;
   string signature = sign_s3_request("GET", uri, date, YourSecretAccessKeyID, AWSAccessKeyId);
   string Authorization = "AWS "+ AWSAccessKeyId +":" + signature;
   string loc =  req->dest + uri;
@@ -869,17 +880,20 @@ int RemoteS3Request::submit_http_get_request_s3(){
     curl_easy_setopt(curl_handle, CURLOPT_URL, loc.c_str());
     curl_easy_setopt(curl_handle, CURLOPT_FOLLOWLOCATION, 1L); //for redirection of the url
     curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, _remote_req_cb);
+//    curl_easy_setopt(curl_handle, CURLOPT_VERBOSE, 1L);
+    curl_easy_setopt(curl_handle, CURLOPT_FAILONERROR, 1L);
     curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, (void*)req);
     res = curl_easy_perform(curl_handle); //run the curl command
     curl_easy_reset(curl_handle);
     curl_slist_free_all(chunk);
-  }if(res != CURLE_OK){
-    ldout(cct,10) << "__func__ " << curl_easy_strerror(res) << " key " << req->key << dendl;
-    return -1;
-  }else{
-    req->r->result = 0;
-    req->aio->put(*(req->r));
-    return 0;}
+    curl_easy_cleanup(curl_handle);
+  }
+  if(res == CURLE_HTTP_RETURNED_ERROR) {
+   ldout(cct,10) << "__func__ " << " CURLE_HTTP_RETURNED_ERROR" <<curl_easy_strerror(res) << " key " << req->key << dendl;
+  } 
+ 
+  if (res != CURLE_OK) { return -1;}
+  else { return 0; }
 
 }
 
@@ -889,15 +903,27 @@ void RemoteS3Request::run() {
   int max_retries = cct->_conf->max_remote_retries;
   int r = 0;
   for (int i=0; i<max_retries; i++ ){
-    if(!(r = submit_http_get_request_s3())){
-	  //ldout(cct, 0) <<  __func__  << "remote get success"<<req->key << dendl;
-      req->finish();
-      return;
+    if(!(r = submit_http_get_request_s3()) && (req->s.size() == req->read_len)){
+       ldout(cct, 0) <<  __func__  << "remote get success"<<req->key << " r-id "<< req->r->id << dendl;
+//       req->func(req);
+        req->finish();
+      	return;
     }
+    if(req->s.size() != req->read_len){
+//#if(req->bl->length() != r->read_len){
+       req->s.clear();
+    }
+    }
+
+    if (r = ECANCELED) {
     ldout(cct, 0) << "ERROR: " << __func__  << "(): remote s3 request for failed, obj="<<req->key << dendl;
     req->r->result = -1;
     req->aio->put(*(req->r));
-  }
+    return;
+    }
+  
+  
+ 
 
 
 }

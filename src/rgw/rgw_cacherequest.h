@@ -20,14 +20,16 @@ class CacheRequest {
     ceph::mutex lock = ceph::make_mutex("CacheRequest");
     int sequence;
     int stat;
-    bufferlist *bl;
-    uint64_t ofs;
-    uint64_t read_ofs;
-    uint64_t read_len;   
+    bufferlist *bl=nullptr;
+    off_t ofs;
+    off_t read_ofs;
+    off_t read_len;   
     rgw::AioResult* r = nullptr;
     std::string key;
     rgw::Aio* aio = nullptr;
-    CacheRequest() :  sequence(0), stat(-1), bl(nullptr), ofs(0),  read_ofs(0), read_len(0){};
+    librados::AioCompletion *lc;
+    Context *onack;
+    CacheRequest() :  sequence(0), stat(-1), bl(nullptr), ofs(0),  read_ofs(0), read_len(0), lc(nullptr){};
     virtual ~CacheRequest(){};
     virtual void release()=0;
     virtual void cancel_io()=0;
@@ -40,10 +42,10 @@ struct LocalRequest : public CacheRequest{
   LocalRequest() :  CacheRequest(), paiocb(NULL) {}
   ~LocalRequest(){}
 
-  int prepare_op(std::string key,  bufferlist *bl, int read_len, int ofs, int read_ofs, void(*f)(sigval_t), rgw::Aio* aio, rgw::AioResult* r, string& location) {
+  int prepare_op(std::string key,  bufferlist *bl, off_t read_len, off_t ofs, off_t read_ofs, void(*f)(sigval_t), rgw::Aio* aio, rgw::AioResult* r, string& location) {
     this->r = r;	
     this->aio = aio;
-    this->bl = bl;
+//    this->bl = bl;
     this->ofs = ofs;
     this->key = key;
     this->read_len = read_len;
@@ -64,6 +66,14 @@ struct LocalRequest : public CacheRequest{
     cb->aio_sigevent.sigev_value.sival_ptr = this;
     this->paiocb = cb;
     return 0;
+  }
+
+   int submit_op(){
+    int ret = 0;
+    if((ret = ::aio_read(this->paiocb)) != 0) {
+          return ret;
+         }
+    return ret;
   }
 
   void release (){
@@ -97,26 +107,29 @@ struct LocalRequest : public CacheRequest{
 
   void finish(){
     bl->append((char*)paiocb->aio_buf, paiocb->aio_nbytes);
-	release();
+    onack->complete(0);
+    release();
   }
 };
 
+
+typedef   void (*f)( RemoteRequest* func );
 struct RemoteRequest : public CacheRequest{
   string dest;
-  int stat;
   void *tp;
   RGWRESTConn *conn;
-  RGWRESTStreamRWRequest *in_stream_req;
+  string path;
+  string ak;
+  string sk; 
+  //bufferlist pbl;// =nullptr;
+  std::string s; 
+  f func; 
   cache_block *c_block;
-  RGWRados *store;
-  CephContext *cct;
-  rgw_obj obj;
-  RemoteRequest(rgw_obj& _obj, cache_block* _c_block, RGWRados* _store, CephContext* _cct) :  CacheRequest() , stat(-1), c_block(_c_block), store(_store), cct(_cct), obj(_obj){
-    }
+  RemoteRequest() :  CacheRequest(), c_block(nullptr) {}
+
 
   ~RemoteRequest(){}
-  int prepare_op(std::string key,  bufferlist *bl, int read_len, int ofs, int read_ofs, string dest, rgw::Aio* aio, rgw::AioResult* r);
-  int submit_op();
+  int prepare_op(std::string key,  bufferlist *bl, off_t read_len, off_t ofs, off_t read_ofs, string dest, rgw::Aio* aio, rgw::AioResult* r, cache_block *c_block, string path, void(*f)(RemoteRequest*));
 
   void release (){
     lock.lock();
@@ -130,8 +143,12 @@ struct RemoteRequest : public CacheRequest{
   }
 
   void finish(){
-    release();
+    lock.lock();
+    bl->append(s.c_str(), s.size());
+    onack->complete(0);
+    lock.unlock();
   }
+
   int status(){
     return 0;
   }

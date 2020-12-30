@@ -4,20 +4,19 @@
 #define dout_subsys ceph_subsys_rgw
 
 
+int RemoteRequest::prepare_op(std::string key,  bufferlist *bl, off_t read_len, off_t ofs, off_t read_ofs, string dest, rgw::Aio* aio, rgw::AioResult* r, cache_block *c_block, string path, void(*func)(RemoteRequest*)){
 
-int RemoteRequest::submit_op(){
-	
-  ldout(cct, 0) << __func__ << "RemoteRequest::submit_op " << ofs<< dendl;
-  return 0;
-}
-int RemoteRequest::prepare_op(std::string key,  bufferlist *bl, int read_len, int ofs, int read_ofs, string dest, rgw::Aio* aio, rgw::AioResult* r){
   this->r = r;
   this->aio = aio;
-  this->bl = bl;
+//  this->bl = bl;
   this->ofs = ofs;
   this->key = key;
   this->read_len = read_len;
   this->dest = dest;
+  this->path = path;
+  this->ak = c_block->c_obj.accesskey.id;
+  this->sk = c_block->c_obj.accesskey.key;
+  this->func= func;
   return 0;
 }
 

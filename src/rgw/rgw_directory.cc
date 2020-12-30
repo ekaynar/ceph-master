@@ -422,7 +422,6 @@ int RGWObjectDirectory::setValue(cache_obj *ptr){
   //this will be used for aging policy
   //clientzadd("keyObjectDirectory", options, timeKey, [](cpp_redis::reply &reply){
   //});
-
   if (result.find("OK") != std::string::npos)
 	return 0;
   else
@@ -516,12 +515,12 @@ int RGWBlockDirectory::setTTL(cache_block *ptr, int seconds){
 
 int RGWObjectDirectory::getValue(cache_obj *ptr){
 
-  //ldout(cct,10) << __func__ << "in func getValue "<< key << dendl;
   //delete the existing key,
   //to update an existing key, updateValue() should be used
   cpp_redis::client client;
   string key = buildIndex(ptr);
   findClient(key, &client);
+  ldout(cct,10) << __func__ << "in func getValue "<< key << dendl;
 
   string owner;
   string obj_acl;
@@ -596,8 +595,9 @@ int RGWObjectDirectory::getValue(cache_obj *ptr){
   //passing the values to the requester
   ptr->owner = owner;
   ptr->acl = obj_acl;
-  ptr->aclTimeStamp = stoi(aclTimeStamp);
-
+ // ptr->aclTimeStamp = stoi(aclTimeStamp);
+  ptr->aclTimeStamp = stoull(aclTimeStamp);
+//stoull
   //host1_host2_host3_...
   while(getline(sloction, tmp, '_'))
     ptr->hosts_list.push_back(tmp);
@@ -605,8 +605,8 @@ int RGWObjectDirectory::getValue(cache_obj *ptr){
   ptr->dirty = StringToBool(dirty);
   ptr->intermediate = StringToBool(intermediate);
   ptr->size_in_bytes = stoull(size);
-  ptr->creationTime = stoi(creationTime);
-  ptr->lastAccessTime = stoi(lastAccessTime);
+  ptr->creationTime = stoull(creationTime);
+  ptr->lastAccessTime = stoull(lastAccessTime);
   ptr->etag = etag;
   ptr->backendProtocol = stringToProtocol(backendProtocol);
   ptr->bucket_name = bucket_name;
@@ -618,9 +618,9 @@ int RGWObjectDirectory::getValue(cache_obj *ptr){
 
 int RGWBlockDirectory::getValue(cache_block *ptr){
   string key = buildIndex(ptr);
-  ldout(cct,10) << __func__ <<" key:" << key <<dendl;
   cpp_redis::client client;
   findClient(key, &client);
+  ldout(cct,10) << __func__ <<" key:" << key <<dendl;
   //if (existKey(key, &client)){
   
   string owner;

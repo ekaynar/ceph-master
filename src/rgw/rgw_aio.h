@@ -30,6 +30,7 @@
 #include "include/function2.hpp"
 //#include "rgw_cacherequest.h" //datacache
 struct RemoteRequest;
+struct DataCache;
 namespace rgw {
 
 struct AioResult {
@@ -97,8 +98,8 @@ class Aio {
   static OpFunc librados_op(librados::ObjectWriteOperation&& op,
                             optional_yield y);
   /* datacache */
-  static OpFunc cache_op(librados::ObjectReadOperation&& op, optional_yield y, off_t obj_ofs, off_t read_ofs, uint64_t read_len, string location);
-  static OpFunc remote_op(librados::ObjectReadOperation&& op, optional_yield y, off_t obj_ofs, off_t read_ofs, uint64_t read_len, string location, RemoteRequest *c);
+  static OpFunc cache_op(librados::ObjectReadOperation&& op, optional_yield y, off_t obj_ofs, off_t read_ofs, off_t read_len, string location);
+  static OpFunc remote_op(librados::ObjectReadOperation&& op, optional_yield y, off_t obj_ofs, off_t read_ofs, off_t read_len, string location, RemoteRequest *c, cache_block *c_block, string path,  DataCache *d);
 };
 
 } // namespace rgw

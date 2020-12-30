@@ -1537,6 +1537,15 @@ int librados::IoCtx::operate(const std::string& oid, librados::ObjectReadOperati
   return io_ctx_impl->operate_read(obj, &o->impl->o, pbl, translate_flags(flags));
 }
 
+/* datacache */
+int librados::IoCtx::aio_operate(const std::string& oid, AioCompletion *c, CacheRequest *cc, bufferlist *pbl) {
+  if (!cc) return -EINVAL;
+  object_t obj(oid);
+  return io_ctx_impl->cache_aio_operate_read(obj, c->pc, cc, pbl);
+}
+/* datacache */
+
+
 int librados::IoCtx::aio_operate(const std::string& oid, AioCompletion *c,
 				 librados::ObjectWriteOperation *o)
 {
@@ -1661,13 +1670,6 @@ int librados::IoCtx::aio_operate(const std::string& oid, AioCompletion *c,
                translate_flags(flags), pbl, trace_info);
 }
 
-/* datacache 
-int librados::IoCtx::cache_aio_notifier(const std::string& oid, librados::CacheRequest *cc) {
-  if (!cc) return -EINVAL;
-  object_t obj(oid);
-  return io_ctx_impl->cache_aio_operate_read(obj, cc->lc->pc, cc);
-}
-/* datacache */
 
 void librados::IoCtx::snap_set_read(snap_t seq)
 {

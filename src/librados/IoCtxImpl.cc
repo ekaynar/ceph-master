@@ -13,7 +13,6 @@
  */
 
 #include <limits.h>
-
 #include "IoCtxImpl.h"
 
 #include "librados/librados_c.h"
@@ -23,7 +22,6 @@
 #include "include/ceph_assert.h"
 #include "common/valgrind.h"
 #include "common/EventTrace.h"
-
 
 #define dout_subsys ceph_subsys_rados
 #undef dout_prefix
@@ -751,10 +749,11 @@ int librados::IoCtxImpl::aio_operate_read(const object_t &oid,
   return 0;
 }
 
-/* datacache 
-int librados::IoCtxImpl::cache_aio_operate_read(const object_t &oid, AioCompletionImpl *c, librados::CacheRequest *cc) {
+/* datacache */ 
+int librados::IoCtxImpl::cache_aio_operate_read(const object_t &oid, AioCompletionImpl *c, CacheRequest *cc,  bufferlist *pbl) {
 
    FUNCTRACE(client->cct);
+   OID_EVENT_TRACE(oid.name.c_str(), "Cache_READ_OP_BEGIN");
    Context *oncomplete = new C_aio_Complete(c);
 
 #if defined(WITH_EVENTTRACE)
@@ -763,6 +762,10 @@ int librados::IoCtxImpl::cache_aio_operate_read(const object_t &oid, AioCompleti
    c->is_read = true;
    c->io = this;
    cc->onack = oncomplete;
+   cc->bl = pbl;
+//   c->blp = pbl;
+//   c->pc = cc->lc->pc;
+//   c->blp = &(cc->bl);
    return 0;
 }
 /* datacache */

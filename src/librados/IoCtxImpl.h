@@ -27,7 +27,9 @@
 #include "include/xlist.h"
 #include "osd/osd_types.h"
 #include "osdc/Objecter.h"
-//#include "rgw/rgw_cacherequest.h" // datacache
+#include "rgw/rgw_rados.h"
+
+///* datacache*/
 
 class RadosClient;
 
@@ -161,7 +163,7 @@ struct librados::IoCtxImpl {
   int aio_operate_read(const object_t& oid, ::ObjectOperation *o,
 		       AioCompletionImpl *c, int flags, bufferlist *pbl, const blkin_trace_info *trace_info = nullptr);
   /*datacache*/
-  //int cache_aio_operate_read(const object_t &oid, librados::AioCompletionImpl *c, librados::CacheRequest *cc);
+  int cache_aio_operate_read(const object_t &oid, AioCompletionImpl *c, CacheRequest* cc, bufferlist *pbl);
 
   struct C_aio_stat_Ack : public Context {
     librados::AioCompletionImpl *c;

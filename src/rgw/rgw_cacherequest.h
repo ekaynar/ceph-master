@@ -145,8 +145,10 @@ struct RemoteRequest : public CacheRequest{
   void finish(){
     lock.lock();
     bl->append(s.c_str(), s.size());
+    s.clear();
     onack->complete(0);
     lock.unlock();
+    delete this;
   }
 
   int status(){

@@ -54,7 +54,7 @@ void cache_aio_cb(sigval_t sigval){
 	return;
   } else if (status == 0) {
 	c->finish();
-//	delete c;
+	delete c;
   }
 }
 

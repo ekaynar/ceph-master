@@ -6320,8 +6320,8 @@ struct get_obj_data {
       completed.pop_front_and_dispose(std::default_delete<rgw::AioResultEntry>{});
       offset += bl.length();
       if(cct->_conf->rgw_datacache_enabled and cache_enable){
-        bufferlist chunk_buffer;	
-	chunk_buffer.append(bl);
+  //      bufferlist chunk_buffer;	
+//	chunk_buffer.append(bl);
         key = get_pending_key();
         cache_block c_block = get_pending_block(key); 	
 //        if (true){
@@ -6331,8 +6331,8 @@ struct get_obj_data {
 		  std::string str2 = str.substr(pos);
 		  std::string endpoint = str2.substr(9);    
 		  c_block.hosts_list.push_back(endpoint);
-//		  store->put_data(key, bl , bl.length(), &c_block); 
-		  store->put_data(key, chunk_buffer, chunk_buffer.length(), &c_block); 
+		  store->put_data(key, bl , bl.length(), &c_block); 
+//		  store->put_data(key, chunk_buffer, chunk_buffer.length(), &c_block); 
         }
       }
 

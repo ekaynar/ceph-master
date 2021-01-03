@@ -891,6 +891,7 @@ int RemoteS3Request::submit_http_get_request_s3(){
   }
   if(res == CURLE_HTTP_RETURNED_ERROR) {
    ldout(cct,10) << "__func__ " << " CURLE_HTTP_RETURNED_ERROR" <<curl_easy_strerror(res) << " key " << req->key << dendl;
+   return -1;
   } 
  
   if (res != CURLE_OK) { return -1;}
@@ -914,6 +915,7 @@ void RemoteS3Request::run() {
 //#if(req->bl->length() != r->read_len){
        req->s.clear();
     }
+    req->s.clear();
     }
 
     if (r == ECANCELED) {

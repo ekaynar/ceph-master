@@ -880,6 +880,7 @@ int RemoteS3Request::submit_http_get_request_s3(){
     curl_easy_setopt(curl_handle, CURLOPT_URL, loc.c_str());
     curl_easy_setopt(curl_handle, CURLOPT_FOLLOWLOCATION, 1L); //for redirection of the url
     curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, _remote_req_cb);
+    curl_easy_setopt(curl_handle, CURLOPT_NOSIGNAL, 1L);
 //    curl_easy_setopt(curl_handle, CURLOPT_VERBOSE, 1L);
     curl_easy_setopt(curl_handle, CURLOPT_FAILONERROR, 1L);
     curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, (void*)req);
@@ -915,7 +916,7 @@ void RemoteS3Request::run() {
     }
     }
 
-    if (r = ECANCELED) {
+    if (r == ECANCELED) {
     ldout(cct, 0) << "ERROR: " << __func__  << "(): remote s3 request for failed, obj="<<req->key << dendl;
     req->r->result = -1;
     req->aio->put(*(req->r));

@@ -590,6 +590,7 @@ int RGWObjectDirectory::getValue(cache_obj *ptr){
     ldout(cct,10) << __func__ << "no entry in the object directory for key:" << key<< dendl;
     return key_exist;
   }
+  ldout(cct,10) << __func__ << "found the entry  "<< key << dendl;
   stringstream sloction(hosts);
   string tmp;
   //passing the values to the requester
@@ -663,6 +664,7 @@ int RGWBlockDirectory::getValue(cache_block *ptr){
 	return key_exist;
   }
 
+  ldout(cct,10) << __func__ << "found the block entry "<< key << dendl;
   stringstream sloction(hosts);
   string tmp;
 

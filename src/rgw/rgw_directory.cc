@@ -222,15 +222,19 @@ string RGWBlockDirectory::buildIndex(cache_block *ptr){
 int RGWObjectDirectory::existKey(string key, cpp_redis::client *client){
 
   int result = 0;
+  bool a = false;
   //cpp_redis::client client;
   vector<string> keys;
   keys.push_back(key);
-
   //findClient(key, &client);
-  client->exists(keys, [&result](cpp_redis::reply &reply){
+  client->exists(keys, [&result, &a](cpp_redis::reply &reply){
       result = reply.as_integer();
+      if (reply.is_error())
+	  a = true;
       });
-  client->sync_commit();	
+  client->sync_commit(std::chrono::milliseconds(1000));  
+
+  ldout(cct,10) << __func__ << " res " << result << " key " << key << " " << a<< dendl;
   return result;
 }
 
@@ -242,11 +246,14 @@ int RGWBlockDirectory::existKey(string key,cpp_redis::client *client){
   keys.push_back(key);
 
   //findClient(key, &client);
-
-  client->exists(keys, [&result](cpp_redis::reply &reply){
+  bool a =false;
+  client->exists(keys, [&result, &a](cpp_redis::reply &reply){
       result = reply.as_integer();
+      if (reply.is_error())
+          a = true;
       });
-  client->sync_commit();	
+  client->sync_commit(std::chrono::milliseconds(1000));	
+  ldout(cct,10) << __func__ << " res dir " << result << " key " << key << " " << a<< dendl;
   return result;
 }
 
@@ -522,6 +529,7 @@ int RGWObjectDirectory::getValue(cache_obj *ptr){
   findClient(key, &client);
   ldout(cct,10) << __func__ << "in func getValue "<< key << dendl;
   if (existKey(key, &client)){
+
   string owner;
   string obj_acl;
   string aclTimeStamp;

@@ -521,7 +521,7 @@ int RGWObjectDirectory::getValue(cache_obj *ptr){
   string key = buildIndex(ptr);
   findClient(key, &client);
   ldout(cct,10) << __func__ << "in func getValue "<< key << dendl;
-
+  if (existKey(key, &client)){
   string owner;
   string obj_acl;
   string aclTimeStamp;
@@ -613,7 +613,8 @@ int RGWObjectDirectory::getValue(cache_obj *ptr){
   ptr->bucket_name = bucket_name;
   ptr->obj_name = obj_name;
   ptr->home_location = stringToHome(home_location);
-  return key_exist;
+  return key_exist;}
+  else{return -1;}
 }
 
 
@@ -622,7 +623,7 @@ int RGWBlockDirectory::getValue(cache_block *ptr){
   cpp_redis::client client;
   findClient(key, &client);
   ldout(cct,10) << __func__ <<" key:" << key <<dendl;
-  //if (existKey(key, &client)){
+  if (existKey(key, &client)){
   
   string owner;
   string hosts;
@@ -681,6 +682,8 @@ int RGWBlockDirectory::getValue(cache_block *ptr){
   ptr->block_id = stoull(block_id);
   ptr->access_count = stoull(access_count);
   return 0;
+  }
+  else{return -1;}
 }
 
 

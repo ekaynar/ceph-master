@@ -232,7 +232,7 @@ int RGWObjectDirectory::existKey(string key, cpp_redis::client *client){
       if (reply.is_error())
 	  a = true;
       });
-  client->sync_commit(std::chrono::milliseconds(1000));  
+  client->sync_commit(std::chrono::milliseconds(3000));  
 
   ldout(cct,10) << __func__ << " res " << result << " key " << key << " " << a<< dendl;
   return result;
@@ -252,7 +252,7 @@ int RGWBlockDirectory::existKey(string key,cpp_redis::client *client){
       if (reply.is_error())
           a = true;
       });
-  client->sync_commit(std::chrono::milliseconds(1000));	
+  client->sync_commit(std::chrono::milliseconds(3000));	
   ldout(cct,10) << __func__ << " res dir " << result << " key " << key << " " << a<< dendl;
   return result;
 }
@@ -409,6 +409,8 @@ int RGWObjectDirectory::setValue(cache_obj *ptr){
   list.push_back(make_pair("obj_name", ptr->obj_name));
   list.push_back(make_pair("home_location", homeToString(ptr->home_location)));
   list.push_back(make_pair("intermediate", BoolToString(ptr->intermediate)));
+  list.push_back(make_pair("mapping_id", ptr->mapping_id));
+  list.push_back(make_pair("offset", to_string(ptr->offset)));
 
   //creating a key entry
   keys.push_back(key);
@@ -424,7 +426,7 @@ int RGWObjectDirectory::setValue(cache_obj *ptr){
 
 
   // synchronous commit, no timeout
-  client.sync_commit();
+  client.sync_commit(std::chrono::milliseconds(3000));
 
   //this will be used for aging policy
   //clientzadd("keyObjectDirectory", options, timeKey, [](cpp_redis::reply &reply){
@@ -544,6 +546,8 @@ int RGWObjectDirectory::getValue(cache_obj *ptr){
   string obj_name;
   string home_location;
   string intermediate;
+  string mapping_id;
+  string offset;
   int key_exist = 0;
 
   //fields will be filled by the redis hmget functoin
@@ -563,9 +567,11 @@ int RGWObjectDirectory::getValue(cache_obj *ptr){
   fields.push_back("obj_name");
   fields.push_back("home_location");
   fields.push_back("intermediate");
+  fields.push_back("mapping_id");
+  fields.push_back("offset");
 
 
-  client.hmget(key, fields, [&key, &owner, &obj_acl, &aclTimeStamp, &hosts, &dirty, &size, &creationTime, &lastAccessTime, &etag, &backendProtocol, &bucket_name, &obj_name, &home_location, &intermediate, &key_exist](cpp_redis::reply& reply){
+  client.hmget(key, fields, [&key, &owner, &obj_acl, &aclTimeStamp, &hosts, &dirty, &size, &creationTime, &lastAccessTime, &etag, &backendProtocol, &bucket_name, &obj_name, &home_location, &intermediate, &mapping_id, &offset, &key_exist](cpp_redis::reply& reply){
 
       auto arr = reply.as_array();
       if (arr[0].is_null()){
@@ -587,12 +593,15 @@ int RGWObjectDirectory::getValue(cache_obj *ptr){
       obj_name = arr[12].as_string();
       home_location = arr[13].as_string();
       intermediate = arr[14].as_string();
+      mapping_id = arr[15].as_string();
+      offset = arr[16].as_string();
       }
 
 
   });
 
-  client.sync_commit();
+  //client.sync_commit();
+  client.sync_commit(std::chrono::milliseconds(3000));
   //	client.disconnect(true);
   if (key_exist < 0){
     ldout(cct,10) << __func__ << "no entry in the object directory for key:" << key<< dendl;
@@ -621,6 +630,8 @@ int RGWObjectDirectory::getValue(cache_obj *ptr){
   ptr->bucket_name = bucket_name;
   ptr->obj_name = obj_name;
   ptr->home_location = stringToHome(home_location);
+  ptr->mapping_id = mapping_id;
+  ptr->offset = stoull(offset);
   return key_exist;}
   else{return -1;}
 }
@@ -667,7 +678,8 @@ int RGWBlockDirectory::getValue(cache_block *ptr){
 	  }
   });
   
-  client.sync_commit();
+  //client.sync_commit();
+  client.sync_commit(std::chrono::milliseconds(3000));
   if (key_exist < 0 ){
 	ldout(cct,10) << __func__ << "no entry in the block directory for key:" << key<< dendl;
 	return key_exist;

@@ -279,7 +279,9 @@ class CacheThreadPool {
 
 class CopyRemoteS3Object : public Task {
    public:
-    CopyRemoteS3Object(CephContext *_cct, RGWRados *_store, cache_obj *_c_obj) : Task(), cct(_cct), store(_store), c_obj(_c_obj) {
+    CopyRemoteS3Object(CephContext *_cct, RGWRados *_store, cache_obj *_c_obj, bool _coales_write, std::list<cache_obj*>& _write_list, std::list<string>& _small_writes) : Task(), cct(_cct), store(_store), c_obj(_c_obj), coales_write(_coales_write), write_list(_write_list), small_writes(_small_writes) {
+	  // std::list<cache_obj*> *write_list = new std::list<cache_obj*>;
+	  // outstanding_small_write_list = new std::list<cache_obj*>
       pthread_mutex_init(&qmtx,0);
       pthread_cond_init(&wcond, 0);
     }
@@ -292,13 +294,19 @@ class CopyRemoteS3Object : public Task {
       curl_handle = (CURL *)handle;
     }
  private:
+    
 	int submit_http_put_request_s3();
+	int submit_coalesing_writes_s3();
+
  private:
     pthread_mutex_t qmtx;
     pthread_cond_t wcond;
     CephContext *cct;
 	RGWRados *store;
     cache_obj *c_obj;
+	bool coales_write;
+	std::list<cache_obj*>& write_list;// = new std::list<cache_obj*>;
+    std::list<string>& small_writes;
     CURL *curl_handle;
 };
 
@@ -389,6 +397,9 @@ struct DataCache {
     std::map<string, ObjectDataInfo*> write_cache_map;
     std::map<string, ChunkDataInfo*> cache_map;
     std::list<string> outstanding_write_list;
+    std::list<string> *small_writes;
+	std::list<cache_obj*> *outstanding_small_write_list;
+	uint64_t coalesed_write_size = 0;
 	CephContext *cct;
     std::string path;
     uint64_t free_data_cache_size;
@@ -433,7 +444,9 @@ struct DataCache {
       tail = NULL;
       obj_head = NULL;
       obj_tail = NULL;
-    }
+      outstanding_small_write_list = new std::list<cache_obj*>;
+      small_writes = new std::list<string>;
+	}
     void set_block_directory(RGWBlockDirectory *_blkDirectory){
 	blkDirectory = _blkDirectory;
     }

@@ -3954,6 +3954,7 @@ void RGWPutObj::execute()
       }
     }
     pdest_placement = &s->dest_placement;
+
     processor.emplace<AtomicObjectProcessor>(
 	&*aio, store, s->bucket_info, pdest_placement,
 	s->bucket_owner.get_id(), obj_ctx, obj, olh_epoch,
@@ -8272,7 +8273,7 @@ void RGWGetObj::cache_execute(){
   RGWRados::Object op_target(store->getRados(), dest_bucket_info, *static_cast<RGWObjectCtx *>(s->obj_ctx), obj);
   RGWRados::Object::Read read_op(&op_target);
   s->obj_size = c_obj.size_in_bytes;
-
+  this->lo_etag = c_obj.etag;
   range_str = s->info.env->get("HTTP_RANGE");
   op_ret = init_common();
   if (op_ret < 0)

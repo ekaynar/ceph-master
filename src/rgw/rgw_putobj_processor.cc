@@ -346,7 +346,9 @@ int AtomicObjectProcessor::complete(size_t accounted_size,
     cacheObj.backendProtocol =  S3;
     cacheObj.acl = "ugur_acl_test"; //FIXME
     cacheObj.aclTimeStamp = mktime(gmtime(&rawTime)); //FIXME
-    r = store->getRados()->objDirectory->setValue(&cacheObj);
+    cacheObj.offset = 0;
+	cacheObj.mapping_id = "";
+	r = store->getRados()->objDirectory->setValue(&cacheObj);
     store->getRados()->datacache->put_obj(&cacheObj);
     
 	/* datacache */

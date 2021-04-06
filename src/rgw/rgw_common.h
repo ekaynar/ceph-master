@@ -2456,6 +2456,8 @@ struct cache_obj {
   time_t creationTime; // Creation time of the S3 Object
   bool dirty;
   bool intermediate;
+  string mapping_id;
+  uint64_t offset;
 };
 
 struct cache_block {

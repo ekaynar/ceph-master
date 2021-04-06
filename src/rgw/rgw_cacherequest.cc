@@ -10,6 +10,7 @@ int RemoteRequest::prepare_op(std::string key,  bufferlist *bl, off_t read_len, 
   this->aio = aio;
 //  this->bl = bl;
   this->ofs = ofs;
+  this->read_ofs = read_ofs;
   this->key = key;
   this->read_len = read_len;
   this->dest = dest;

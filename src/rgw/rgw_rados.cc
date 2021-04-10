@@ -9300,7 +9300,7 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
     auto completed = d->aio->get(obj, rgw::Aio::cache_op(std::move(op) , d->yield, obj_ofs, read_ofs, read_len, cct->_conf->rgw_datacache_path), cost, id);
     return d->flush(std::move(completed));
 //    return d->drain();
-  } else if( (c_block.c_obj.size_in_bytes < 0x400000) && c_block.c_obj.dirty == false) {
+  } else if( (c_block.c_obj.size_in_bytes < 0x400000) && c_block.c_obj.dirty == false && cct->_conf->enable_coalesing_write) {
 	  dout(10) << __func__   << "MISS small object read backend, key:" << oid<< dendl; 
 	  d->add_pending_block(oid, c_block); 
 	  RemoteRequest *c =  new RemoteRequest();
@@ -9308,7 +9308,7 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
 	  rgw_raw_obj read_obj1(pool,oid);
       auto obj = d->store->svc.rados->obj(read_obj1);
       ret  = obj.open();
-      string path = "smallobj/"+c_block.c_obj.mapping_id;
+      string path = cct->_conf->coalesced_write_bucket_name + c_block.c_obj.mapping_id;
 	  read_ofs = c_block.c_obj.offset;
       read_len = c_block.c_obj.size_in_bytes ;
 	  dout(10) << __func__   << "MISS small object read backend, key:" << read_ofs <<" len"<< read_len<< dendl;
@@ -9773,7 +9773,8 @@ set_err_state:
 
 int RGWRados::copy_small_remote(RGWRados *store, cache_obj* c_obj, list<cache_obj*>& outstanding_small_write_list,  list<string>& outstanding_small_write_list2){
 
-   ldout(cct, 0) << __func__ << c_obj->obj_name << " " << c_obj->owner << " "  << outstanding_small_write_list2.size() << " colaes size "<< c_obj->size_in_bytes <<dendl;
+   ldout(cct, 0) << __func__ << c_obj->obj_name << " " << c_obj->owner << " "  << outstanding_small_write_list2.size() << " colaes size "<< c_obj->size_in_bytes << 
+	"threadid"<<  std::this_thread::get_id()  << dendl;
    
    RGWAccessKey accesskey;
    int ret = get_s3_credentials(store, c_obj->owner, accesskey);
@@ -9787,8 +9788,11 @@ int RGWRados::copy_small_remote(RGWRados *store, cache_obj* c_obj, list<cache_ob
    RGWRESTConn *conn = svc.zone->get_master_conn();
   
    std::time_t result = std::time(0);
-   const string dest_obj_name = cct->_conf->host +"_"+ std::to_string(result);
-   rgw_bucket_key dest_bucket_key("","smallobj","smallobj");
+   srand(time(NULL));
+   float random_num = (float)rand()/RAND_MAX; 
+   const string dest_obj_name = cct->_conf->host +"_"+ std::to_string(result)+std::to_string(datacache->getUid());
+   string dest_bucket_name = cct->_conf->coalesced_write_bucket_name;
+   rgw_bucket_key dest_bucket_key("",dest_bucket_name,dest_bucket_name);
    rgw_bucket dest_bucket(dest_bucket_key);
    rgw_obj dest_obj(dest_bucket, dest_obj_name);
    

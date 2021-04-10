@@ -1251,10 +1251,14 @@ OPTION(max_aging_retries, OPT_INT) // maximum retry count for remote aging reque
 OPTION(cache_threadpool_size ,OPT_INT) // cache threadpool size for remote requests
 OPTION(cache_aging_threadpool_size ,OPT_INT) // cache threadpool size for aging objects to remote storage
 OPTION(rgw_cache_size ,OPT_INT) // rgw local read cache capacity
-OPTION(rgw_directory_address1 ,OPT_STR) // cache directory address 
+OPTION(rgw_directory_address ,OPT_STR) // cache directory address 
 OPTION(rgw_directory_address2 ,OPT_STR) // cache directory address 
 OPTION(rgw_directory_address3 ,OPT_STR) // cache directory address 
 OPTION(rgw_directory_port ,OPT_INT) // cache directory port
+OPTION(rgw_directory_serverCount,OPT_INT) // cache directory port
+OPTION(coalesing_write_size,OPT_INT) // cache directory port
+OPTION(enable_coalesing_write,OPT_BOOL) // cache directory port
+OPTION(coalesced_write_bucket_name,OPT_STR) // cache directory port
 
 
 OPTION(rgw_max_attr_name_len, OPT_SIZE)

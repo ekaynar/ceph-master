@@ -3954,6 +3954,8 @@ void RGWPutObj::execute()
       }
     }
     pdest_placement = &s->dest_placement;
+	if(s->obj_size < 4*1024*1024)
+	  ldpp_dout(this, 20) << "ugur small object " << pdest_placement->name << " " << pdest_placement->storage_class<< dendl;
 
     processor.emplace<AtomicObjectProcessor>(
 	&*aio, store, s->bucket_info, pdest_placement,

@@ -399,7 +399,7 @@ struct DataCache {
     std::list<string> outstanding_write_list;
     std::list<string> *small_writes;
 	std::list<cache_obj*> *outstanding_small_write_list;
-	uint64_t coalesed_write_size = 0;
+	uint64_t total_write_size = 0;
 	CephContext *cct;
     std::string path;
     uint64_t free_data_cache_size;
@@ -434,6 +434,7 @@ struct DataCache {
     void copy_aged_obj(RGWRados *store, uint64_t interval);
 	void init_writecache_aging(RGWRados *store);
     void timer_start(RGWRados *store, uint64_t interval);
+	static int getUid();
 	void init(CephContext *_cct) {
       cct = _cct;
       free_data_cache_size = cct->_conf->rgw_cache_size;
@@ -453,7 +454,8 @@ struct DataCache {
     void set_object_directory(RGWObjectDirectory *_objDirectory){
 	objDirectory = _objDirectory;
     }
-    
+
+	 
 	void lru_insert_head(struct ChunkDataInfo *o) {
         o->lru_next = head;
         o->lru_prev = NULL;

@@ -7012,8 +7012,11 @@ std::vector<Option> get_rgw_options() {
     .set_default("/tmp/")
     .set_description("rgw datacache path"),
 
+    Option("rgw_directory_serverCount", Option::TYPE_INT, Option::LEVEL_ADVANCED)
+    .set_default(3)
+    .set_description("rgw directory server count"),
 
-    Option("rgw_directory_address1", Option::TYPE_STR, Option::LEVEL_ADVANCED)
+    Option("rgw_directory_address", Option::TYPE_STR, Option::LEVEL_ADVANCED)
     .set_default("127.0.0.1")
     .set_description("rgw directory address"),
 
@@ -7032,6 +7035,18 @@ std::vector<Option> get_rgw_options() {
     Option("aging_interval_in_minutes", Option::TYPE_INT, Option::LEVEL_ADVANCED)
     .set_default(5)
     .set_description("rgw write cache aging interval in minutes"),
+    
+	Option("coalesing_write_size", Option::TYPE_INT, Option::LEVEL_ADVANCED)
+    .set_default(16777216)
+    .set_description("coalesing_write_size in bytes"),
+	
+	Option("enable_coalesing_write", Option::TYPE_BOOL, Option::LEVEL_ADVANCED)
+    .set_default(false)
+    .set_description("rge enable coalesing_writes to datalake"),
+
+	Option("coalesced_write_bucket_name", Option::TYPE_STR, Option::LEVEL_ADVANCED)
+    .set_default("coalesed")
+    .set_description("rge enable coalesing_writes to datalake"),
 
     Option("backend_url", Option::TYPE_STR, Option::LEVEL_ADVANCED)
     .set_default("localhost:8000")
@@ -7050,7 +7065,7 @@ std::vector<Option> get_rgw_options() {
     .set_description("cache threadpool size for remote requests"),
 
     Option("cache_aging_threadpool_size", Option::TYPE_INT, Option::LEVEL_ADVANCED)
-    .set_default(2)
+    .set_default(32)
     .set_description("cache threadpool size for aging objects to storage"),
     
     Option("max_aging_retries", Option::TYPE_INT, Option::LEVEL_ADVANCED)

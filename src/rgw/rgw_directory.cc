@@ -179,10 +179,23 @@ string timeToString(time_t time)
   return time_s;
 }
 
+
+
 void RGWObjectDirectory::findClient(string key, cpp_redis::client *client){
   int slot = 0;
   slot = hash_slot(key.c_str(), key.size());
 
+  if (slot < 5461)
+    client->connect(cct->_conf->rgw_directory_address, cct->_conf->rgw_directory_port);
+  //client = &client1;
+  else if (slot < 10923)
+    client->connect(cct->_conf->rgw_directory_address2, cct->_conf->rgw_directory_port);
+  //client = &client2;
+  else
+    client->connect(cct->_conf->rgw_directory_address3, cct->_conf->rgw_directory_port);
+  //client = &client3;
+
+  /*
   vector<string> servers (10);
   string tmpServers;
   tmpServers = cct->_conf->rgw_directory_address;
@@ -209,14 +222,23 @@ void RGWObjectDirectory::findClient(string key, cpp_redis::client *client){
                                        }
                        });
     }
-  }
+  }*/
 }
 
 
 void RGWBlockDirectory::findClient(string key, cpp_redis::client *client){
   int slot = 0;
   slot = hash_slot(key.c_str(), key.size());
-
+  if (slot < 5461)
+    client->connect(cct->_conf->rgw_directory_address, cct->_conf->rgw_directory_port);
+  //client = &client1;
+  else if (slot < 10923)
+    //client = &client2;
+    client->connect(cct->_conf->rgw_directory_address2, cct->_conf->rgw_directory_port);
+  else
+    //client = &client3;
+    client->connect(cct->_conf->rgw_directory_address3, cct->_conf->rgw_directory_port);
+  /*
   //vector<string> servers (cct->_conf->rgw_directory_serverCount);
   vector<string> servers (10);
   string tmpServers;
@@ -246,7 +268,7 @@ void RGWBlockDirectory::findClient(string key, cpp_redis::client *client){
     ldout(cct, 10) << "reply is " << reply << dendl;
     }
   }
-
+*/
 }
 
 

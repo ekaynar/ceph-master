@@ -6286,6 +6286,7 @@ struct get_obj_data {
   rgw::AioResultList completed; // completed read results, sorted by offset
   optional_yield yield;
   bool cache_enable = false;
+  bool cowrite = false;
 //  cache_obj c_obj;
 
   /* datacache */
@@ -6319,13 +6320,14 @@ struct get_obj_data {
       auto bl = std::move(completed.front().data);
       completed.pop_front_and_dispose(std::default_delete<rgw::AioResultEntry>{});
       offset += bl.length();
-      if(cct->_conf->rgw_datacache_enabled and cache_enable){
-  //      bufferlist chunk_buffer;	
+      if(false){
+//      if(cct->_conf->rgw_datacache_enabled and cache_enable){
+  //      bufferlist chunk_buffer;r
 //	chunk_buffer.append(bl);
         key = get_pending_key();
         cache_block c_block = get_pending_block(key); 	
-//        if (true){
-        if (bl.length() == 0x400000){
+        if (false){
+//        if (bl.length() == 0x400000){
 /*      		string str = cct->_conf->rgw_frontends;
 		  std::size_t pos = str.find("endpoint=");
 		  std::string str2 = str.substr(pos);
@@ -6336,7 +6338,8 @@ struct get_obj_data {
 //		  store->put_data(key, chunk_buffer, chunk_buffer.length(), &c_block); 
         }
       }
-
+     
+	  
       int r = client_cb->handle_data(bl, 0, bl.length());
     // ldout(cct, 20) << "after_handle" << key << " bl.length=" << bl.length() << dendl;	
       if (r < 0) {
@@ -9770,41 +9773,105 @@ set_err_state:
 
 }
 
+int RGWRados::copy_small_remote(RGWRados *store, string owner, uint64_t t_size, cache_obj* c_obj,  list<string>& aged_list, bufferlist& pbl){
 
-int RGWRados::copy_small_remote(RGWRados *store, cache_obj* c_obj, list<cache_obj*>& outstanding_small_write_list,  list<string>& outstanding_small_write_list2){
+   uint64_t offset_list[aged_list.size()];
+   uint64_t counter = 0;
+   uint64_t start = 0;
+   int ret = 0;
 
-   ldout(cct, 0) << __func__ << c_obj->obj_name << " " << c_obj->owner << " "  << outstanding_small_write_list2.size() << " colaes size "<< c_obj->size_in_bytes << 
-	"threadid"<<  std::this_thread::get_id()  << dendl;
-   
+ rgw::BlockingAioThrottle aio(cct->_conf->rgw_put_obj_min_window_size);
+
+ for (auto it=aged_list.begin(); it!=aged_list.end(); ++it){
+    std::vector<std::string> results;
+    boost::split(results, *it, [](char c){return c == '_';});
+    const string src_bucket_name = results[0];
+    const string src_obj_name = results[1];
+    uint64_t size = std::stoi(results[2]);
+    const string src_tenant_name = "";
+    offset_list[counter]=start;
+    start+=size;
+    counter +=1;
+
+    map<string, bufferlist> src_attrs;
+    RGWBucketInfo src_bucket_info;
+    RGWObjectCtx obj_ctx(this->store);
+    ret = get_bucket_info(&svc, src_tenant_name, src_bucket_name, src_bucket_info, NULL, null_yield, &src_attrs);
+    RGWObjState *astate = NULL;
+    rgw_obj src_obj(src_bucket_info.bucket, src_obj_name);
+    ret =  get_obj_state(&obj_ctx, src_bucket_info, src_obj, &astate, false, null_yield);
+
+    RGWRados::Object src_op_target(store, src_bucket_info, obj_ctx, src_obj);
+    RGWRados::Object::Read read_op(&src_op_target);
+    read_op.params.attrs = &src_attrs;
+    read_op.params.obj_size = &size;
+
+    ret = read_op.prepare(null_yield);
+    if (ret < 0)
+      return ret;
+
+    bufferlist bl;
+    ret = read_op.read(0, size - 1, bl, null_yield);
+    if (ret < 0){
+	  ldout(cct, 0) << __func__ << "read_op.read() oid: " << src_bucket_name +"_" +src_obj_name << dendl;
+	  return ret;
+	  }
+	
+	pbl.append(bl);
+  }
+
+}
+
+int RGWRados::copy_small_remote(RGWRados *store, string owner, uint64_t t_size, cache_obj* c_obj,  list<string>& aged_list){
+
    RGWAccessKey accesskey;
-   int ret = get_s3_credentials(store, c_obj->owner, accesskey);
+   int ret = get_s3_credentials(store, owner, accesskey);
    RGWRESTStreamS3PutObj *wr;
-   rgw_user user_id(c_obj->owner);
+   rgw_user user_id(owner);
    
    map<string, bufferlist> dest_attrs;
-   //string url ="http://172.24.0.1:8081"; 
    string url ="http://" + cct->_conf->backend_url; 
+  
+   list<string> endpoints;
+   endpoints.push_back(url);
    
-   RGWRESTConn *conn = svc.zone->get_master_conn();
+//    RGWRESTConn *rest_master_conn = new RGWRESTConn(this->cct, nullptr, "", endpoints, accesskey);
+   auto rest_master_conn = svc.zone->get_master_conn();
   
    std::time_t result = std::time(0);
    srand(time(NULL));
    float random_num = (float)rand()/RAND_MAX; 
    const string dest_obj_name = cct->_conf->host +"_"+ std::to_string(result)+std::to_string(datacache->getUid());
+
+   ldout(cct, 0) << __func__ << " " << owner << " "  << aged_list.size() << " colaes size "<< t_size << " OBJ NAME " << dest_obj_name << " threadid"<<  std::this_thread::get_id()  << dendl;
+
    string dest_bucket_name = cct->_conf->coalesced_write_bucket_name;
    rgw_bucket_key dest_bucket_key("",dest_bucket_name,dest_bucket_name);
    rgw_bucket dest_bucket(dest_bucket_key);
    rgw_obj dest_obj(dest_bucket, dest_obj_name);
    
-   ret = conn->put_obj_async(user_id, dest_obj, c_obj->size_in_bytes, dest_attrs, true, &wr, url, accesskey);
-   if (ret < 0)
-    return ret;
+   ret = rest_master_conn->put_obj_async(user_id, dest_obj, t_size, dest_attrs, true, &wr, url, accesskey);
+   if (ret < 0){
+	 ldout(cct, 0) << __func__ << "put_obj ERROR" << dest_obj_name <<dendl;
+     return ret;
+   }
 
-   uint64_t offset_list[outstanding_small_write_list2.size()];
+
+/*   HostStyle host_style = PathStyle;
+   RGWRESTStreamS3PutObj *wr = new RGWRESTStreamS3PutObj(cct, "PUT", url, NULL, NULL, host_style);
+   wr->set_send_length(t_size);
+   ret = wr->put_obj_init(accesskey, dest_obj, t_size, dest_attrs, true);
+  if (ret < 0) {
+    delete wr;
+    return -1;
+  }
+*/
+
+   uint64_t offset_list[aged_list.size()];
    uint64_t counter = 0;
    uint64_t start = 0;
-
-   for (auto it=outstanding_small_write_list2.begin(); it!=outstanding_small_write_list2.end(); ++it){
+  
+   for (auto it=aged_list.begin(); it!=aged_list.end(); ++it){
 	std::vector<std::string> results;
     boost::split(results, *it, [](char c){return c == '_';}); 
 	const string src_bucket_name = results[0];
@@ -9819,24 +9886,44 @@ int RGWRados::copy_small_remote(RGWRados *store, cache_obj* c_obj, list<cache_ob
 	RGWBucketInfo src_bucket_info;
 	RGWObjectCtx obj_ctx(this->store);
     ret = get_bucket_info(&svc, src_tenant_name, src_bucket_name, src_bucket_info, NULL, null_yield, &src_attrs);
-    rgw_obj src_obj(src_bucket_info.bucket, src_obj_name);
- 
+    RGWObjState *astate = NULL;
+	rgw_obj src_obj(src_bucket_info.bucket, src_obj_name);
+	ret =  get_obj_state(&obj_ctx, src_bucket_info, src_obj, &astate, false, null_yield);
+	
+    ldout(cct, 0) << __func__ << "astate size " << astate->size << " obj size " << size <<dendl;
  	RGWRados::Object src_op_target(store, src_bucket_info, obj_ctx, src_obj);
     RGWRados::Object::Read read_op(&src_op_target);
-    ret = read_op.prepare(null_yield);
-	if (ret <0)
+    read_op.params.attrs = &src_attrs;
+    read_op.params.obj_size = &size;
+
+	ret = read_op.prepare(null_yield);
+	if (ret <0){
 	  return ret;
-    ret = read_op.iterate(0, size - 1, wr->get_out_cb(), null_yield);
-    if (ret < 0)
-      return ret;
 	}
 
-    string etag;
-    ret = conn->complete_request(wr, etag, nullptr);
-    if (ret < 0)
+    ret = read_op.iterate(0, size - 1, wr->get_out_cb(), null_yield);
+	if (ret < 0){
+	 ldout(cct, 0) << __func__ << "iterate ERROR" << dest_obj_name <<dendl;
+	 delete wr;
+     return ret;
+	}
+}
+	string etag;
+	real_time mtime;
+	ret = wr->complete_request(&etag, nullptr);
+	if (ret < 0) {
+    return ret;
+  }
+   /* ret = rest_master_conn->complete_request(wr, etag, &mtime);
+    if (ret < 0){
+	 ldout(cct, 0) << __func__ << "completion ERROR" << dest_obj_name <<dendl;
      return ret;  
-	start = 0;
-	for (auto it=outstanding_small_write_list2.begin(); it!=outstanding_small_write_list2.end(); ++it){
+   }*/
+    ldout(cct, 0) << __func__ << " Done " << " obj size "<< t_size << " OBJ NAME " << dest_obj_name << " write size "<< " threadid"<<  std::this_thread::get_id()  << dendl;
+	delete c_obj;
+	//delete conn;
+/*	start = 0;
+	for (auto it=aged_list.begin(); it!=aged_list.end(); ++it){
 	std::vector<std::string> results;
     boost::split(results, *it, [](char c){return c == '_';});
 	cache_obj *c_obj=new cache_obj();
@@ -9847,10 +9934,10 @@ int RGWRados::copy_small_remote(RGWRados *store, cache_obj* c_obj, list<cache_ob
     objDirectory->updateField(c_obj, "dirty", "false");
 	start += std::stoi(results[2]);
 	}
-
+*/
 	//updatedir
 	//delete items
-    
+  return 0;   
 }
 
 

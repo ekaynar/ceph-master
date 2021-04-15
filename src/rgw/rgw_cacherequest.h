@@ -122,7 +122,9 @@ struct RemoteRequest : public CacheRequest{
   string ak;
   string sk; 
   //bufferlist pbl;// =nullptr;
-  std::string s; 
+  std::string s;
+  size_t sizeleft;
+  const char *readptr;
   f func; 
   cache_block *c_block;
   RemoteRequest() :  CacheRequest(), c_block(nullptr) {}

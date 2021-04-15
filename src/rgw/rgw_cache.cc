@@ -433,9 +433,8 @@ void DataCache::copy_aged_obj(RGWRados *store, uint64_t interval){
 	ldout(cct, 20) << __func__ << dendl;
 	time_t rawTime = time(NULL);
     time_t now =  mktime(gmtime(&rawTime));
-	
+
 	while (obj_head != NULL) {
-	  
 	  obj_cache_lock.lock();
 	  ObjectDataInfo *del_entry;
 	  del_entry = obj_tail;
@@ -450,17 +449,14 @@ void DataCache::copy_aged_obj(RGWRados *store, uint64_t interval){
 	  c_obj->bucket_name = del_entry->c_obj->bucket_name;
 	  c_obj->obj_name = del_entry->c_obj->obj_name;
 	  c_obj->size_in_bytes = del_entry->c_obj->size_in_bytes;
+	  c_obj->owner = del_entry->c_obj->owner;
+	  string owner_obj =  del_entry->c_obj->owner;
 
-	ldout(cct, 20) << __func__ << 
-				"bname " <<  del_entry->c_obj->bucket_name << " " << c_obj->bucket_name  <<
-				" size "<< del_entry->c_obj->size_in_bytes<< " " <<c_obj->size_in_bytes << dendl;
-	
 	//small object coalesing writes
-	 if (c_obj->size_in_bytes < 4*1024*1024 and cct->_conf->enable_coalesing_write){
+	 if (c_obj->size_in_bytes < cct->_conf->rgw_obj_stripe_size and cct->_conf->enable_coalesing_write){
 		string obj_id = del_entry->obj_id;
 		obj_cache_lock.lock();
 		total_write_size += c_obj->size_in_bytes;
-     	outstanding_small_write_list->push_back(c_obj);
 		small_writes->push_back(obj_id+"_"+std::to_string(c_obj->size_in_bytes));
 		map<string, ObjectDataInfo*>::iterator iter = write_cache_map.find(obj_id);
 		if (iter != write_cache_map.end())
@@ -468,43 +464,40 @@ void DataCache::copy_aged_obj(RGWRados *store, uint64_t interval){
 
 	    obj_lru_remove(del_entry);
 		obj_cache_lock.unlock();
-		ldout(cct, 20) << __func__ << "total size "<< total_write_size
-					  << " limit "<< cct->_conf->coalesing_write_size <<dendl; 
+		
 		if (total_write_size >=  cct->_conf->coalesing_write_size){
-		  std::list<cache_obj*> *small_write_list =  new std::list<cache_obj*>;
 		  std::list<string> *outgoing_small_writes = new std::list<string>;
-	    
 		  obj_cache_lock.lock();
-		  while (!outstanding_small_write_list->empty()){
-		  	small_write_list->push_back(outstanding_small_write_list->front());
-		  	outstanding_small_write_list->pop_front();
-			outgoing_small_writes->push_back(small_writes->front());
-			small_writes->pop_front();
+		  while(!small_writes->empty()){
+		  string aging_candidate = small_writes->front();
+		  outgoing_small_writes->push_back(aging_candidate);
+		  small_writes->pop_front();
 		  }
-		  c_obj->size_in_bytes = total_write_size;
+		  uint64_t t_size = total_write_size;
 		  total_write_size = 0;
 		  obj_cache_lock.unlock();
-		  aging_tp->addTask(new CopyRemoteS3Object(this->cct, store, c_obj, true, *small_write_list, *outgoing_small_writes));
+		  RemoteRequest *c =  new RemoteRequest();
+		  aging_tp->addTask(new CopyRemoteS3Object(this->cct, store, owner_obj ,t_size, c_obj, true, *outgoing_small_writes, c));
 		  }
-	  }
 	  
-//	  int ret = objDirectory->getValue(c_obj);
-	 else if (objDirectory->getValue(c_obj) == 0  && c_obj->intermediate == true){
-		ldout(cct, 20) << __func__ << "intermediate" << dendl;
+	  //int ret = objDirectory->getValue(c_obj);
+	  // Don't age if it is intermediate
+	  } else if (objDirectory->getValue(c_obj) == 0  && c_obj->intermediate == true){
 		obj_cache_lock.lock();
 		obj_lru_remove(del_entry);
 		obj_lru_insert_head(del_entry);
 		obj_cache_lock.unlock();
-	  }
-	  else {
+	  } else {
 		ldout(cct, 20) << __func__ << " aging large objects" <<dendl;
 		string del_oid = del_entry->obj_id;
 	    time_t now = time(NULL);
 	   double diff = difftime(now, del_entry->c_obj->creationTime);
 		if (diff < double(interval*60)) {
-		  std::list<cache_obj*> *small_write_list;
-		  std::list<string> *outgoing_small_writes;
-		  aging_tp->addTask(new CopyRemoteS3Object(this->cct, store, c_obj, false, *small_write_list, *outgoing_small_writes));
+		  std::list<string> outgoing_small_writes;
+		  string owner = c_obj->owner;
+		  uint64_t t_size = c_obj->size_in_bytes;
+		  RemoteRequest *c =  new RemoteRequest();
+		  aging_tp->addTask(new CopyRemoteS3Object(this->cct, store, owner, t_size,  c_obj, false, outgoing_small_writes,c));
 			
 		  obj_cache_lock.lock();
 		  map<string, ObjectDataInfo*>::iterator iter = write_cache_map.find(del_oid);
@@ -536,8 +529,6 @@ void DataCache::timer_start(RGWRados *store, uint64_t interval)
 }
 
 int DataCache::getUid() {
-    static std::atomic<std::uint32_t> uid { 0 };  // <<== initialised
-//    uid = 0;    <<== removed
     return ++uid;
 }
 
@@ -547,10 +538,7 @@ int CopyRemoteS3Object::submit_http_put_request_s3(){
 }
 
 int CopyRemoteS3Object::submit_coalesing_writes_s3(){
-//  ldout(cct, 20) << __func__ <<  write_list->size() << dendl;
-  int ret =  store->copy_small_remote(store, c_obj, write_list, small_writes);
-//  for (auto it=outstanding_small_write_list.begin(); it!=outstanding_small_write_list.end(); ++it)
-//	ldout(cct, 20) << " list ici "<< *it <<dendl;
+  int ret =  store->copy_small_remote(store, owner_obj, t_size, c_obj, out_small_writes, pbl);
   return ret;
 }
 
@@ -559,11 +547,10 @@ void CopyRemoteS3Object::run() {
   int ret = 0;
   for (int i=0; i<max_retries; i++ ){
 	if(coales_write){
-	  if(!(ret = submit_coalesing_writes_s3())){
-		//delete
+	  if(!(ret = submit_http_put_coalesed_requests_s3())){
 	   return;	
 	  }
-	  ldout(cct, 0) << "ERROR: " << __func__  << "(): coalesing_writes s3 request for failed, obj=" << dendl;
+	  ldout(cct, 0) << "ERROR: " << __func__  << "submit_http_put_coalesed_requests_s3() failed" << dendl;
       return;
 	  }
 	
@@ -573,7 +560,7 @@ void CopyRemoteS3Object::run() {
 		ret = store->delete_writecache_obj(store, c_obj);
 		return;
 	  }
-	  ldout(cct, 0) << "ERROR: " << __func__  << "(): remote s3 request for failed, obj=" << dendl;
+	  ldout(cct, 0) << "ERROR: " << __func__  << "submit_http_put_request_s3() failed" << dendl;
 	  return;
 	}
   }
@@ -581,7 +568,7 @@ void CopyRemoteS3Object::run() {
 
 void DataCache::init_writecache_aging(RGWRados *store){
   ldout(cct, 0) << __func__ <<dendl;
-
+  
   timer_start(store, cct->_conf->aging_interval_in_minutes);
 
 }
@@ -811,9 +798,11 @@ void DataCache::put_obj(cache_obj* c_obj){
   if (!(iter == write_cache_map.end())){
 	struct ObjectDataInfo *chdo = iter->second;
 	obj_lru_remove(chdo);
+    ldout(cct, 10) << __func__  <<" size_in_byte:"<< chdo->c_obj->size_in_bytes << " " <<obj_id <<dendl;
 	chdo->c_obj->creationTime = c_obj->creationTime;
 	chdo->c_obj->etag = c_obj->etag;
 	chdo->c_obj->size_in_bytes = c_obj->size_in_bytes;
+    ldout(cct, 10) << __func__  <<" size_in_byte:"<< chdo->c_obj->size_in_bytes << "after" << c_obj->size_in_bytes << " " <<obj_id <<dendl;
 	obj_lru_insert_head(chdo);
   }
   else{
@@ -921,6 +910,118 @@ string RemoteS3Request::get_date(){
   date = buffer;
   return date;
 }
+
+
+string CopyRemoteS3Object::get_date(){
+  time_t now = time(0);
+  tm *gmtm = gmtime(&now);
+  string date;
+  char buffer[128];
+  std::strftime(buffer,128,"%a, %d %b %Y %X %Z",gmtm);
+  date = buffer;
+  return date;
+}
+
+string CopyRemoteS3Object::sign_s3_request(string HTTP_Verb, string uri, string date, string YourSecretAccessKeyID, string AWSAccessKeyId){
+  std::string Content_Type = "text/plain";
+  std::string Content_MD5 ="";
+  std::string CanonicalizedResource = uri.c_str();
+  std::string StringToSign = HTTP_Verb + "\n" + Content_MD5 + "\n" + Content_Type + "\n" + date + "\n" +CanonicalizedResource;
+  char key[YourSecretAccessKeyID.length()+1] ;
+  strcpy(key, YourSecretAccessKeyID.c_str());
+  const char * data = StringToSign.c_str();
+  unsigned char* digest;
+  digest = HMAC(EVP_sha1(), key, strlen(key), (unsigned char*)data, strlen(data), NULL, NULL);
+  std::string signature = base64_encode(digest, 20);
+  return signature;
+
+}
+
+static size_t send_http_data(char *ptr, const size_t size, const size_t nmemb, void * param)
+{
+ // lsubdout(g_ceph_context, rgw, 1) << __func__ << " data is written "<< " key " << req->bl->length() << dendl; 
+  RemoteRequest *req = static_cast<RemoteRequest *>(param);
+  size_t ret;
+  curl_off_t nread;
+  size_t buffer_size = size*nmemb;
+  size_t copy_this_much = req->sizeleft;
+  
+  if(req->sizeleft) {
+	size_t copy_this_much = req->sizeleft;
+	if(copy_this_much > buffer_size)
+      copy_this_much = buffer_size;
+	memcpy(ptr, req->readptr, copy_this_much);
+    req->readptr += copy_this_much;
+	req->sizeleft -= copy_this_much;
+	  return copy_this_much;
+	  }
+	  return 0;
+  }
+
+int CopyRemoteS3Object::submit_http_put_coalesed_requests_s3(){
+  
+  req->bl = &pbl;
+  
+  int ret =  store->copy_small_remote(store, owner_obj, t_size, c_obj, out_small_writes, pbl);
+  req->sizeleft = t_size;
+  req->readptr =  req->bl->c_str();
+  //string AWSAccessKeyId = c_obj->accesskey.id;
+  //string YourSecretAccessKeyID = c_obj->accesskey.key;
+  
+  std::time_t result = std::time(0);
+  srand(time(NULL));
+  float random_num = (float)rand()/RAND_MAX;
+  string dest_bucket_name = cct->_conf->coalesced_write_bucket_name;
+  const string dest_obj_name = cct->_conf->host +"_"+ std::to_string(result)+std::to_string(store->datacache->getUid());
+
+  CURLcode res;
+  string uri="/"+dest_bucket_name+"/"+dest_obj_name;
+  string date = get_date();
+  string AWSAccessKeyId="TX2XS2M6LVH5WJWBCW53";
+  string YourSecretAccessKeyID="BKg6KC5DpUhWDRukuINZidEv06vbTyZQybj2NiIu";
+  string signature = sign_s3_request("PUT", uri, date, YourSecretAccessKeyID, AWSAccessKeyId);
+  string Authorization = "AWS "+ AWSAccessKeyId +":" + signature;
+  string loc =  "http://" + cct->_conf->backend_url + uri;
+  string auth="Authorization: " + Authorization;
+  string timestamp="Date: " + date;
+//  string user_agent="User-Agent: aws-sdk-java/1.7.4 Linux/3.10.0-514.6.1.el7.x86_64 OpenJDK_64-Bit_Server_VM/24.131-b00/1.7.0_131";
+  string user_agent="User-Agent: rgw_datacache";
+
+   string content_type="Content-Type: text/plain";
+  curl_handle = curl_easy_init();
+  if(curl_handle) {
+    struct curl_slist *chunk = NULL;
+    chunk = curl_slist_append(chunk, auth.c_str());
+    chunk = curl_slist_append(chunk, timestamp.c_str());
+    chunk = curl_slist_append(chunk, user_agent.c_str());
+    chunk = curl_slist_append(chunk, content_type.c_str());
+    res = curl_easy_setopt(curl_handle, CURLOPT_HTTPHEADER, chunk); //set headers
+    curl_easy_setopt(curl_handle, CURLOPT_URL, loc.c_str());
+	curl_easy_setopt(curl_handle, CURLOPT_UPLOAD, 1L);
+    curl_easy_setopt(curl_handle, CURLOPT_READFUNCTION, send_http_data);
+    curl_easy_setopt(curl_handle, CURLOPT_NOSIGNAL, 1L);
+    curl_easy_setopt(curl_handle, CURLOPT_FAILONERROR, 1L);
+    curl_easy_setopt(curl_handle, CURLOPT_READDATA, (void*)req);
+	curl_easy_setopt(curl_handle, CURLOPT_INFILESIZE, t_size);
+    res = curl_easy_perform(curl_handle); //run the curl command
+    curl_easy_cleanup(curl_handle);
+  }
+
+  if(res == CURLE_HTTP_RETURNED_ERROR) {
+	ldout(cct,10) << "__func__ " << " CURLE_HTTP_RETURNED_ERROR" <<curl_easy_strerror(res) << dendl;
+	return -1;
+	}
+
+  if (res != CURLE_OK)
+	return -1;
+  
+  return 0;
+
+
+
+
+}
+
 
 
 int RemoteS3Request::submit_http_get_request_s3(){

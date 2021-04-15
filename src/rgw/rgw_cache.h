@@ -37,6 +37,7 @@ class CacheThreadPool;
 struct RemoteRequest;
 struct ObjectDataInfo;
 class RemoteS3Request;
+class RGWGetDataCB;
 struct DataCache;
 /*datacache*/
 
@@ -279,7 +280,7 @@ class CacheThreadPool {
 
 class CopyRemoteS3Object : public Task {
    public:
-    CopyRemoteS3Object(CephContext *_cct, RGWRados *_store, cache_obj *_c_obj, bool _coales_write, std::list<cache_obj*>& _write_list, std::list<string>& _small_writes) : Task(), cct(_cct), store(_store), c_obj(_c_obj), coales_write(_coales_write), write_list(_write_list), small_writes(_small_writes) {
+    CopyRemoteS3Object(CephContext *_cct, RGWRados *_store, string _owner_obj, uint64_t _t_size, cache_obj *_c_obj, bool _coales_write, std::list<string>& _out_small_writes, RemoteRequest *_req) : Task(), cct(_cct), store(_store), owner_obj(_owner_obj), t_size(_t_size), c_obj(_c_obj), coales_write(_coales_write), out_small_writes(_out_small_writes), req(_req) {
 	  // std::list<cache_obj*> *write_list = new std::list<cache_obj*>;
 	  // outstanding_small_write_list = new std::list<cache_obj*>
       pthread_mutex_init(&qmtx,0);
@@ -293,21 +294,28 @@ class CopyRemoteS3Object : public Task {
 	virtual void set_handler(void *handle) {
       curl_handle = (CURL *)handle;
     }
+	  string sign_s3_request(string HTTP_Verb, string uri, string date, string YourSecretAccessKeyID, string AWSAccessKeyId);
+    string get_date();
  private:
     
 	int submit_http_put_request_s3();
+	int submit_http_put_coalesed_requests_s3();
 	int submit_coalesing_writes_s3();
 
  private:
+    CURL *curl_handle;
     pthread_mutex_t qmtx;
     pthread_cond_t wcond;
     CephContext *cct;
 	RGWRados *store;
+	string owner_obj;
+	uint64_t t_size;
     cache_obj *c_obj;
 	bool coales_write;
-	std::list<cache_obj*>& write_list;// = new std::list<cache_obj*>;
-    std::list<string>& small_writes;
-    CURL *curl_handle;
+    std::list<string>& out_small_writes;
+    RemoteRequest *req;
+	bufferlist pbl;
+
 };
 
 class RemoteS3Request : public Task {
@@ -407,6 +415,7 @@ struct DataCache {
     CacheThreadPool *tp;
     CacheThreadPool *aging_tp;
     ceph::mutex obj_cache_lock = ceph::make_mutex("DataCache::obj_cache_lock");
+    ceph::mutex age_cache_lock = ceph::make_mutex("DataCache::age_cache_lock");
     ceph::mutex cache_lock = ceph::make_mutex("DataCache::cache_lock");
     ceph::mutex eviction_lock = ceph::make_mutex("DataCache::eviction_lock");
     RGWBlockDirectory *blkDirectory;
@@ -416,7 +425,7 @@ struct DataCache {
     struct ChunkDataInfo *tail;
     struct ObjectDataInfo *obj_head;
     struct ObjectDataInfo *obj_tail;
-	
+    std::atomic<std::uint32_t> uid { 0 };  // <<== initialised
 
   public:
     DataCache() ;
@@ -434,7 +443,7 @@ struct DataCache {
     void copy_aged_obj(RGWRados *store, uint64_t interval);
 	void init_writecache_aging(RGWRados *store);
     void timer_start(RGWRados *store, uint64_t interval);
-	static int getUid();
+	int getUid();
 	void init(CephContext *_cct) {
       cct = _cct;
       free_data_cache_size = cct->_conf->rgw_cache_size;

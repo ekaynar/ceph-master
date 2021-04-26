@@ -333,12 +333,17 @@ int AtomicObjectProcessor::complete(size_t accounted_size,
     cacheObj.bucket_name = op_target.get_obj().bucket.name;
     cacheObj.obj_name = op_target.get_obj().key.name;
 //ldpp_dout(dpp, 1) << "ugur "<< cacheObj.bucket_name<<" " << cacheObj.obj_name << dendl;
-    cacheObj.hosts_list.push_back("writecache");
+    
+	r = store->getRados()->objDirectory->getValue(&cacheObj);
+	if (r<0) {
+	  cacheObj.intermediate = false;
+	}
+	cacheObj.hosts_list.push_back("writecache");
     cacheObj.home_location = CACHE;
     cacheObj.size_in_bytes = manifest.get_obj_size();
 
     cacheObj.dirty = true;
-    cacheObj.intermediate = false;
+//    cacheObj.intermediate = false;
     cacheObj.etag = etag;
     time_t rawTime = time(NULL);
     cacheObj.creationTime =  mktime(gmtime(&rawTime));

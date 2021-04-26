@@ -97,6 +97,17 @@ int rgw_process_authenticated(RGWHandler_REST * const handler,
   
   int ret;
   ldpp_dout(op, 2) << "rgw_process_authenticated" << dendl;
+  if ( (strcmp("delete_obj",op->name()) == 0) && (s->cct->_conf->rgw_datacache_enabled) ){
+	 if ( (OP_DELETE == s->op) ) {
+	   if( !op->object_in_cache()){
+		 op->complete();
+		return 0 ; 
+	   }
+	  	
+	 }
+  
+  }
+
    if ( (strcmp("get_obj",op->name()) == 0) && (s->cct->_conf->rgw_datacache_enabled) ){
     if ( (OP_GET == s->op) ) {
 	  ret = op->cache_authorize();

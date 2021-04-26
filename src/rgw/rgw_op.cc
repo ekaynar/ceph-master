@@ -8242,6 +8242,21 @@ void RGWDeleteBucketPublicAccessBlock::execute()
 //
 bool compare_acls(){return true;}
 
+bool RGWDeleteObj::object_in_cache(){
+  c_obj.bucket_name = s->bucket_name;
+  c_obj.obj_name = s->object.name;
+  c_obj.owner = s->user->get_info().user_id.id;
+  int op_ret = store->getRados()->objDirectory->getValue(&c_obj);
+  if (op_ret < 0){
+	return false;
+  }
+  if(c_obj.home_location==BACKEND)
+	return false;
+  
+  return true;
+
+}
+
 bool RGWGetObj::cache_authorize(){
   bool allow =  false;
   c_obj.bucket_name = s->bucket_name;

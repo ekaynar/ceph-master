@@ -193,6 +193,7 @@ public:
   /*datacache*/
   virtual void cache_execute() {}  
   virtual bool cache_authorize() {return true;}  
+  virtual bool object_in_cache() {return true;}; /*datacache*/
   cache_obj c_obj;
 //  RGWObjectDirectory objectDirectory;
   /*datacache*/
@@ -1412,6 +1413,7 @@ public:
   void pre_exec() override;
   void execute() override;
   int handle_slo_manifest(bufferlist& bl);
+  bool object_in_cache() override; /*datacache*/
 
   virtual int get_params() { return 0; }
   void send_response() override = 0;

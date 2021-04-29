@@ -6436,6 +6436,24 @@ static int _get_obj_iterate_cb(const rgw_raw_obj& read_obj, off_t obj_ofs,
       is_head_obj, astate, arg);
 }
 
+bool RGWRados::get_obj(cache_obj *c_obj){
+  RGWObjectCtx obj_ctx(this->store);
+  RGWBucketInfo bucket_info;
+  rgw_bucket bucket;
+  map<string, bufferlist> bucket_attrs;
+  int r = get_bucket_info(&svc, "", c_obj->bucket_name, bucket_info, NULL, null_yield, &bucket_attrs);
+  if (r < 0)
+	return false;
+  rgw_obj src_obj(bucket, c_obj->obj_name);
+  RGWObjState *astate = NULL;
+  r = get_obj_state(&obj_ctx, bucket_info, src_obj, &astate, false, null_yield);
+  if (r < 0)
+	return false;
+
+  return true;
+
+}
+
 int RGWRados::get_obj_iterate_cb(const rgw_raw_obj& read_obj, off_t obj_ofs,
     off_t read_ofs, off_t len, bool is_head_obj,
     RGWObjState *astate, void *arg)

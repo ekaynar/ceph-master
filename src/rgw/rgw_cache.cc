@@ -433,37 +433,67 @@ void DataCache::copy_aged_obj(RGWRados *store, uint64_t interval){
 	ldout(cct, 20) << __func__ << dendl;
 	time_t rawTime = time(NULL);
     time_t now =  mktime(gmtime(&rawTime));
+	obj_cache_lock.lock();
+    ObjectDataInfo *del_entry;
+    del_entry = obj_tail;
+	obj_cache_lock.unlock();
 
-	while (obj_head != NULL) {
-	  obj_cache_lock.lock();
-	  ObjectDataInfo *del_entry;
-	  del_entry = obj_tail;
-	  obj_cache_lock.unlock();
+	while (obj_head != NULL and del_entry != NULL) {
 	  
+	  ldout(cct, 20) << __func__ << del_entry->c_obj->obj_name <<dendl;
 	  double seconds = difftime(now,del_entry->c_obj->creationTime);
-	  if (seconds < double(interval))
+	  if (seconds < (double(interval)*60))
 		break;
+	 
+	  cache_obj *c_obj = new cache_obj();
+      c_obj->bucket_name = del_entry->c_obj->bucket_name;
+      c_obj->obj_name = del_entry->c_obj->obj_name;
+	  
+	  // Check Object exists or not
+	  if ( !store->get_obj(c_obj)){
+		obj_cache_lock.lock();
+		string obj_id = del_entry->obj_id;
+		ObjectDataInfo *aged_item;
+        aged_item = del_entry;
+		map<string, ObjectDataInfo*>::iterator iter = write_cache_map.find(obj_id);
+		if (iter != write_cache_map.end())
+          write_cache_map.erase(obj_id);
+		  obj_lru_remove(aged_item);
+		  obj_cache_lock.unlock();
+		  del_entry = obj_tail;
+	  }
 
 	  // Check the object is intermediate data or not
-	  cache_obj *c_obj = new cache_obj();
 	  c_obj->bucket_name = del_entry->c_obj->bucket_name;
 	  c_obj->obj_name = del_entry->c_obj->obj_name;
 	  c_obj->size_in_bytes = del_entry->c_obj->size_in_bytes;
 	  c_obj->owner = del_entry->c_obj->owner;
 	  string owner_obj =  del_entry->c_obj->owner;
-
+	  
+	   
+	  int ret = objDirectory->getValue(c_obj);
+      // Don't age if it is intermediate
+      if (objDirectory->getValue(c_obj) == 0  && c_obj->intermediate == true){
+        //obj_cache_lock.lock();
+		del_entry = del_entry->lru_prev;
+		ldout(cct, 20) << __func__ << "inter" <<del_entry->c_obj->obj_name <<dendl;
+        //obj_lru_insert_head(del_entry);
+        //obj_cache_lock.unlock();
 	//small object coalesing writes
-	 if (c_obj->size_in_bytes < cct->_conf->rgw_obj_stripe_size and cct->_conf->enable_coalesing_write){
+	 } else if (c_obj->size_in_bytes < cct->_conf->rgw_obj_stripe_size and cct->_conf->enable_coalesing_write){
 		string obj_id = del_entry->obj_id;
 		obj_cache_lock.lock();
 		total_write_size += c_obj->size_in_bytes;
 		small_writes->push_back(obj_id+"_"+std::to_string(c_obj->size_in_bytes));
+		ObjectDataInfo *aged_item;
+        aged_item = del_entry;
 		map<string, ObjectDataInfo*>::iterator iter = write_cache_map.find(obj_id);
 		if (iter != write_cache_map.end())
 		  write_cache_map.erase(obj_id);
 
-	    obj_lru_remove(del_entry);
+	    obj_lru_remove(aged_item);
 		obj_cache_lock.unlock();
+		del_entry = obj_tail;
 		
 		if (total_write_size >=  cct->_conf->coalesing_write_size){
 		  std::list<string> *outgoing_small_writes = new std::list<string>;
@@ -480,14 +510,31 @@ void DataCache::copy_aged_obj(RGWRados *store, uint64_t interval){
 		  aging_tp->addTask(new CopyRemoteS3Object(this->cct, store, owner_obj ,t_size, c_obj, true, *outgoing_small_writes, c));
 		  }
 	  
-	  //int ret = objDirectory->getValue(c_obj);
-	  // Don't age if it is intermediate
-	  } else if (objDirectory->getValue(c_obj) == 0  && c_obj->intermediate == true){
-		obj_cache_lock.lock();
-		obj_lru_remove(del_entry);
-		obj_lru_insert_head(del_entry);
-		obj_cache_lock.unlock();
+	  
 	  } else {
+		ldout(cct, 20) << __func__ << " Large Object" <<dendl;
+		string obj_id = del_entry->obj_id;
+		ObjectDataInfo *aged_item;
+		aged_item = del_entry;
+		del_entry = del_entry->lru_prev;
+		obj_cache_lock.lock();
+		map<string, ObjectDataInfo*>::iterator iter = write_cache_map.find(obj_id);
+        if (iter != write_cache_map.end())
+          write_cache_map.erase(obj_id);
+        obj_lru_remove(aged_item);
+        obj_cache_lock.unlock();
+		uint64_t t_size = c_obj->size_in_bytes;
+		RemoteRequest *c =  new RemoteRequest();
+		std::list<string> *outgoing_small_writes = new std::list<string>;
+		outgoing_small_writes->push_back(obj_id+"_"+std::to_string(c_obj->size_in_bytes));
+		aging_tp->addTask(new CopyRemoteS3Object(this->cct, store, owner_obj ,t_size, c_obj, false, *outgoing_small_writes, c));
+
+	  }
+	  
+	  
+	  
+	  /*
+	   else {
 		ldout(cct, 20) << __func__ << " aging large objects" <<dendl;
 		string del_oid = del_entry->obj_id;
 	    time_t now = time(NULL);
@@ -509,8 +556,9 @@ void DataCache::copy_aged_obj(RGWRados *store, uint64_t interval){
 		}
 		else { break; }
 	  }
+	  */
   }
-   ldout(cct, 20) << __func__ << "out of while loop "<< dendl;
+  //ldout(cct, 20) << __func__ << "out of while loop "<< dendl;
 }
 
 
@@ -558,6 +606,7 @@ void CopyRemoteS3Object::run() {
 	else {
 	  if(!(ret = submit_http_put_request_s3())){
 		ret = store->delete_writecache_obj(store, c_obj);
+
 		return;
 	  }
 	  ldout(cct, 0) << "ERROR: " << __func__  << "submit_http_put_request_s3() failed" << dendl;

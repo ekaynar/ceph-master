@@ -1124,7 +1124,7 @@ public:
   int retrieve_oid(cache_obj& c_obj, rgw_raw_obj& read_obj, uint64_t obj_ofs, optional_yield y);
   int retrieve_obj_acls(cache_obj& c_obj);
   int retrieve_obj_size(cache_obj& c_obj, RGWRados *store);
-
+  bool get_obj(cache_obj *c_obj);
   /* datacache */
 
   int rewrite_obj(RGWBucketInfo& dest_bucket_info, const rgw_obj& obj, const DoutPrefixProvider *dpp, optional_yield y);

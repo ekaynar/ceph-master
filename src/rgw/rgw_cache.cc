@@ -24,6 +24,8 @@ uint64_t expected_size = 0;
 #include <mutex>
 #include <curl/curl.h>
 #include <time.h>
+#include <algorithm>
+#include <string>
 //#include "rgw_cacherequest.h"
 static const std::string base64_chars =
 "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -947,8 +949,21 @@ string RemoteS3Request::sign_s3_request(string HTTP_Verb, string uri, string dat
   digest = HMAC(EVP_sha1(), key, strlen(key), (unsigned char*)data, strlen(data), NULL, NULL);
   std::string signature = base64_encode(digest, 20);
   return signature;
-
 }
+
+
+string DataCache::sign_s3_request(string HTTP_Verb, string uri, string date, string YourSecretAccessKeyID, string AWSAccessKeyId){
+  std::string CanonicalizedResource = uri.c_str();
+  std::string StringToSign = HTTP_Verb + "\n" + "" +"\n" + "" + "\n"+ date + "\n" + CanonicalizedResource;
+  char key[YourSecretAccessKeyID.length()+1] ;
+  strcpy(key, YourSecretAccessKeyID.c_str());
+  const char * data = StringToSign.c_str();
+  unsigned char* digest;
+  digest = HMAC(EVP_sha1(), key, strlen(key), (unsigned char*)data, strlen(data), NULL, NULL);
+  std::string signature = base64_encode(digest, 20);
+  return signature;
+}
+
 
 string RemoteS3Request::get_date(){
   time_t now = time(0);
@@ -960,6 +975,15 @@ string RemoteS3Request::get_date(){
   return date;
 }
 
+string DataCache::get_date(){
+  time_t now = time(0);
+  tm *gmtm = gmtime(&now);
+  string date;
+  char buffer[128];
+  std::strftime(buffer,128,"%a, %d %b %Y %X %Z",gmtm);
+  date = buffer;
+  return date;
+}
 
 string CopyRemoteS3Object::get_date(){
   time_t now = time(0);
@@ -1006,6 +1030,194 @@ static size_t send_http_data(char *ptr, const size_t size, const size_t nmemb, v
 	  }
 	  return 0;
   }
+
+static size_t header_callback(void *pData, size_t tSize, size_t tCount, void *pmUser)
+{
+  size_t length = tSize * tCount, index = 0;
+    while (index < length)
+    {
+        unsigned char *temp = (unsigned char *)pData + index;
+        if ((temp[0] == '\r') || (temp[0] == '\n'))
+            break;
+        index++;
+    }
+
+    std::string str((unsigned char*)pData, (unsigned char*)pData + index);
+    std::map<std::string, std::string>* pmHeader = (std::map<std::string, std::string>*)pmUser;
+    size_t pos = str.find(' ');
+    if (pos != std::string::npos)
+        pmHeader->insert(std::pair<std::string, std::string> (str.substr(0, pos), str.substr(pos + 1)));
+	
+  return tCount;
+
+}
+
+
+
+
+size_t get_callback(void *ptr, size_t size, size_t nmemb, std::string *s)
+{
+  s->append(static_cast<char *>(ptr), size*nmemb);
+  return size*nmemb;
+}
+
+
+std::string ReplaceAll(std::string str, const std::string& from, const std::string& to) {
+    size_t start_pos = 0;
+    while((start_pos = str.find(from, start_pos)) != std::string::npos) {
+        str.replace(start_pos, from.length(), to);
+        start_pos += to.length(); // Handles case where 'to' is a substring of 'from'
+    }
+    return str;
+}
+
+int DataCache::submit_http_get_requests_s3(cache_obj *c_obj, string prefix, string marker, int max_b){
+  CURL *curl_handle;
+  std::string s;
+  CURLcode res;
+  string uri="/"+c_obj->bucket_name+"/";
+  string date = get_date();
+  string AWSAccessKeyId="TX2XS2M6LVH5WJWBCW53";
+  string YourSecretAccessKeyID="BKg6KC5DpUhWDRukuINZidEv06vbTyZQybj2NiIu";
+  string signature = sign_s3_request("GET", uri, date, YourSecretAccessKeyID, AWSAccessKeyId);
+  string Authorization = "AWS "+ AWSAccessKeyId +":" + signature;
+  ldout(cct,10) << __func__ << " bucketname " << c_obj->bucket_name <<" objname  "<< c_obj->obj_name<< dendl; 
+  ldout(cct,10) << __func__ << " marker " << marker  <<" prefix  "<< prefix << dendl; 
+  uri = "/"+c_obj->bucket_name+"/?delimiter=%2F";
+
+  if (marker != ""){
+	string tmp2 = ReplaceAll(string(marker), std::string("/"), std::string("%2F"));
+	string tmp = ReplaceAll(string(tmp2), std::string("."), std::string("%2C"));
+	uri = uri +"&marker=" + tmp;
+  }
+  if (prefix != ""){
+	string tmp2 = ReplaceAll(string(prefix), std::string("/"), std::string("%2F"));
+	string tmp = ReplaceAll(string(tmp2), std::string("."), std::string("%2C"));
+	ldout(cct,10) << __func__ << " tmp2 "<< tmp2<< " tmp " << tmp <<dendl;
+	uri = uri +"&prefix=" + tmp;
+  }
+//  if (max_b != 0) 
+//	uri = uri+"&max-keys="+ to_string(max_b);
+  ldout(cct,10) << __func__ << " uri  "<< uri << dendl; 
+  
+  string loc =  "http://" + cct->_conf->backend_url + uri;
+  string auth="Authorization: " + Authorization;
+  string timestamp="Date: " + date;
+  string user_agent="User-Agent: rgw_datacache";
+  curl_handle = curl_easy_init();
+   if(curl_handle) {
+    struct curl_slist *chunk = NULL;
+    chunk = curl_slist_append(chunk, auth.c_str());
+    chunk = curl_slist_append(chunk, timestamp.c_str());
+    chunk = curl_slist_append(chunk, user_agent.c_str());
+    res = curl_easy_setopt(curl_handle, CURLOPT_HTTPHEADER, chunk); //set headers
+	curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, get_callback);
+	curl_easy_setopt(curl_handle, CURLOPT_FOLLOWLOCATION, 1L);
+	curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, &s);
+    curl_easy_setopt(curl_handle, CURLOPT_URL, loc.c_str());
+    res = curl_easy_perform(curl_handle); //run the curl command
+    curl_easy_reset(curl_handle);
+    curl_slist_free_all(chunk);
+    curl_easy_cleanup(curl_handle);
+  }
+	c_obj->acl = s;
+    ldout(cct,10) << __func__ << " url " <<  uri <<"first "<< s << dendl;
+
+	return 0;
+}
+
+
+int DataCache::submit_http_head_requests_s3(cache_obj *c_obj){
+  ldout(cct,10) << __func__   << dendl;
+  int ret=-1;
+  std::map<std::string, std::string> mHeader;
+  CURL *curl_handle;
+  CURLcode res;
+  string uri="/"+c_obj->bucket_name+"/"+c_obj->obj_name;
+  string date = get_date();
+  string AWSAccessKeyId="TX2XS2M6LVH5WJWBCW53";
+  string YourSecretAccessKeyID="BKg6KC5DpUhWDRukuINZidEv06vbTyZQybj2NiIu";
+  string signature = sign_s3_request("HEAD", uri, date, YourSecretAccessKeyID, AWSAccessKeyId);
+  string Authorization = "AWS "+ AWSAccessKeyId +":" + signature;
+  string loc =  "http://" + cct->_conf->backend_url + uri;
+  string auth="Authorization: " + Authorization;
+  string timestamp="Date: " + date;
+//  string content_type="Content-Type: application/x-www-form-urlencoded; charset=utf-8";
+  string user_agent="User-Agent: rgw_datacache";
+  curl_handle = curl_easy_init();
+  if(curl_handle) {
+    struct curl_slist *chunk = NULL;
+    chunk = curl_slist_append(chunk, auth.c_str());
+    chunk = curl_slist_append(chunk, timestamp.c_str());
+    chunk = curl_slist_append(chunk, user_agent.c_str());
+  //  chunk = curl_slist_append(chunk, content_type.c_str());
+    res = curl_easy_setopt(curl_handle, CURLOPT_HTTPHEADER, chunk); //set headers
+	curl_easy_setopt(curl_handle, CURLOPT_HEADERFUNCTION, header_callback);
+	curl_easy_setopt(curl_handle, CURLOPT_HEADERDATA, &mHeader);
+    curl_easy_setopt(curl_handle, CURLOPT_URL, loc.c_str());
+	curl_easy_setopt(curl_handle, CURLOPT_NOBODY, 1L);
+	curl_easy_setopt(curl_handle, CURLOPT_VERBOSE, 1L);
+	curl_easy_setopt(curl_handle, CURLOPT_NOPROGRESS, 1L);
+	res = curl_easy_perform(curl_handle); //run the curl command
+	curl_easy_reset(curl_handle);
+    curl_slist_free_all(chunk);
+    curl_easy_cleanup(curl_handle);
+  }
+
+	std::map<std::string, std::string>::const_iterator itt;
+    for (itt = mHeader.begin(); itt != mHeader.end(); itt++)
+    {
+		ldout(cct,10) << __func__ << "first "<< itt->first << " second " << itt->second << dendl;
+		string line = itt->first;
+		if (line.find("HTTP") != std::string::npos){
+		  string code = itt->second;
+		  size_t pos = code.find(' ');
+		  if (pos != std::string::npos){
+			string strNew = code.substr(0, pos);
+			ret = stoull(strNew);
+		  }
+		}
+		if (line.find("Content-Length:") != std::string::npos){
+		    string size = itt->second;
+		    ldout(cct,10) << __func__ << "Content-Length2: "<< size << dendl;
+            c_obj->size_in_bytes = stoull(size);
+		  }
+		if (line.find("ETag:") != std::string::npos){
+		    string etag = itt->second;
+		    ldout(cct,10) << __func__ << "ETag: "<< etag << dendl;
+            c_obj->etag = etag;
+		  }
+		if (line.find("Rgwx-Mtime:") != std::string::npos){
+		    double lastmod = stod(itt->second);
+		    const time_t lastAccessTime = lastmod;
+            c_obj->lastAccessTime = lastAccessTime;
+			ldout(cct,10) << __func__ << "Rgwx-Mtim: "<< lastmod << " con "<< lastAccessTime << dendl;
+		  }
+/*		if (line.find("Last-Modified:") != std::string::npos){
+		    string lastmod2 = itt->second;
+		    time_t lastAccessTime;
+			struct tm tm;
+			strptime(lastmod2.c_str(), "%a, %d %h %Y %H:%M:%S %Z", &tm);
+			time_t t = mktime(&tm);
+//            c_obj->lastAccessTime = t;
+			ldout(cct,10) << __func__ << "Last-Modified: "<< t<< " con "<< t << dendl;
+		  }*/
+
+	  }
+	  
+ /*Content-Length: 222
+< x-amz-request-id: tx00000000000000000002b-00608b7651-48e03f1-default
+< Accept-Ranges: bytes
+< Content-Type: application/xml
+< Date: Fri, 30 Apr 2021 03:15:29 GMT
+< Connection: Keep-Alive
+*/
+		
+		
+  
+  return ret;
+
+}
 
 int CopyRemoteS3Object::submit_http_put_coalesed_requests_s3(){
   

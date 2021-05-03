@@ -99,17 +99,25 @@ int rgw_process_authenticated(RGWHandler_REST * const handler,
   ldpp_dout(op, 2) << "rgw_process_authenticated" << dendl;
   if ( (strcmp("delete_obj",op->name()) == 0) && (s->cct->_conf->rgw_datacache_enabled) ){
 	 if ( (OP_DELETE == s->op) ) {
-	   if( !op->object_in_cache()){
-		 op->complete();
-		return 0 ; 
-	   }
-	  	
+		  bool a = op->object_in_cache();
 	 }
-  
   }
 
+  
+  
+  /*if ( (strcmp("multi_object_delete",op->name()) == 0) && (s->cct->_conf->rgw_datacache_enabled) ){
+	 op->delete_multi_objects();
+
+  }*/
    if ( (strcmp("get_obj",op->name()) == 0) && (s->cct->_conf->rgw_datacache_enabled) ){
-    if ( (OP_GET == s->op) ) {
+	
+/*	if (s->op == OP_HEAD){
+	  ret = op->cache_head_op();
+	  if (ret == true)
+		return 0;
+	}*/
+
+	if (s->op == OP_GET) {
 	  ret = op->cache_authorize();
 	  ldpp_dout(op, 2) << "get backend acls " << ret << dendl;
 	  if (!(ret)) {
@@ -123,6 +131,8 @@ int rgw_process_authenticated(RGWHandler_REST * const handler,
     }
 
   }
+
+  
 
   ldpp_dout(op, 2) << "init permissions" << dendl;
   ret = handler->init_permissions(op);
@@ -149,6 +159,18 @@ int rgw_process_authenticated(RGWHandler_REST * const handler,
   ldpp_dout(op, 2) << "reading permissions" << dendl;
   ret = handler->read_permissions(op);
   if (ret < 0) {
+	if (s->cct->_conf->rgw_datacache_enabled && s->op == OP_HEAD){
+	// ldpp_dout(op, 2) << "reading permissions" << s->op << " " << op->name() << dendl;
+	 bool exists  = op->cache_head_op();
+	 if (exists){
+        ldpp_dout(op, 2) << "head executing" << dendl;
+		op->cache_execute();
+        ldpp_dout(op, 2) << "head completing" << dendl;
+	    op->complete();
+        return 0;
+		}
+	  }	
+
     return ret;
   }
 

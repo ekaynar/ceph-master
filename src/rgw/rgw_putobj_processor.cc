@@ -326,6 +326,8 @@ int AtomicObjectProcessor::complete(size_t accounted_size,
     // on success, clear the set of objects for deletion
     writer.clear_written();
     
+   ldpp_dout(dpp, 1) << __func__ << "ugur bucket "<< op_target.get_obj().bucket.name << "" 
+   "objname" << op_target.get_obj().key.name <<" " << manifest.get_obj_size() << dendl;
     /* datacache */
     if( store->ctx()->_conf->rgw_datacache_enabled){
     cache_obj cacheObj;
@@ -354,7 +356,8 @@ int AtomicObjectProcessor::complete(size_t accounted_size,
     cacheObj.offset = 0;
 	cacheObj.mapping_id = "";
 	r = store->getRados()->objDirectory->setValue(&cacheObj);
-    store->getRados()->datacache->put_obj(&cacheObj);
+	if(manifest.get_obj_size() >0)
+	  store->getRados()->datacache->put_obj(&cacheObj);
     
 	/* datacache */
     }

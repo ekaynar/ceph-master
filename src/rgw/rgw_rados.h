@@ -1019,7 +1019,8 @@ public:
 
       RGWRados::Bucket *target;
       rgw_obj_key next_marker;
-
+	  /*datacache*/
+	  //int get_remote_buckets(cache_obj& c_obj, vector<string> remote_bucket_list, string prefix, string marker);
       int list_objects_ordered(int64_t max,
 			       vector<rgw_bucket_dir_entry> *result,
 			       map<string, bool> *common_prefixes,
@@ -1124,6 +1125,9 @@ public:
   int retrieve_oid(cache_obj& c_obj, rgw_raw_obj& read_obj, uint64_t obj_ofs, optional_yield y);
   int retrieve_obj_acls(cache_obj& c_obj);
   int retrieve_obj_size(cache_obj& c_obj, RGWRados *store);
+  int get_head_obj(cache_obj& c_obj);
+  vector<string> get_xml_data(string &text, string tag);
+  int get_remote_buckets(cache_obj& c_obj, vector<string>& remote_bucket_list, string prefix, string marker, int max_b, string& next_marker);
   bool get_obj(cache_obj *c_obj);
   /* datacache */
 

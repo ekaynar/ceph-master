@@ -2420,6 +2420,8 @@ int RGWGetUsage::verify_permission()
   return 0;
 }
 
+
+
 void RGWListBuckets::execute()
 {
   bool done;
@@ -2849,7 +2851,7 @@ void RGWStatBucket::pre_exec()
 
 void RGWStatBucket::execute()
 {
-  if (!s->bucket_exists) {
+  if (!s->bucket_exists) {	
     op_ret = -ERR_NO_SUCH_BUCKET;
     return;
   }
@@ -2878,6 +2880,14 @@ int RGWListBucket::verify_permission()
 	list_versions ?
 	rgw::IAM::s3ListBucketVersions :
 	rgw::IAM::s3ListBucket)) {
+  /*datacache*/
+ /* if (s->cct->_conf->rgw_datacache_enabled){
+	c_obj.bucket_name = s->bucket_name;
+    c_obj.obj_name = s->object.name;
+	op_ret = store->getRados()->list_remote_obj(c_obj);
+	}
+*/
+  /*datacache*/
     return -EACCES;
   }
 
@@ -2935,6 +2945,7 @@ void RGWListBucket::execute()
   if (op_ret >= 0) {
     next_marker = list_op.get_next_marker();
   }
+
 }
 
 int RGWGetBucketLogging::verify_permission()
@@ -6617,6 +6628,16 @@ void RGWDeleteMultiObj::execute()
 
     obj_ctx->set_atomic(obj);
 
+
+	if (s->cct->_conf->rgw_datacache_enabled){
+	  cache_obj d_obj;
+	    d_obj.bucket_name = s->bucket_name;
+		d_obj.obj_name = s->object.name;
+		d_obj.backendProtocol =  S3;
+		 ldpp_dout(this, 20) << "del dictionary object: "<< d_obj.bucket_name << " obj: "<< d_obj.obj_name<< dendl;
+		int ret =  store->getRados()->objDirectory->delValue(&d_obj);
+	}
+
     RGWRados::Object del_target(store->getRados(), s->bucket_info, *obj_ctx, obj);
     RGWRados::Object::Delete del_op(&del_target);
 
@@ -7616,8 +7637,8 @@ int RGWHandler::do_read_permissions(RGWOp *op, bool only_bucket)
     ldpp_dout(op, 10) << "read_permissions on " << s->bucket << ":"
       << s->object << " only_bucket=" << only_bucket
       << " ret=" << ret << dendl;
-    if (ret == -ENODATA)
-      ret = -EACCES;
+	if (ret == -ENODATA)
+        ret = -EACCES;
   }
 
   return ret;
@@ -8242,19 +8263,47 @@ void RGWDeleteBucketPublicAccessBlock::execute()
 //
 bool compare_acls(){return true;}
 
+int RGWDeleteMultiObj::delete_multi_objects(){
+  c_obj.bucket_name = s->bucket_name;
+  c_obj.obj_name = s->object.name;
+  c_obj.owner = s->user->get_info().user_id.id;
+//  int op_ret = store->getRados()->objDirectory->delMultiValue(&c_obj);
+}
 bool RGWDeleteObj::object_in_cache(){
   c_obj.bucket_name = s->bucket_name;
   c_obj.obj_name = s->object.name;
   c_obj.owner = s->user->get_info().user_id.id;
-  int op_ret = store->getRados()->objDirectory->getValue(&c_obj);
+  int op_ret = store->getRados()->objDirectory->delValue(&c_obj);
+
+  /*int op_ret = store->getRados()->objDirectory->getValue(&c_obj);
   if (op_ret < 0){
 	return false;
   }
   if(c_obj.home_location==BACKEND)
 	return false;
-  
+  */
   return true;
 
+}
+
+bool RGWGetObj::cache_head_op(){
+  c_obj.bucket_name = s->bucket_name;
+  c_obj.obj_name = s->object.name;
+  c_obj.backendProtocol =  S3;
+
+  c_obj.owner = s->user->get_info().user_id.id;
+  if(!get_data){
+      op_ret = store->getRados()->get_head_obj(c_obj);
+	  s->obj_size = c_obj.size_in_bytes;
+      if ( op_ret == 200 ){
+		this->lo_etag = c_obj.etag;
+	    this->total_len =  c_obj.size_in_bytes;
+        return true;
+	  }
+      else
+        return false;
+    }
+  return false;
 }
 
 bool RGWGetObj::cache_authorize(){
@@ -8263,18 +8312,16 @@ bool RGWGetObj::cache_authorize(){
   c_obj.obj_name = s->object.name;
   c_obj.backendProtocol =  S3;
   c_obj.owner = s->user->get_info().user_id.id;
-//  c_obj.size_in_bytes = 134217728;
-//  return true;
-  int op_ret = store->getRados()->objDirectory->getValue(&c_obj);
-  // Object not found in diretory cache, and it's size and acls retrieved from backend
+  int op_ret;
+  
+  op_ret = store->getRados()->objDirectory->getValue(&c_obj);
   if (op_ret < 0){
 	op_ret = store->getRados()->retrieve_obj_acls(c_obj);
 	if (op_ret < 0)
       return false;
-	int op_ret = store->getRados()->objDirectory->setValue(&c_obj);
+	op_ret = store->getRados()->objDirectory->setValue(&c_obj);
     return compare_acls();
-	// objectDirectory.updateACL(c_obj,c_obj.acl);
-	// c_obj.aclTimeStamp = now;
+  
   } else { // Object is in write-back cache 
 	return compare_acls(); 
   }
@@ -8285,16 +8332,26 @@ void RGWGetObj::cache_execute(){
   ldpp_dout(this, 10) << __func__  << "object size:" <<  c_obj.size_in_bytes <<dendl;
   RGWGetObj_CB cb(this);
   RGWGetObj_Filter* filter = (RGWGetObj_Filter *)&cb;
- 
+  s->obj_size = c_obj.size_in_bytes;
+
+
   RGWBucketInfo dest_bucket_info;
   RGWRados::Object op_target(store->getRados(), dest_bucket_info, *static_cast<RGWObjectCtx *>(s->obj_ctx), obj);
   RGWRados::Object::Read read_op(&op_target);
-  s->obj_size = c_obj.size_in_bytes;
   this->lo_etag = c_obj.etag;
   range_str = s->info.env->get("HTTP_RANGE");
   op_ret = init_common();
   if (op_ret < 0)
     return ;
+  
+  if (!get_data){
+    ldpp_dout(this, 10) << __func__  << "HEAD request object size:" <<  c_obj.size_in_bytes <<dendl;
+    bufferlist bl;
+    send_response_data(bl, 0, 0);
+    return ;
+  }
+ 
+  
   if(range_str){
      op_ret = read_op.range_to_ofs(s->obj_size, ofs, end);
      this->total_len = end - ofs + 1;

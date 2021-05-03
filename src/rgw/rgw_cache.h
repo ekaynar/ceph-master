@@ -443,7 +443,11 @@ struct DataCache {
     void copy_aged_obj(RGWRados *store, uint64_t interval);
 	void init_writecache_aging(RGWRados *store);
     void timer_start(RGWRados *store, uint64_t interval);
+	string sign_s3_request(string HTTP_Verb, string uri, string date, string YourSecretAccessKeyID, string AWSAccessKeyId);
 	int getUid();
+	string get_date();
+	int submit_http_head_requests_s3(cache_obj *c_obj);
+	int submit_http_get_requests_s3(cache_obj *c_obj, string prefix, string marker, int max_b);
 	void init(CephContext *_cct) {
       cct = _cct;
       free_data_cache_size = cct->_conf->rgw_cache_size;

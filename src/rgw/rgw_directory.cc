@@ -367,6 +367,20 @@ int RGWBlockDirectory::updateField(cache_block *ptr, string field, string value)
   return 0;
 }
 
+int RGWObjectDirectory::delMultiValue(cache_obj *ptr){
+
+  int result = 0;
+  vector<string> keys;
+  cpp_redis::client client;
+  string key = buildIndex(ptr);
+  keys.push_back(key);
+  findClient(key, &client);
+  client.del(keys, [&result](cpp_redis::reply &reply){
+      result = reply.as_integer();
+      });
+  client.sync_commit();	
+  return result-1;
+}
 int RGWObjectDirectory::delValue(cache_obj *ptr){
 
   int result = 0;

@@ -71,7 +71,6 @@ using namespace librados;
 #include "rgw_data_sync.h"
 #include "rgw_realm_watcher.h"
 #include "rgw_reshard.h"
-
 #include "services/svc_zone.h"
 #include "services/svc_zone_utils.h"
 #include "services/svc_quota.h"
@@ -84,6 +83,7 @@ using namespace librados;
 
 #include "compressor/Compressor.h"
 
+#include "rgw_tag_s3.h" //datacache
 #ifdef WITH_LTTNG
 #define TRACEPOINT_DEFINE
 #define TRACEPOINT_PROBE_DYNAMIC_LINKAGE
@@ -1750,7 +1750,6 @@ int RGWRados::Bucket::List::list_objects_ordered(
   RGWRados *store = target->get_store();
   CephContext *cct = store->ctx();
   int shard_id = target->get_shard_id();
-
   int count = 0;
   bool truncated = true;
   bool cls_filtered = false;
@@ -1827,7 +1826,35 @@ int RGWRados::Bucket::List::list_objects_ordered(
 	&cls_filtered,
 	&cur_marker,
 	y);
-    if (r < 0) {
+
+    
+   bool is_remote = false;
+   bool remote_exists =false;
+   if (!is_remote && count < max_p && cct->_conf->rgw_datacache_enabled ){
+	int max_b = max_p - count;
+    is_remote = true;
+    int remote_bucket_size = 0;
+    vector<string> remote_buckets;
+    cache_obj c_obj;
+	c_obj.bucket_name = target->get_bucket_info().bucket.name;
+    c_obj.obj_name = "";
+	c_obj.owner = target->get_bucket_info().owner.id;
+	string marker = cur_marker.name;
+	string remote_next_marker="";
+    int son =  store->get_remote_buckets(c_obj, remote_buckets, cur_prefix, marker, max_b, remote_next_marker);
+    
+	for (vector<string>::iterator t=remote_buckets.begin(); t!=remote_buckets.end(); ++t)
+    {
+       rgw_bucket_dir_entry entry;
+       rgw_obj_index_key index_key(*t);
+	   ldout(cct, 20) << "ugur rembucket : "<< *t<< dendl;
+       entry.key = index_key;
+	   ent_map[*t] = (std::move(entry));
+	   remote_exists = true;
+   }
+  }
+  
+    if (r < 0 && !remote_exists) {
       return r;
     }
 
@@ -1836,7 +1863,9 @@ int RGWRados::Bucket::List::list_objects_ordered(
       rgw_obj_index_key index_key = entry.key;
       rgw_obj_key obj(index_key);
 
-      ldout(cct, 20) << "RGWRados::Bucket::List::" << __func__ <<
+      ldout(cct, 20) << "ugur ent_map size "<<  ent_map.size() <<dendl;
+      
+	  ldout(cct, 20) << "RGWRados::Bucket::List::" << __func__ <<
 	" considering entry " << entry.key << dendl;
 
       /* note that parse_raw_oid() here will not set the correct
@@ -1956,6 +1985,8 @@ int RGWRados::Bucket::List::list_objects_ordered(
       result->emplace_back(std::move(entry));
       count++;
     } // eiter for loop
+
+	
 
     // NOTE: the following conditional is needed by older versions of
     // the OSD that don't do delimiter filtering on the CLS side; once
@@ -8402,6 +8433,8 @@ int RGWRados::cls_bucket_list_ordered(RGWBucketInfo& bucket_info,
     ", expansion_factor=" << expansion_factor << dendl;
 
   m.clear();
+	
+
 
   RGWSI_RADOS::Pool index_pool;
   // key   - oid (for different shards if there is any)
@@ -8513,6 +8546,8 @@ int RGWRados::cls_bucket_list_ordered(RGWBucketInfo& bucket_info,
     *cls_filtered = *cls_filtered && r.second.cls_filtered;
   }
 
+
+
   // create a map to track the next candidate entry from ShardTracker
   // (key=candidate, value=index into results_trackers); as we consume
   // entries from shards, we replace them with the next entries in the
@@ -8526,6 +8561,8 @@ int RGWRados::cls_bucket_list_ordered(RGWBucketInfo& bucket_info,
     next_candidate(t, candidates, tracker_idx);
     ++tracker_idx;
   }
+
+
 
   rgw_bucket_dir_entry*
     last_entry_visited = nullptr; // to set last_entry (marker)
@@ -8569,7 +8606,7 @@ int RGWRados::cls_bucket_list_ordered(RGWBucketInfo& bucket_info,
 
     if (r >= 0) {
       ldout(cct, 10) << "RGWRados::" << __func__ << ": got " <<
-	dirent.key.name << "[" << dirent.key.instance << "]" << dendl;
+	dirent.key.name << "[" << dirent.key.instance << "]" << "name " << name << dendl;
       m[name] = std::move(dirent);
       ++count;
     } else {
@@ -8604,9 +8641,7 @@ int RGWRados::cls_bucket_list_ordered(RGWBucketInfo& bucket_info,
       c->release();
     }
   } // updates loop
-
-  // determine truncation by checking if all the returned entries are
-  // consumed or not
+   
   *is_truncated = false;
   for (const auto& t : results_trackers) {
     if (!t.at_end() || t.is_truncated()) {
@@ -8614,6 +8649,8 @@ int RGWRados::cls_bucket_list_ordered(RGWBucketInfo& bucket_info,
       break;
     }
   }
+  // determine truncation by checking if all the returned entries are
+  // consumed or not
 
   ldout(cct, 20) << "RGWRados::" << __func__ <<
     ": returning, count=" << count << ", is_truncated=" << *is_truncated <<
@@ -9398,17 +9435,118 @@ void stripTags( string &text )
 }
 
 
+vector<string> RGWRados::get_xml_data(string &text, string tag)
+{
+  vector<string> collection;
+  unsigned int pos = 0, start;
+  while (true){
+	  start = text.find( "<" + tag, pos ); if ( start >= text.length() ) return collection;
+      start = text.find( ">" , start );
+      start++;
+
+      pos = text.find( "</" + tag, start );   if ( pos >= text.length() ) return collection;
+      collection.push_back(text.substr( start, pos - start ) );
+  }
+}
+
+int RGWRados::get_remote_buckets(cache_obj& c_obj, vector<string>& remote_bucket_list, string prefix, string marker, int max_b, string& next_marker){
+	get_s3_credentials(store->getRados(), c_obj.owner, c_obj.accesskey);
+
+	ldout(cct, 20) << __func__ <<dendl;
+	while(true){
+	  int ret  = datacache->submit_http_get_requests_s3(&c_obj, prefix, marker, max_b);
+	  if( ret < 0 )
+		return ret;
+	  vector<string> all;
+//	  string tag ="Key";
+	  vector<string> all_keys = get_xml_data(c_obj.acl, "Key");
+	  vector<string> all_prefix = get_xml_data(c_obj.acl, "Prefix");
+	  //vector<string> marker = get_xml_data(c_obj.acl, "Marker");
+	  if(all_keys.size() == 0 && all_prefix.size()==1)
+		break;
+	  else if (all_prefix.size() > 1){
+		all = all_prefix;
+	  }
+	  //else if (all_keys.size() >= 1){
+	  else {
+		all = all_keys;
+	  }
+	  for (vector<string>::iterator t=all.begin(); t!=all.end(); ++t)
+	  {
+        remote_bucket_list.push_back(*t);
+      }
+
+	  vector<string> all_marker = get_xml_data(c_obj.acl, "NextMarker");
+//	  if(all_marker.size() >= 1){
+//		next_marker = all_marker.front();
+//		break;
+//	  }
+	  if (all_marker.size() == 0)
+		break;
+	  string tmp = all_marker.front();
+//	  if (all_marker.size() == 0);
+	  unsigned first = tmp.find(prefix);
+	  unsigned last = tmp.find("/", first + prefix.size() + 1);
+	  marker =  tmp.substr(first,last-first) +"/";
+	  ldout(cct, 20) << __func__ <<" remote_bucket_size" <<  remote_bucket_list.size() << dendl;
+	}
+		
+	return 0;
+}
+
+int RGWRados::get_head_obj(cache_obj& c_obj){
+  ldout(cct, 20) << __func__ <<dendl;
+  get_s3_credentials(store->getRados(), c_obj.owner, c_obj.accesskey);
+  int ret  = datacache->submit_http_head_requests_s3(&c_obj);
+  return ret;
+  }
+  /*int ret = 0; 
+  if (c_obj.obj_name.find("/") != std::string::npos) {
+    if (c_obj.obj_name.find("tpch") == std::string::npos ){
+      dout(10) << __func__   << "output bucket" << c_obj.bucket_name  <<dendl;
+    } else{
+      dout(10) << __func__   << "bucket" << c_obj.bucket_name  <<dendl;
+      dout(10) << __func__   << "obj"    << c_obj.obj_name <<dendl;
+//	  ret  = datacache->submit_http_get_requests_s3(&c_obj,"","");
+/*	  string tag = "Key";
+	  vector<string> remote_bucket_list = get_xml_data(c_obj.acl, tag );
+		for (vector<string>::iterator t=remote_bucket_list.begin(); t!=remote_bucket_list.end(); ++t) 
+		{
+	     dout(10) << __func__   << " first_key " << *t <<dendl;
+		}
+       dout(10) << __func__   << " ACCL44 "    << c_obj.acl <<dendl;*/
+	  //int reti = retrieve_obj_acls(c_obj);
+      //int ret  = datacache->submit_http_head_requests_s3(&c_obj);
+//}
+
 int RGWRados::retrieve_obj_acls(cache_obj& c_obj){
   ldout(cct, 20) << __func__ <<dendl;
   get_s3_credentials(store->getRados(), c_obj.owner, c_obj.accesskey);
   RGWRESTStreamRWRequest *in_stream_req;
   string backend_url = cct->_conf->backend_url;
-  list<string> endpoints;
-  endpoints.push_back(backend_url);
 
   rgw_user user_id(c_obj.owner);
   rgw_bucket bucket;
   bucket.name = c_obj.bucket_name;
+/*  if (c_obj.obj_name.find("/") != std::string::npos) {
+	if (c_obj.obj_name.find("out") != std::string::npos ){
+	  dout(10) << __func__   << "output bucket" << c_obj.bucket_name  <<dendl;
+	  
+	} else{
+	  dout(10) << __func__   << "bucket" << c_obj.bucket_name  <<dendl;
+	  dout(10) << __func__   << "obj"    << c_obj.obj_name <<dendl;
+	  int ret  = datacache->submit_http_head_requests_s3(&c_obj);
+	  if (ret < 0)
+		return -1;
+	  else;
+		return 0;
+	}
+  }
+  */
+  //backend_url = backend_url +"/"+ c_obj.bucket_name +"/"+c_obj.obj_name;
+  list<string> endpoints;
+  endpoints.push_back(backend_url);
+  ldout(cct, 20) << __func__ << " url " << backend_url <<dendl; 
   rgw_obj src_obj(bucket, c_obj.obj_name);
   map<string, bufferlist> src_attrs;
 

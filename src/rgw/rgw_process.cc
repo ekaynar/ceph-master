@@ -103,20 +103,8 @@ int rgw_process_authenticated(RGWHandler_REST * const handler,
 	 }
   }
 
-  
-  
-  /*if ( (strcmp("multi_object_delete",op->name()) == 0) && (s->cct->_conf->rgw_datacache_enabled) ){
-	 op->delete_multi_objects();
 
-  }*/
    if ( (strcmp("get_obj",op->name()) == 0) && (s->cct->_conf->rgw_datacache_enabled) ){
-	
-/*	if (s->op == OP_HEAD){
-	  ret = op->cache_head_op();
-	  if (ret == true)
-		return 0;
-	}*/
-
 	if (s->op == OP_GET) {
 	  ret = op->cache_authorize();
 	  ldpp_dout(op, 2) << "get backend acls " << ret << dendl;
@@ -160,18 +148,17 @@ int rgw_process_authenticated(RGWHandler_REST * const handler,
   ret = handler->read_permissions(op);
   if (ret < 0) {
 	if (s->cct->_conf->rgw_datacache_enabled && s->op == OP_HEAD){
-	// ldpp_dout(op, 2) << "reading permissions" << s->op << " " << op->name() << dendl;
-	 bool exists  = op->cache_head_op();
-	 if (exists){
-        ldpp_dout(op, 2) << "head executing" << dendl;
+	  if ( op->cache_head_op()){
+        ldpp_dout(op, 2) << "remote head executing" << dendl;
 		op->cache_execute();
-        ldpp_dout(op, 2) << "head completing" << dendl;
+        ldpp_dout(op, 2) << "remote head completing" << dendl;
 	    op->complete();
         return 0;
-		}
-	  }	
-
-    return ret;
+	  } else 
+		return ret;
+	}
+	
+	return ret;	
   }
 
   ldpp_dout(op, 2) << "init op" << dendl;

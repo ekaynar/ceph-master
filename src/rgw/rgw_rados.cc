@@ -1826,8 +1826,10 @@ int RGWRados::Bucket::List::list_objects_ordered(
 	&cls_filtered,
 	&cur_marker,
 	y);
-
-    
+/*	if (r<0){
+	  return r;
+	}
+  */
    bool is_remote = false;
    bool remote_exists =false;
    if (!is_remote && count < max_p && cct->_conf->rgw_datacache_enabled ){
@@ -1841,9 +1843,17 @@ int RGWRados::Bucket::List::list_objects_ordered(
 	c_obj.owner = target->get_bucket_info().owner.id;
 	string marker = cur_marker.name;
 	string remote_next_marker="";
-    int son =  store->get_remote_buckets(c_obj, remote_buckets, cur_prefix, marker, max_b, remote_next_marker);
-    
-	for (vector<string>::iterator t=remote_buckets.begin(); t!=remote_buckets.end(); ++t)
+	vector<rgw_bucket_dir_entry> remote_buc;
+    int son =  store->get_remote_buckets(c_obj, remote_buckets, cur_prefix, marker, max_b, remote_next_marker, remote_buc);
+   
+   for (auto t = remote_buc.begin(); t != remote_buc.end(); ++t) {
+	  string name = t->key.name;
+	  ent_map[name] = (std::move(*t));
+	  ldout(cct, 20) << "ugur remote obj name : "<< name<< " "<< t->meta.etag << " " << t->meta.size <<  dendl;
+	  remote_exists = true;
+  
+  }  
+/*	for (vector<string>::iterator t=remote_buckets.begin(); t!=remote_buckets.end(); ++t)
     {
        rgw_bucket_dir_entry entry;
        rgw_obj_index_key index_key(*t);
@@ -1851,7 +1861,7 @@ int RGWRados::Bucket::List::list_objects_ordered(
        entry.key = index_key;
 	   ent_map[*t] = (std::move(entry));
 	   remote_exists = true;
-   }
+   }*/
   }
   
     if (r < 0 && !remote_exists) {
@@ -9350,7 +9360,7 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
   // read block from local ssd cache
   if (datacache->get(oid)){
     d->add_pending_block(oid, c_block);
-    dout(10) << __func__   << "HIT local read cache, key:" << oid<< dendl; 
+    dout(10) << __func__   << "ugur HIT local read cache, key:" << oid<< dendl; 
     rgw_pool pool("default.rgw.buckets.data");
     rgw_raw_obj read_obj1(pool,oid);
     auto obj = d->store->svc.rados->obj(read_obj1);
@@ -9359,7 +9369,7 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
     return d->flush(std::move(completed));
 //    return d->drain();
   } else if( (c_block.c_obj.size_in_bytes < 0x400000) && c_block.c_obj.dirty == false && cct->_conf->enable_coalesing_write) {
-	  dout(10) << __func__   << "MISS small object read backend, key:" << oid<< dendl; 
+	  dout(10) << __func__   << "datacache MISS small object read backend, key:" << oid<< dendl; 
 	  d->add_pending_block(oid, c_block); 
 	  RemoteRequest *c =  new RemoteRequest();
 	  rgw_pool pool("default.rgw.buckets.data");
@@ -9369,13 +9379,13 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
       string path = cct->_conf->coalesced_write_bucket_name + c_block.c_obj.mapping_id;
 	  read_ofs = c_block.c_obj.offset;
       read_len = c_block.c_obj.size_in_bytes ;
-	  dout(10) << __func__   << "MISS small object read backend, key:" << read_ofs <<" len"<< read_len<< dendl;
+	  dout(10) << __func__   << "datacache MISS small object read backend, key:" << read_ofs <<" len"<< read_len<< dendl;
       auto completed = d->aio->get(obj, rgw::Aio::remote_op(std::move(op) , d->yield, obj_ofs, read_ofs, read_len, cct->_conf->backend_url, c, &c_block, path , datacache), cost, id);
 	  return d->flush(std::move(completed));
   } else {
 	ret = blkDirectory->getValue(&c_block);
 	if (ret == 0) { // read from remote cache
-	  dout(10) << __func__   << "HIT remote cache, key:" << oid<< dendl; 
+	  dout(10) << __func__   << "datacache HIT remote cache, key:" << oid<< dendl; 
 	  rgw_user user_id(c_block.c_obj.owner);
 	  string dest= "http://" + c_block.hosts_list[0];
 	  rgw_bucket bucket;
@@ -9394,7 +9404,7 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
          return d->flush(std::move(completed));
 		
 	} else if(c_block.c_obj.home_location == 0) { // read from write-back cache
-	  dout(10) << __func__   << "HIT write cache, key:" << oid<< dendl; 
+	  dout(10) << __func__   << "datacache HIT write cache, key:" << oid<< dendl; 
 	  c_block.access_count = 0;
 	  rgw_raw_obj read_obj;
 	  d->add_pending_block(oid, c_block);
@@ -9402,13 +9412,14 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
 	  auto obj = d->store->svc.rados->obj(read_obj);
 	  r = obj.open();
 	  if (r < 0) {
-    	ldout(cct, 4) << "failed to open rados context for " << read_obj << dendl;
+    	ldout(cct, 4) << "failed to open rados context for " << read_obj << " id " << id << dendl;
 	    return r; }
 	  auto completed = d->aio->get(obj, rgw::Aio::librados_op(std::move(op), d->yield), cost, id);
 	  return d->flush(std::move(completed));
     
 	} else { //read from backend
-	dout(10) << __func__   << "MISS cache layer, key:" << oid<< " offset " << id <<dendl; 
+	dout(10) << __func__   << "datacache MISS cache layer, key:" << oid<< " offset " << id << " read_len " <<
+	read_len <<dendl; 
     	d->add_pending_block(oid, c_block);
     	RemoteRequest *c =  new RemoteRequest();
     	rgw_pool pool("default.rgw.buckets.data");
@@ -9449,31 +9460,60 @@ vector<string> RGWRados::get_xml_data(string &text, string tag)
   }
 }
 
-int RGWRados::get_remote_buckets(cache_obj& c_obj, vector<string>& remote_bucket_list, string prefix, string marker, int max_b, string& next_marker){
+int RGWRados::get_remote_buckets(cache_obj& c_obj, vector<string>& remote_bucket_list, string prefix, string marker, int max_b, string& next_marker, vector<rgw_bucket_dir_entry>& remote_buckets){
 	get_s3_credentials(store->getRados(), c_obj.owner, c_obj.accesskey);
-
 	ldout(cct, 20) << __func__ <<dendl;
 	while(true){
 	  int ret  = datacache->submit_http_get_requests_s3(&c_obj, prefix, marker, max_b);
 	  if( ret < 0 )
 		return ret;
 	  vector<string> all;
-//	  string tag ="Key";
 	  vector<string> all_keys = get_xml_data(c_obj.acl, "Key");
 	  vector<string> all_prefix = get_xml_data(c_obj.acl, "Prefix");
+	  vector<string> sizes = get_xml_data(c_obj.acl, "Size");
+	  vector<string> etags = get_xml_data(c_obj.acl, "ETag");
+	  vector<string> modified = get_xml_data(c_obj.acl, "LastModified");
 	  //vector<string> marker = get_xml_data(c_obj.acl, "Marker");
 	  if(all_keys.size() == 0 && all_prefix.size()==1)
 		break;
-	  else if (all_prefix.size() > 1){
+	  else if (all_keys.size() >= 1){
+		  all = all_keys;
+	  }
+//	  else if (all_prefix.size() > 1){
+	  else{
 		all = all_prefix;
 	  }
 	  //else if (all_keys.size() >= 1){
-	  else {
-		all = all_keys;
-	  }
+//	  else {
+//		all = all_keys;
+//	  }
+	  int ind = 0;
 	  for (vector<string>::iterator t=all.begin(); t!=all.end(); ++t)
 	  {
-        remote_bucket_list.push_back(*t);
+		rgw_bucket_dir_entry entry;
+		rgw_obj_index_key index_key(*t);
+		entry.key = index_key;
+		entry.exists =true;
+		if(all_keys.size() >= 1){
+/*		  string s = "&quot;";
+ *		  std::string::size_type i =  etags[ind].find(s);
+		  if (i != std::string::npos)
+			 etags[ind].erase(i, s.length());
+			 */
+		  string s = "&quot;";
+		  etags[ind].erase (0,s.length());
+		  etags[ind].erase(etags[ind].length()-s.length(),etags[ind].length());
+		  entry.meta.etag =  etags[ind];
+		  entry.meta.owner = "ugur";
+		  ldout(cct, 20) << __func__ << ind << " " << *t << " entry.meta.etag  " << entry.meta.etag << dendl;
+		  entry.meta.size = stoull(sizes[ind]);
+		  entry.meta.accounted_size = stoull(sizes[ind]);
+		  ldout(cct, 20) << __func__ <<  " entry.meta.size " <<  entry.meta.size << dendl;;
+		}
+		remote_buckets.push_back(entry);
+		remote_bucket_list.push_back(*t);
+		
+		ind = ind + 1;
       }
 
 	  vector<string> all_marker = get_xml_data(c_obj.acl, "NextMarker");
@@ -9500,24 +9540,6 @@ int RGWRados::get_head_obj(cache_obj& c_obj){
   int ret  = datacache->submit_http_head_requests_s3(&c_obj);
   return ret;
   }
-  /*int ret = 0; 
-  if (c_obj.obj_name.find("/") != std::string::npos) {
-    if (c_obj.obj_name.find("tpch") == std::string::npos ){
-      dout(10) << __func__   << "output bucket" << c_obj.bucket_name  <<dendl;
-    } else{
-      dout(10) << __func__   << "bucket" << c_obj.bucket_name  <<dendl;
-      dout(10) << __func__   << "obj"    << c_obj.obj_name <<dendl;
-//	  ret  = datacache->submit_http_get_requests_s3(&c_obj,"","");
-/*	  string tag = "Key";
-	  vector<string> remote_bucket_list = get_xml_data(c_obj.acl, tag );
-		for (vector<string>::iterator t=remote_bucket_list.begin(); t!=remote_bucket_list.end(); ++t) 
-		{
-	     dout(10) << __func__   << " first_key " << *t <<dendl;
-		}
-       dout(10) << __func__   << " ACCL44 "    << c_obj.acl <<dendl;*/
-	  //int reti = retrieve_obj_acls(c_obj);
-      //int ret  = datacache->submit_http_head_requests_s3(&c_obj);
-//}
 
 int RGWRados::retrieve_obj_acls(cache_obj& c_obj){
   ldout(cct, 20) << __func__ <<dendl;
@@ -9613,9 +9635,9 @@ int RGWRados::retrieve_obj_acls(cache_obj& c_obj){
 
 int RGWRados::iterate_obj(cache_obj& c_obj, off_t ofs, off_t end, uint64_t max_chunk_size, iterate_cache_obj_cb cb, void *arg, optional_yield y, RGWRados *store){
   dout(10) << __func__  <<dendl;
-  uint64_t len;
-  uint64_t read_ofs = 0;
-  
+  uint64_t len = 0;
+  uint64_t read_len = 0;
+    
   //FIXME:: Calculate_block_id
   if (end < 0)
     len = 0;
@@ -9623,10 +9645,17 @@ int RGWRados::iterate_obj(cache_obj& c_obj, off_t ofs, off_t end, uint64_t max_c
     len = end - ofs + 1;
 
   while (ofs <= end) {
+	uint64_t read_ofs = 0;
     cache_block c_block;
     c_block.c_obj = c_obj;
-    uint64_t read_len = std::min(len, max_chunk_size);
-    c_block.block_id = ofs/max_chunk_size;
+    read_len = std::min(len, max_chunk_size);
+	c_block.block_id = ofs/max_chunk_size;
+    
+	if ( (ofs % max_chunk_size) != 0) {
+	  read_ofs = ofs - (c_block.block_id*max_chunk_size) ;
+	  read_len = max_chunk_size - read_ofs;
+	}
+
     c_block.size_in_bytes = read_len;
     int r = cb(c_block, ofs, read_ofs, read_len, arg, store);
     

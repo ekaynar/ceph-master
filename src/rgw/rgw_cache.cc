@@ -1029,6 +1029,7 @@ static size_t send_http_data(char *ptr, const size_t size, const size_t nmemb, v
 	  return copy_this_much;
 	  }
 	  return 0;
+
   }
 
 static size_t header_callback(void *pData, size_t tSize, size_t tCount, void *pmUser)
@@ -1086,14 +1087,14 @@ int DataCache::submit_http_get_requests_s3(cache_obj *c_obj, string prefix, stri
   uri = "/"+c_obj->bucket_name+"/?delimiter=%2F";
 
   if (marker != ""){
-	string tmp2 = ReplaceAll(string(marker), std::string("/"), std::string("%2F"));
-	string tmp = ReplaceAll(string(tmp2), std::string("."), std::string("%2C"));
+	string tmp = ReplaceAll(string(marker), std::string("/"), std::string("%2F"));
+//	string tmp = ReplaceAll(string(tmp2), std::string("."), std::string("%2C"));
 	uri = uri +"&marker=" + tmp;
   }
   if (prefix != ""){
-	string tmp2 = ReplaceAll(string(prefix), std::string("/"), std::string("%2F"));
-	string tmp = ReplaceAll(string(tmp2), std::string("."), std::string("%2C"));
-	ldout(cct,10) << __func__ << " tmp2 "<< tmp2<< " tmp " << tmp <<dendl;
+	string tmp = ReplaceAll(string(prefix), std::string("/"), std::string("%2F"));
+//	string tmp = ReplaceAll(string(tmp2), std::string("."), std::string("%2C"));
+//	ldout(cct,10) << __func__ << " tmp2 "<< tmp2<< " tmp " << tmp <<dendl;
 	uri = uri +"&prefix=" + tmp;
   }
 //  if (max_b != 0) 
@@ -1286,11 +1287,13 @@ int CopyRemoteS3Object::submit_http_put_coalesed_requests_s3(){
 
 
 int RemoteS3Request::submit_http_get_request_s3(){
-  int begin = req->ofs + req->read_ofs;
-  int end = req->ofs + req->read_ofs + req->read_len - 1;
+  //int begin = req->ofs + req->read_ofs;
+  //int end = req->ofs + req->read_ofs + req->read_len - 1;
+  int begin = req->ofs;
+  int end = req->ofs + req->read_len - 1;
   std::string range = std::to_string(begin)+ "-"+ std::to_string(end);
   //std::string range = std::to_string( (int)req->ofs + (int)(req->read_ofs))+ "-"+ std::to_string( (int)(req->ofs) + (int)(req->read_ofs) + (int)(req->read_len - 1));
-//  ldout(cct, 10) << __func__  << " key " << req->key << " range " << range  << dendl;
+  //ldout(cct, 10) << __func__  << " key " << req->key << " range " << range  << dendl;
   
   CURLcode res;
   string uri = "/"+ req->path;;

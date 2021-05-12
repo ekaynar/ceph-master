@@ -3965,8 +3965,6 @@ void RGWPutObj::execute()
       }
     }
     pdest_placement = &s->dest_placement;
-	if(s->obj_size < 4*1024*1024)
-	  ldpp_dout(this, 20) << "ugur small object " << pdest_placement->name << " " << pdest_placement->storage_class<< dendl;
 
     processor.emplace<AtomicObjectProcessor>(
 	&*aio, store, s->bucket_info, pdest_placement,
@@ -4927,6 +4925,17 @@ void RGWDeleteObj::execute()
     RGWObjectCtx *obj_ctx = static_cast<RGWObjectCtx *>(s->obj_ctx);
     obj_ctx->set_atomic(obj);
 
+	
+	if (s->cct->_conf->rgw_datacache_enabled){
+	  cache_obj d_obj;
+	    d_obj.bucket_name = s->bucket_name;
+		d_obj.obj_name = obj.key.name;
+		d_obj.backendProtocol =  S3;
+	    ldpp_dout(this, 20) << "del dictionary object: "<< d_obj.bucket_name << " obj: "<< d_obj.obj_name<< dendl;
+		int ret =  store->getRados()->objDirectory->delValue(&d_obj);
+	}
+
+
     bool ver_restored = false;
     op_ret = store->getRados()->swift_versioning_restore(*obj_ctx, s->bucket_owner.get_id(),
 	s->bucket_info, obj, ver_restored, this);
@@ -5245,7 +5254,7 @@ void RGWCopyObj::execute()
 
   rgw_obj src_obj(src_bucket, src_object);
   rgw_obj dst_obj(dest_bucket, dest_object);
-
+   
   RGWObjectCtx& obj_ctx = *static_cast<RGWObjectCtx *>(s->obj_ctx);
   if ( ! version_id.empty()) {
     dst_obj.key.set_instance(version_id);
@@ -5307,6 +5316,43 @@ void RGWCopyObj::execute()
     // this should be global conf (probably returnign a different handler)
     // so we don't need to read the configured values before we perform it
   }
+  
+  /*datacache*/
+  if (s->cct->_conf->rgw_datacache_enabled){
+	string old_key = src_bucket.name+ "_" +src_object.name;
+	string new_key = dest_bucket.name+ "_" +dest_object;
+	ldpp_dout(this, 0) << __func__ << "Update directory for old_key: " << old_key << " new_key " << new_key << dendl;
+    cache_obj old_obj;
+	old_obj.bucket_name = src_bucket.name;
+	old_obj.obj_name = src_object.name;
+	int r = store->getRados()->objDirectory->getValue(&old_obj);
+	cache_obj new_obj;
+	new_obj = old_obj;
+	new_obj.bucket_name = dest_bucket.name;
+	new_obj.obj_name = dest_object;
+	time_t rawTime = time(NULL);
+	new_obj.lastAccessTime = mktime(gmtime(&rawTime)); 
+	new_obj.creationTime = mktime(gmtime(&rawTime));
+	new_obj.dirty = true;
+	new_obj.intermediate = false; 
+	new_obj.home_location = CACHE;
+	int obj_size = old_obj.size_in_bytes;
+//	int increment = 1024*1024*4;
+	ldpp_dout(this, 0) << __func__ << "Update directory for DONE1" << dendl;
+    r = store->getRados()->objDirectory->delValue(&old_obj);
+	ldpp_dout(this, 0) << __func__ << "Update directory for DONE2" << dendl;
+	r = store->getRados()->objDirectory->setValue(&new_obj);
+	ldpp_dout(this, 0) << __func__ << "Update directory for DONE3" << dendl;
+	/*for (int i = 0 ; i < obj_size; i += increment){
+	  cache_block c_block;
+	  c_block.c_obj = old_obj;
+	  c_block.block_id = i / increment;
+	  r = store->getRados()->blkDirectory->delValue(&c_block);
+	}*/
+	//ldpp_dout(this, 0) << __func__ << "Update directory for DONE" << dendl;
+  }
+	
+
 }
 
 int RGWGetACLs::verify_permission()
@@ -6632,9 +6678,9 @@ void RGWDeleteMultiObj::execute()
 	if (s->cct->_conf->rgw_datacache_enabled){
 	  cache_obj d_obj;
 	    d_obj.bucket_name = s->bucket_name;
-		d_obj.obj_name = s->object.name;
+		d_obj.obj_name = obj.key.name;
 		d_obj.backendProtocol =  S3;
-		 ldpp_dout(this, 20) << "del dictionary object: "<< d_obj.bucket_name << " obj: "<< d_obj.obj_name<< dendl;
+	    ldpp_dout(this, 20) << "del dictionary object: "<< d_obj.bucket_name << " obj: "<< d_obj.obj_name<< dendl;
 		int ret =  store->getRados()->objDirectory->delValue(&d_obj);
 	}
 
@@ -8263,12 +8309,6 @@ void RGWDeleteBucketPublicAccessBlock::execute()
 //
 bool compare_acls(){return true;}
 
-int RGWDeleteMultiObj::delete_multi_objects(){
-  c_obj.bucket_name = s->bucket_name;
-  c_obj.obj_name = s->object.name;
-  c_obj.owner = s->user->get_info().user_id.id;
-//  int op_ret = store->getRados()->objDirectory->delMultiValue(&c_obj);
-}
 bool RGWDeleteObj::object_in_cache(){
   c_obj.bucket_name = s->bucket_name;
   c_obj.obj_name = s->object.name;
@@ -8290,19 +8330,19 @@ bool RGWGetObj::cache_head_op(){
   c_obj.bucket_name = s->bucket_name;
   c_obj.obj_name = s->object.name;
   c_obj.backendProtocol =  S3;
-
   c_obj.owner = s->user->get_info().user_id.id;
   if(!get_data){
-      op_ret = store->getRados()->get_head_obj(c_obj);
-	  s->obj_size = c_obj.size_in_bytes;
-      if ( op_ret == 200 ){
+      int r  = store->getRados()->get_head_obj(c_obj);
+	  op_ret = 0;
+//	  s->obj_size = c_obj.size_in_bytes;
+	  ldpp_dout(this, 10) << __func__  << " ugur op_ret "<< op_ret << " " <<  c_obj.size_in_bytes <<
+	  " buc: " << s->bucket_name << " obj "<< s->object.name << dendl;
+      if ( r == 200 ){
 		this->lo_etag = c_obj.etag;
-	    this->total_len =  c_obj.size_in_bytes;
+//	    this->total_len =  c_obj.size_in_bytes;
         return true;
-	  }
-      else
-        return false;
-    }
+	  } 
+  }
   return false;
 }
 
@@ -8329,11 +8369,18 @@ bool RGWGetObj::cache_authorize(){
 
 
 void RGWGetObj::cache_execute(){
-  ldpp_dout(this, 10) << __func__  << "object size:" <<  c_obj.size_in_bytes <<dendl;
+  ldpp_dout(this, 10) << __func__  << dendl;
   RGWGetObj_CB cb(this);
   RGWGetObj_Filter* filter = (RGWGetObj_Filter *)&cb;
-  s->obj_size = c_obj.size_in_bytes;
+  bufferlist bl;
 
+if (!get_data){
+    ldpp_dout(this, 10) << __func__  << "HEAD request object size:" <<  c_obj.size_in_bytes <<dendl;
+    send_response_data(bl, 0, 0);
+    return ;
+  }
+ 
+  s->obj_size = c_obj.size_in_bytes;
 
   RGWBucketInfo dest_bucket_info;
   RGWRados::Object op_target(store->getRados(), dest_bucket_info, *static_cast<RGWObjectCtx *>(s->obj_ctx), obj);
@@ -8344,26 +8391,28 @@ void RGWGetObj::cache_execute(){
   if (op_ret < 0)
     return ;
   
-  if (!get_data){
-    ldpp_dout(this, 10) << __func__  << "HEAD request object size:" <<  c_obj.size_in_bytes <<dendl;
-    bufferlist bl;
-    send_response_data(bl, 0, 0);
-    return ;
-  }
- 
-  
   if(range_str){
      op_ret = read_op.range_to_ofs(s->obj_size, ofs, end);
-     this->total_len = end - ofs + 1;
+	 total_len = (ofs <= end ? end + 1 - ofs : 0);
+//     this->total_len = end - ofs + 1;
   } else{ 
   	this->total_len = c_obj.size_in_bytes;
   	ofs = 0;
   	end = c_obj.size_in_bytes - 1;
   }
   
+  start = ofs; 
   
+  ldpp_dout(this, 10) << __func__  << 
+  "datacache bucket "<< c_obj.bucket_name <<
+  " obj "<< c_obj.obj_name << 
+  " ofs "<< ofs << " end "<< end << " is range "<< range_str<< dendl;
   op_ret = read_op.read(ofs, end, filter, c_obj, s->yield); 
   if (op_ret >= 0)
     op_ret = filter->flush();
+
+  op_ret = send_response_data(bl, 0, 0);
+  
+
   return;
 }

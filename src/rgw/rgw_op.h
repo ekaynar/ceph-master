@@ -195,7 +195,6 @@ public:
   virtual bool cache_head_op() {return true;}  
   virtual bool cache_authorize() {return true;}  
   virtual bool object_in_cache() {return true;}; /*datacache*/
-  virtual int delete_multi_objects() {}
   cache_obj c_obj;
 //  RGWObjectDirectory objectDirectory;
   /*datacache*/
@@ -1946,7 +1945,6 @@ public:
   int verify_permission() override;
   void pre_exec() override;
   void execute() override;
-  int delete_multi_objects() override;
 
   virtual int get_params() = 0;
   virtual void send_status() = 0;

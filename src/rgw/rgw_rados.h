@@ -1127,7 +1127,7 @@ public:
   int retrieve_obj_size(cache_obj& c_obj, RGWRados *store);
   int get_head_obj(cache_obj& c_obj);
   vector<string> get_xml_data(string &text, string tag);
-  int get_remote_buckets(cache_obj& c_obj, vector<string>& remote_bucket_list, string prefix, string marker, int max_b, string& next_marker);
+  int get_remote_buckets(cache_obj& c_obj, vector<string>& remote_bucket_list, string prefix, string marker, int max_b, string& next_marker, vector<rgw_bucket_dir_entry>& remote_buckets);
   bool get_obj(cache_obj *c_obj);
   /* datacache */
 

@@ -84,6 +84,8 @@ using namespace librados;
 #include "compressor/Compressor.h"
 
 #include "rgw_tag_s3.h" //datacache
+#include <algorithm> //datacache
+#include <boost/algorithm/string/replace.hpp>
 #ifdef WITH_LTTNG
 #define TRACEPOINT_DEFINE
 #define TRACEPOINT_PROBE_DYNAMIC_LINKAGE
@@ -6361,19 +6363,21 @@ struct get_obj_data {
       auto bl = std::move(completed.front().data);
       completed.pop_front_and_dispose(std::default_delete<rgw::AioResultEntry>{});
       offset += bl.length();
-      if(false){
-//      if(cct->_conf->rgw_datacache_enabled and cache_enable){
-  //      bufferlist chunk_buffer;r
-//	chunk_buffer.append(bl);
+//      if(false){
+      if(cct->_conf->rgw_datacache_enabled and cache_enable){
+        bufferlist chunk_buffer;
+	    chunk_buffer.append(bl);
         key = get_pending_key();
         cache_block c_block = get_pending_block(key); 	
-        if (false){
-//        if (bl.length() == 0x400000){
-/*      		string str = cct->_conf->rgw_frontends;
+		ldout(cct, 20) << "before_handle key " << key << " obj.length=" << c_block.c_obj.size_in_bytes << " block lenght  "<< bl.length()  <<dendl;
+//        if (false){
+        if (bl.length() == 0x400000){
+		  ldout(cct, 20) << "after_handle key " << key << " obj.length=" << c_block.c_obj.size_in_bytes << " block lenght  "<< bl.length()  <<dendl;
+      		string str = cct->_conf->rgw_frontends;
 		  std::size_t pos = str.find("endpoint=");
 		  std::string str2 = str.substr(pos);
-		  std::string endpoint = str2.substr(9);    */
-		string endpoint=cct->_conf->host+":8081";
+		  std::string endpoint = str2.substr(9); 
+		  //string endpoint=cct->_conf->host+":8081";
 		  c_block.hosts_list.push_back(endpoint);
 		  store->put_data(key, bl , bl.length(), &c_block); 
 //		  store->put_data(key, chunk_buffer, chunk_buffer.length(), &c_block); 
@@ -9349,7 +9353,13 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
   const uint64_t cost = read_len;
   const uint64_t id = obj_ofs;
   
-  string oid = c_block.c_obj.bucket_name + "_"+c_block.c_obj.obj_name+"_"+ std::to_string(c_block.block_id);
+  string tmp_oname = c_block.c_obj.obj_name;
+  const char x = '/';
+  const char y = '_';
+  std::replace(tmp_oname.begin(), tmp_oname.end(), x, y);
+  string oid = c_block.c_obj.bucket_name + "_"+tmp_oname+"_"+ std::to_string(c_block.block_id);
+   dout(10) << __func__<< " oid " << oid << dendl;
+  //string oid = c_block.c_obj.bucket_name + "_"+c_block.c_obj.obj_name+"_"+ std::to_string(c_block.block_id);
   op.read(read_ofs, read_len, nullptr, nullptr);
 
   d->add_pending_key(oid);

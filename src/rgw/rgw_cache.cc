@@ -1157,7 +1157,7 @@ int DataCache::submit_http_head_requests_s3(cache_obj *c_obj){
 	curl_easy_setopt(curl_handle, CURLOPT_HEADERDATA, &mHeader);
     curl_easy_setopt(curl_handle, CURLOPT_URL, loc.c_str());
 	curl_easy_setopt(curl_handle, CURLOPT_NOBODY, 1L);
-	curl_easy_setopt(curl_handle, CURLOPT_VERBOSE, 1L);
+//	curl_easy_setopt(curl_handle, CURLOPT_VERBOSE, 1L);
 	curl_easy_setopt(curl_handle, CURLOPT_NOPROGRESS, 1L);
 	res = curl_easy_perform(curl_handle); //run the curl command
 	curl_easy_reset(curl_handle);
@@ -1293,7 +1293,7 @@ int RemoteS3Request::submit_http_get_request_s3(){
   int end = req->ofs + req->read_len - 1;
   std::string range = std::to_string(begin)+ "-"+ std::to_string(end);
   //std::string range = std::to_string( (int)req->ofs + (int)(req->read_ofs))+ "-"+ std::to_string( (int)(req->ofs) + (int)(req->read_ofs) + (int)(req->read_len - 1));
-  //ldout(cct, 10) << __func__  << " key " << req->key << " range " << range  << dendl;
+  ldout(cct, 10) << __func__  << " key " << req->key << " range " << range  << dendl;
   
   CURLcode res;
   string uri = "/"+ req->path;;

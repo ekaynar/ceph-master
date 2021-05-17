@@ -8373,14 +8373,15 @@ void RGWGetObj::cache_execute(){
   RGWGetObj_CB cb(this);
   RGWGetObj_Filter* filter = (RGWGetObj_Filter *)&cb;
   bufferlist bl;
+  s->obj_size = c_obj.size_in_bytes;
 
 if (!get_data){
+  	this->total_len = c_obj.size_in_bytes;
     ldpp_dout(this, 10) << __func__  << "HEAD request object size:" <<  c_obj.size_in_bytes <<dendl;
     send_response_data(bl, 0, 0);
     return ;
   }
  
-  s->obj_size = c_obj.size_in_bytes;
 
   RGWBucketInfo dest_bucket_info;
   RGWRados::Object op_target(store->getRados(), dest_bucket_info, *static_cast<RGWObjectCtx *>(s->obj_ctx), obj);

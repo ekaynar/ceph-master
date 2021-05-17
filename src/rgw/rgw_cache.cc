@@ -746,7 +746,12 @@ done:
 
 
 }
-bool DataCache::get(string oid) {
+bool DataCache::get(string oid_orig) {
+
+  string oid = oid_orig;
+  const char x = '/';
+  const char y = '_';
+  std::replace(oid.begin(), oid.end(), x, y);
 
   ldout(cct, 0) << __func__ << "key:"<< oid << dendl;
   bool exist = false;
@@ -876,7 +881,13 @@ void DataCache::put_obj(cache_obj* c_obj){
   obj_cache_lock.unlock();
 }
 
-void DataCache::put(bufferlist& bl, uint64_t len, string obj_id, cache_block *c_block){
+void DataCache::put(bufferlist& bl, uint64_t len, string oid_orig, cache_block *c_block){
+  string obj_id = oid_orig;
+  const char x = '/';
+  const char y = '_';
+  std::replace(obj_id.begin(), obj_id.end(), x, y);
+//  string key2 = c_block.c_obj.bucket_name + "_"+tmp_oname+"_"+ std::to_string(c_block.block_id);
+
   ldout(cct, 10) << __func__  <<" oid:" << obj_id <<dendl;
   int ret = 0;
   uint64_t freed_size = 0, _free_data_cache_size = 0, _outstanding_write_size = 0;

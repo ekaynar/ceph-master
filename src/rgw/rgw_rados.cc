@@ -6372,6 +6372,12 @@ struct get_obj_data {
 		ldout(cct, 20) << "before_handle key " << key << " obj.length=" << c_block.c_obj.size_in_bytes << " block lenght  "<< bl.length()  <<dendl;
 //        if (false){
         if (bl.length() == 0x400000){
+/*		  string tmp_oname = c_block.c_obj.obj_name;
+		  const char x = '/';
+		  const char y = '_';
+		  std::replace(tmp_oname.begin(), tmp_oname.end(), x, y);
+		  string key2 = c_block.c_obj.bucket_name + "_"+tmp_oname+"_"+ std::to_string(c_block.block_id);
+*/
 		  ldout(cct, 20) << "after_handle key " << key << " obj.length=" << c_block.c_obj.size_in_bytes << " block lenght  "<< bl.length()  <<dendl;
       		string str = cct->_conf->rgw_frontends;
 		  std::size_t pos = str.find("endpoint=");
@@ -9357,9 +9363,9 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
   const char x = '/';
   const char y = '_';
   std::replace(tmp_oname.begin(), tmp_oname.end(), x, y);
-  string oid = c_block.c_obj.bucket_name + "_"+tmp_oname+"_"+ std::to_string(c_block.block_id);
-   dout(10) << __func__<< " oid " << oid << dendl;
-  //string oid = c_block.c_obj.bucket_name + "_"+c_block.c_obj.obj_name+"_"+ std::to_string(c_block.block_id);
+  string key = c_block.c_obj.bucket_name + "_"+tmp_oname+"_"+ std::to_string(c_block.block_id);
+  string oid = c_block.c_obj.bucket_name + "_"+c_block.c_obj.obj_name+"_"+ std::to_string(c_block.block_id);
+  dout(10) << __func__<< " oid " << oid << dendl;
   op.read(read_ofs, read_len, nullptr, nullptr);
 
   d->add_pending_key(oid);
@@ -9368,6 +9374,7 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
   
   int ret = 0;  
   // read block from local ssd cache
+
   if (datacache->get(oid)){
     d->add_pending_block(oid, c_block);
     dout(10) << __func__   << "ugur HIT local read cache, key:" << oid<< dendl; 

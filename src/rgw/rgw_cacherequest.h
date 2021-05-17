@@ -3,11 +3,11 @@
 //
 #ifndef RGW_CACHEREQUEST_H
 #define RGW_CACHEREQUEST_H
-
 #include "rgw_rest_conn.h"
 #include <aio.h>
 #include "rgw_aio.h"
 #include "rgw_rest_client.h"
+#include <boost/algorithm/string/replace.hpp>
 
 class RGWRESTConn;
 struct get_obj_data;
@@ -42,15 +42,20 @@ struct LocalRequest : public CacheRequest{
   LocalRequest() :  CacheRequest(), paiocb(NULL) {}
   ~LocalRequest(){}
 
-  int prepare_op(std::string key,  bufferlist *bl, off_t read_len, off_t ofs, off_t read_ofs, void(*f)(sigval_t), rgw::Aio* aio, rgw::AioResult* r, string& location) {
+  int prepare_op(std::string key_orig,  bufferlist *bl, off_t read_len, off_t ofs, off_t read_ofs, void(*f)(sigval_t), rgw::Aio* aio, rgw::AioResult* r, string& location) {
     this->r = r;	
     this->aio = aio;
 //    this->bl = bl;
     this->ofs = ofs;
-    this->key = key;
+    string tmp = key_orig;
+	const char x = '/';
+	const char y = '_';
+	std::replace(tmp.begin(), tmp.end(), x, y);
+	this->key = tmp;
     this->read_len = read_len;
     this->stat = EINPROGRESS;	
-    std::string loc = location+ "/" + key;
+	std::string loc = location+ "/" + this->key;
+	//cout << "prepare_op  " << loc << "\n";
     struct aiocb *cb = new struct aiocb;
     memset(cb, 0, sizeof(struct aiocb));
     cb->aio_fildes = ::open(loc.c_str(), O_RDONLY);

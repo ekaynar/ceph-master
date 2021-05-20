@@ -1794,10 +1794,12 @@ int RGWRados::Bucket::List::list_objects_ordered(
   }
 
   rgw_obj_index_key prev_marker;
-  uint16_t attempt = 0;
-  while (true) {
+  for (uint16_t attempt = 1; /* empty */; ++attempt) {
+// uint16_t attempt = 0;
+//  while (true) {
     ldout(cct, 20) << "RGWRados::Bucket::List::" << __func__ <<
-      " beginning attempt=" << ++attempt << dendl;
+ 		" starting attempt " << attempt << dendl;
+      //	   beginning attempt= << ++attempt << dendl;
 
     // this loop is generally expected only to have a single
     // iteration; the standard exit is at the bottom of the loop, but
@@ -2042,8 +2044,8 @@ int RGWRados::Bucket::List::list_objects_ordered(
     ldout(cct, 1) << "RGWRados::Bucket::List::" << __func__ <<
       " INFO ordered bucket listing requires read #" << (1 + attempt) <<
       dendl;
-  } // read attempt loop
-
+  //} // read attempt loop
+  } // for (uint16_t attempt...
 done:
 
   if (is_truncated) {

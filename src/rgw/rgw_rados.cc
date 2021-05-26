@@ -9361,12 +9361,14 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
   const uint64_t cost = read_len;
   const uint64_t id = obj_ofs;
   
-  string tmp_oname = c_block.c_obj.obj_name;
+/*  string tmp_oname = c_block.c_obj.obj_name;
   const char x = '/';
   const char y = '_';
   std::replace(tmp_oname.begin(), tmp_oname.end(), x, y);
   string key = c_block.c_obj.bucket_name + "_"+tmp_oname+"_"+ std::to_string(c_block.block_id);
+  */
   string oid = c_block.c_obj.bucket_name + "_"+c_block.c_obj.obj_name+"_"+ std::to_string(c_block.block_id);
+  
   dout(10) << __func__<< " oid " << oid << dendl;
   op.read(read_ofs, read_len, nullptr, nullptr);
 
@@ -9376,7 +9378,6 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
   
   int ret = 0;  
   // read block from local ssd cache
-
   if (datacache->get(oid)){
     d->add_pending_block(oid, c_block);
     dout(10) << __func__   << "ugur HIT local read cache, key:" << oid<< dendl; 
@@ -9387,7 +9388,9 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
     auto completed = d->aio->get(obj, rgw::Aio::cache_op(std::move(op) , d->yield, obj_ofs, read_ofs, read_len, cct->_conf->rgw_datacache_path), cost, id);
     return d->flush(std::move(completed));
 //    return d->drain();
-  } else if( (c_block.c_obj.size_in_bytes < 0x400000) && c_block.c_obj.dirty == false && cct->_conf->enable_coalesing_write) {
+    }
+
+  else if( (c_block.c_obj.size_in_bytes < 0x400000) && c_block.c_obj.dirty == false && cct->_conf->enable_coalesing_write) {
 	  dout(10) << __func__   << "datacache MISS small object read backend, key:" << oid<< dendl; 
 	  d->add_pending_block(oid, c_block); 
 	  RemoteRequest *c =  new RemoteRequest();
@@ -9401,7 +9404,10 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
 	  dout(10) << __func__   << "datacache MISS small object read backend, key:" << read_ofs <<" len"<< read_len<< dendl;
       auto completed = d->aio->get(obj, rgw::Aio::remote_op(std::move(op) , d->yield, obj_ofs, read_ofs, read_len, cct->_conf->backend_url, c, &c_block, path , datacache), cost, id);
 	  return d->flush(std::move(completed));
-  } else {
+  }
+
+	  
+  else {
 	ret = blkDirectory->getValue(&c_block);
 	if (ret == 0) { // read from remote cache
 	  dout(10) << __func__   << "datacache HIT remote cache, key:" << oid<< dendl; 
@@ -9421,8 +9427,9 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
 //	  datacache->submit_remote_req(c);
 //	return d->drain();
          return d->flush(std::move(completed));
-		
-	} else if(c_block.c_obj.home_location == 0) { // read from write-back cache
+	}		
+	
+	else if(c_block.c_obj.home_location == 0) { // read from write-back cache
 	  dout(10) << __func__   << "datacache HIT write cache, key:" << oid<< dendl; 
 	  c_block.access_count = 0;
 	  rgw_raw_obj read_obj;
@@ -9436,7 +9443,9 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
 	  auto completed = d->aio->get(obj, rgw::Aio::librados_op(std::move(op), d->yield), cost, id);
 	  return d->flush(std::move(completed));
     
-	} else { //read from backend
+	} 
+	
+	else { //read from backend
 	dout(10) << __func__   << "datacache MISS cache layer, key:" << oid<< " offset " << id << " read_len " <<
 	read_len <<dendl; 
     	d->add_pending_block(oid, c_block);
@@ -9448,8 +9457,9 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
      	string path = c_block.c_obj.bucket_name + "/"+c_block.c_obj.obj_name;
         auto completed = d->aio->get(obj, rgw::Aio::remote_op(std::move(op) , d->yield, obj_ofs, read_ofs, read_len, cct->_conf->backend_url, c, &c_block, path , datacache), cost, id);
  //     return d->drain();
-    return d->flush(std::move(completed));
-  }}
+    	return d->flush(std::move(completed));
+  	}
+     }
 } 
 
 void stripTags( string &text )

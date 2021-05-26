@@ -682,8 +682,7 @@ done:
 void DataCache::cache_aio_write_completion_cb(cacheAioWriteRequest* c){
   ChunkDataInfo  *chunk_info = nullptr;
   
-  ldout(cct, 20) << __func__ << dendl;
- ldout(cct, 10) << __func__  << " oid " << c->key << dendl; 
+  ldout(cct, 10) << __func__  << " oid " << c->key << dendl; 
 
   cache_lock.lock();
   outstanding_write_list.remove(c->key);
@@ -746,23 +745,24 @@ done:
 
 
 }
-bool DataCache::get(string oid_orig) {
+bool DataCache::get(string oid) {
 
-  string oid = oid_orig;
+  string key = oid;
   const char x = '/';
   const char y = '_';
-  std::replace(oid.begin(), oid.end(), x, y);
+  std::replace(key.begin(), key.end(), x, y);
 
-  ldout(cct, 0) << __func__ << "key:"<< oid << dendl;
+  ldout(cct, 0) << __func__ << "key:"<< key << dendl;
   bool exist = false;
   int ret = 0;
-  string location = cct->_conf->rgw_datacache_path + "/"+ oid;
+  string location = cct->_conf->rgw_datacache_path + "/"+ key;
   cache_lock.lock();
-  map<string, ChunkDataInfo*>::iterator iter = cache_map.find(oid);
+  map<string, ChunkDataInfo*>::iterator iter = cache_map.find(key);
   if (!(iter == cache_map.end())){
      // check inside cache whether file exists or not!!!! then make exist true;
      struct ChunkDataInfo *chdo = iter->second;
      if(access(location.c_str(), F_OK ) != -1 ) { // file exists
+	   ldout(cct, 0) << __func__ << " filexist:"<< key << dendl;
  	  exist = true;
  	  /* LRU */
  	  eviction_lock.lock();
@@ -772,9 +772,9 @@ bool DataCache::get(string oid_orig) {
  	  eviction_lock.unlock();
      } else { /*LRU*/
 	  ret = evict_from_directory(oid);
-	  cache_map.erase(oid);
+	  cache_map.erase(key);
 	  lru_remove(chdo);
-      exist = false;
+          exist = false;
  	  eviction_lock.lock();
  	  free_data_cache_size += chdo->size;
  	  eviction_lock.unlock();
@@ -882,6 +882,7 @@ void DataCache::put_obj(cache_obj* c_obj){
 }
 
 void DataCache::put(bufferlist& bl, uint64_t len, string oid_orig, cache_block *c_block){
+
   string obj_id = oid_orig;
   const char x = '/';
   const char y = '_';

@@ -7008,6 +7008,10 @@ std::vector<Option> get_rgw_options() {
     .set_default(false)
     .set_description("enabling rgw datacache"),
 
+    Option("remote_cache_addr", Option::TYPE_STR, Option::LEVEL_ADVANCED)
+    .set_default("localhost:8080")
+    .set_description("rgw address as a remote cache"),
+
     Option("rgw_datacache_path", Option::TYPE_STR, Option::LEVEL_ADVANCED)
     .set_default("/tmp/")
     .set_description("rgw datacache path"),

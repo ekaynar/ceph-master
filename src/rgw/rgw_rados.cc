@@ -6384,8 +6384,8 @@ struct get_obj_data {
       		string str = cct->_conf->rgw_frontends;
 		  std::size_t pos = str.find("endpoint=");
 		  std::string str2 = str.substr(pos);
-		  std::string endpoint = str2.substr(9); 
-		  //string endpoint=cct->_conf->host+":8081";
+		  //std::string endpoint = str2.substr(9); 
+		  string endpoint=cct->_conf->remote_cache_addr;
 		  c_block.hosts_list.push_back(endpoint);
 		  store->put_data(key, bl , bl.length(), &c_block); 
 //		  store->put_data(key, chunk_buffer, chunk_buffer.length(), &c_block); 

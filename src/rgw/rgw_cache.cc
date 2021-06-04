@@ -773,9 +773,9 @@ bool DataCache::get(string oid) {
      } else { /*LRU*/
 	  ret = evict_from_directory(oid);
 	  cache_map.erase(key);
+ 	  eviction_lock.lock();
 	  lru_remove(chdo);
           exist = false;
- 	  eviction_lock.lock();
  	  free_data_cache_size += chdo->size;
  	  eviction_lock.unlock();
      }
@@ -838,7 +838,8 @@ size_t DataCache::lru_eviction(){
 
   cache_lock.unlock();
   freed_size = del_entry->size;
-  free(del_entry);
+  //free(del_entry);
+  delete del_entry;
   location = cct->_conf->rgw_datacache_path + "/" + del_oid; /*replace tmp with the correct path from config file*/
   remove(location.c_str());
   return freed_size;

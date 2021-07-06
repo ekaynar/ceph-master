@@ -1113,6 +1113,11 @@ int RGWRados::init_rados()
 	datacache->set_object_directory(objDirectory);
 	datacache->init_writecache_aging(this);
   }
+  
+  if (use_d3n){
+	datacache = new DataCache();
+	datacache->init(cct);
+  }
   return ret;
 }
 
@@ -6332,14 +6337,16 @@ struct get_obj_data {
   optional_yield yield;
   bool cache_enable = false;
   bool cowrite = false;
-//  cache_obj c_obj;
+  CephContext *cct;
+  cache_obj c_obj;
 
   /* datacache */
   int sequence;
   std::list<string> pending_key_list;
   void add_pending_key(std::string key);
   string get_pending_key();
-
+  std::string d3n_deterministic_hash(std::string oid);
+  bool d3n_deterministic_hash_is_local(string oid);
   void add_pending_block(std::string oid, cache_block c_block);
   cache_block  get_pending_block(std::string oid);
   std::map<std::string, cache_block> cache_block_map;  
@@ -6422,6 +6429,44 @@ struct get_obj_data {
 };
 
 /* datacache */
+
+std::string get_obj_data::d3n_deterministic_hash(std::string oid)
+{
+  std::string location = g_conf()->rgw_d3n_l2_datacache_hosts;
+  string delimiters(",");
+
+  std::vector<std::string> tokens;
+  boost::split(tokens, location, boost::is_any_of(",")); 
+  int mod = tokens.size();
+
+  std::string::size_type sz;   // alias of size_t
+  std::vector<std::string> sv;
+  boost::split(sv, oid, boost::is_any_of("_"));
+  /* Make sure the input string to stoi starts with a number */
+  std::string key = sv[sv.size() - 1];
+  std::string key_length = to_string(key.size());
+  int hash = 0;
+  try { 
+    hash = std::stoi(key_length + key, &sz); 
+  }
+  catch(std::invalid_argument& e) {
+    dout(0) << "ERROR: d3n_deterministic_hash(): stoi() catch invalid_argumen" << dendl;
+    return 0; 
+  }
+  catch(std::out_of_range& e) {
+    dout(0) << "ERROR: d3n_deterministic_hash(): stoi() catch out_of_range" << dendl;
+    return 0; 
+  }
+  return tokens[hash%mod];
+}
+
+bool get_obj_data::d3n_deterministic_hash_is_local(string oid) {
+  if( g_conf()->rgw_d3n_enabled == false ) {
+    return true;
+  } else {
+	  return (d3n_deterministic_hash(oid).compare(g_conf()->rgw_host)==0);
+  }
+}
 
 void get_obj_data::add_pending_block(std::string oid, cache_block c_block)
 {
@@ -6549,11 +6594,48 @@ int RGWRados::get_obj_iterate_cb(const rgw_raw_obj& read_obj, off_t obj_ofs,
   op.read(read_ofs, len, nullptr, nullptr);
 
   const uint64_t cost = len;
+  const uint64_t read_len = len;
   const uint64_t id = obj_ofs; // use logical object offset for sorting replies
+  oid = read_obj.oid;
+  d->cct = cct;
+  d->add_pending_key(oid);
+  cache_block c_block;
+  //c_block.c_obj = d->c_obj;
+  c_block.size_in_bytes = read_len;
 
-  auto completed = d->aio->get(obj, rgw::Aio::librados_op(std::move(op), d->yield), cost, id);
+  if (datacache->get(oid)){
+	dout(10) << __func__   << "ugur HIT local read cache, key:" << oid<< dendl;
+	d->add_pending_block(oid, c_block);
+	rgw_pool pool("default.rgw.buckets.data");
+	rgw_raw_obj read_obj1(pool,oid);
+	r = obj.open();
+    auto completed = d->aio->get(obj, rgw::Aio::cache_op(std::move(op) , d->yield, obj_ofs, read_ofs, read_len, cct->_conf->rgw_datacache_path), cost, id);
+    return d->flush(std::move(completed));
+  }
+ 
+  else if (!d->d3n_deterministic_hash_is_local(oid)){
+	dout(10) << __func__   << "datacache HIT remote cache, key:" << oid<< dendl;
+   	rgw_user user_id(c_block.c_obj.owner);
+	rgw_bucket bucket;
+	bucket.name = c_block.c_obj.bucket_name;
+	d->add_pending_block(oid, c_block);
+	rgw_obj src_obj(bucket, c_block.c_obj.obj_name);
+	RemoteRequest *c =  new RemoteRequest();
+    rgw_pool pool("default.rgw.buckets.data");
+    rgw_raw_obj read_obj1(pool,oid);
+    auto obj = d->store->svc.rados->obj(read_obj1);
+    r = obj.open();
+    string path = c_block.c_obj.bucket_name + "/"+c_block.c_obj.obj_name;
+	string dest =  "http://" + d->d3n_deterministic_hash(oid);
+	auto completed = d->aio->get(obj, rgw::Aio::remote_op(std::move(op) , d->yield, obj_ofs, read_ofs, read_len, dest, c, &c_block, path, datacache), cost, id);
+	 return d->flush(std::move(completed));
+  }
 
-  return d->flush(std::move(completed));
+  else{
+	dout(10) << __func__   << "datacache MISS cache, key:" << oid<< dendl;
+	auto completed = d->aio->get(obj, rgw::Aio::librados_op(std::move(op), d->yield), cost, id);
+	return d->flush(std::move(completed));
+  }
 }
 
 int RGWRados::Object::Read::iterate(int64_t ofs, int64_t end, RGWGetDataCB *cb,
@@ -9336,7 +9418,7 @@ int RGWRados::Object::Read::read(int64_t ofs, int64_t end, RGWGetDataCB *cb, cac
   int r = store->get_s3_credentials(store, c_obj.owner, c_obj.accesskey);
 
   auto aio = rgw::make_throttle(window_size, y);
-  get_obj_data data(store, cb, &*aio, ofs, y);  
+  get_obj_data data(store, cb, &*aio, ofs, y); 
   r = store->iterate_obj(c_obj, ofs, end, chunk_size, _get_cache_obj_iterate_cb,  &data, y, store);
   if (r < 0) {
       dout(10) << __func__   << " drain error"<< dendl;

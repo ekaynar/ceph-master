@@ -274,6 +274,7 @@ req_state::~req_state() {
   delete formatter;
 }
 
+
 std::ostream& req_state::gen_prefix(std::ostream& out) const
 {
   auto p = out.precision();

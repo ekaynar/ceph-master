@@ -2201,6 +2201,12 @@ static inline void rgw_cond_decode_objtags(
 
 void RGWGetObj::execute()
 {
+
+  c_obj.bucket_name = s->bucket_name;
+  c_obj.obj_name = s->object.name;
+  c_obj.backendProtocol =  S3;
+  c_obj.owner = s->user->get_info().user_id.id;
+
   bufferlist bl;
   gc_invalidate_time = ceph_clock_now();
   gc_invalidate_time += (s->cct->_conf->rgw_gc_obj_min_wait / 2);

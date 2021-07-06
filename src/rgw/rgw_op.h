@@ -237,6 +237,7 @@ public:
    * Filter can modify content of bl.
    * When bl_len == 0 , it means 'flush
    */
+
   int handle_data(bufferlist& bl, off_t bl_ofs, off_t bl_len) override {
     if (next) {
       return next->handle_data(bl, bl_ofs, bl_len);
@@ -365,7 +366,7 @@ public:
   int handle_slo_manifest(bufferlist& bl);
 
   int get_data_cb(bufferlist& bl, off_t ofs, off_t len);
-
+  
   virtual int get_params() = 0;
   virtual int send_response_data_error() = 0;
   virtual int send_response_data(bufferlist& bl, off_t ofs, off_t len) = 0;

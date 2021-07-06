@@ -521,6 +521,7 @@ protected:
 
   bool use_cache{false};
   bool use_datacache{false};//datacache
+  bool use_d3n{false};//datacache
 public:
   RGWRados(): timer(NULL),
                gc(NULL), lc(NULL), obj_expirer(NULL), use_gc_thread(false), use_lc_thread(false), quota_threads(false),
@@ -543,6 +544,10 @@ public:
 /*datacache*/
   RGWRados& set_use_datacache(bool status) {
     use_datacache = status;
+    return *this;
+  }
+    RGWRados& set_use_d3n(bool status) {
+    use_d3n = status;
     return *this;
   }
 /*datacache*/

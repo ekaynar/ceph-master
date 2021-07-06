@@ -703,7 +703,7 @@ void DataCache::cache_aio_write_completion_cb(cacheAioWriteRequest* c){
   time_t rawTime = time(NULL);
   c->c_block.lastAccessTime = mktime(gmtime(&rawTime));  
   c->c_block.access_count = 0;
-  int ret = blkDirectory->setValue(&(c->c_block));
+//  int ret = blkDirectory->setValue(&(c->c_block));
 //  ldout(cct, 20) << __func__ <<"key:" <<c->key << " ret:"<< ret <<dendl; 
   c->release(); 
 
@@ -748,10 +748,10 @@ done:
 bool DataCache::get(string oid) {
 
   string key = oid;
-  const char x = '/';
+  /*const char x = '/';
   const char y = '_';
   std::replace(key.begin(), key.end(), x, y);
-
+*/
   ldout(cct, 0) << __func__ << "key:"<< key << dendl;
   bool exist = false;
   int ret = 0;
@@ -768,10 +768,10 @@ bool DataCache::get(string oid) {
  	  eviction_lock.lock();
  	  lru_remove(chdo);
  	  lru_insert_head(chdo);
-	  ret = blkDirectory->updateAccessCount(oid);
+//	  ret = blkDirectory->updateAccessCount(oid);
  	  eviction_lock.unlock();
      } else { /*LRU*/
-	  ret = evict_from_directory(oid);
+//	  ret = evict_from_directory(oid);
 	  cache_map.erase(key);
  	  eviction_lock.lock();
 	  lru_remove(chdo);
@@ -832,7 +832,7 @@ size_t DataCache::lru_eviction(){
   del_oid = del_entry->obj_id;
   map<string, ChunkDataInfo*>::iterator iter = cache_map.find(del_entry->obj_id);
   if (iter != cache_map.end()) {
-    int ret = evict_from_directory(del_oid);
+//    int ret = evict_from_directory(del_oid);
 	cache_map.erase(del_oid); // oid
   }
 
@@ -885,9 +885,10 @@ void DataCache::put_obj(cache_obj* c_obj){
 void DataCache::put(bufferlist& bl, uint64_t len, string oid_orig, cache_block *c_block){
 
   string obj_id = oid_orig;
-  const char x = '/';
+/*  const char x = '/';
   const char y = '_';
   std::replace(obj_id.begin(), obj_id.end(), x, y);
+  */
 //  string key2 = c_block.c_obj.bucket_name + "_"+tmp_oname+"_"+ std::to_string(c_block.block_id);
 
   ldout(cct, 10) << __func__  <<" oid:" << obj_id <<dendl;

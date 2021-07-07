@@ -1306,7 +1306,6 @@ int RemoteS3Request::submit_http_get_request_s3(){
   int begin = req->ofs;
   int end = req->ofs + req->read_len - 1;
   std::string range = std::to_string(begin)+ "-"+ std::to_string(end);
-  //std::string range = std::to_string( (int)req->ofs + (int)(req->read_ofs))+ "-"+ std::to_string( (int)(req->ofs) + (int)(req->read_ofs) + (int)(req->read_len - 1));
   ldout(cct, 10) << __func__  << " key " << req->key << " range " << range  << dendl;
   
   CURLcode res;
@@ -1314,10 +1313,10 @@ int RemoteS3Request::submit_http_get_request_s3(){
   //string uri = "/"+req->c_block->c_obj.bucket_name + "/" +req->c_block->c_obj.obj_name;
   string date = get_date();
    
-  //string AWSAccessKeyId=req->c_block->c_obj.accesskey.id;
-  //string YourSecretAccessKeyID=req->c_block->c_obj.accesskey.key;
-  string AWSAccessKeyId=req->ak;
-  string YourSecretAccessKeyID=req->sk;
+//  string AWSAccessKeyId=req->c_block->c_obj.accesskey.id;
+//  string YourSecretAccessKeyID=req->c_block->c_obj.accesskey.key;
+  string AWSAccessKeyId="TX2XS2M6LVH5WJWBCW53";
+  string YourSecretAccessKeyID="BKg6KC5DpUhWDRukuINZidEv06vbTyZQybj2NiIu";
   string signature = sign_s3_request("GET", uri, date, YourSecretAccessKeyID, AWSAccessKeyId);
   string Authorization = "AWS "+ AWSAccessKeyId +":" + signature;
   string loc =  req->dest + uri;
@@ -1326,6 +1325,7 @@ int RemoteS3Request::submit_http_get_request_s3(){
   string user_agent="User-Agent: aws-sdk-java/1.7.4 Linux/3.10.0-514.6.1.el7.x86_64 OpenJDK_64-Bit_Server_VM/24.131-b00/1.7.0_131";
   string content_type="Content-Type: application/x-www-form-urlencoded; charset=utf-8";
   curl_handle = curl_easy_init();
+  ldout(cct, 10) << __func__  << " loc: " << loc << dendl;
   if(curl_handle) {
     struct curl_slist *chunk = NULL;
     chunk = curl_slist_append(chunk, auth.c_str());

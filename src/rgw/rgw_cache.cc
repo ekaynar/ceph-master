@@ -1309,7 +1309,8 @@ int RemoteS3Request::submit_http_get_request_s3(){
   ldout(cct, 10) << __func__  << " key " << req->key << " range " << range  << dendl;
   
   CURLcode res;
-  string uri = "/"+ req->path;;
+  string tmp = "/"+ req->path;
+  string uri = ReplaceAll(string(tmp), std::string("%"), std::string("%25"));
   //string uri = "/"+req->c_block->c_obj.bucket_name + "/" +req->c_block->c_obj.obj_name;
   string date = get_date();
    

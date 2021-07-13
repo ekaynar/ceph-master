@@ -1835,10 +1835,10 @@ int RGWRados::Bucket::List::list_objects_ordered(
 	&cls_filtered,
 	&cur_marker,
 	y);
-/*	if (r<0){
+	if (r<0){
 	  return r;
 	}
-  */
+  /*
    bool is_remote = false;
    bool remote_exists =false;
    if (!is_remote && count < max_p && cct->_conf->rgw_datacache_enabled ){
@@ -1870,13 +1870,13 @@ int RGWRados::Bucket::List::list_objects_ordered(
        entry.key = index_key;
 	   ent_map[*t] = (std::move(entry));
 	   remote_exists = true;
-   }*/
+   }
   }
   
     if (r < 0 && !remote_exists) {
       return r;
     }
-
+*/
     for (auto eiter = ent_map.begin(); eiter != ent_map.end(); ++eiter) {
       rgw_bucket_dir_entry& entry = eiter->second;
       rgw_obj_index_key index_key = entry.key;

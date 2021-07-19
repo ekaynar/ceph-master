@@ -6607,6 +6607,7 @@ int RGWRados::get_obj_iterate_cb(const rgw_raw_obj& read_obj, off_t obj_ofs,
   }
  
   else if (!d->d3n_deterministic_hash_is_local(oid)){
+//  else if(false){
 //	rgw_bucket bucket;
 //	bucket.name = c_block.c_obj.bucket_name;
 	d->add_pending_block(oid, c_block);
@@ -6618,7 +6619,7 @@ int RGWRados::get_obj_iterate_cb(const rgw_raw_obj& read_obj, off_t obj_ofs,
     //r = obj.open();
     string path = c_block.c_obj.bucket_name + "/"+c_block.c_obj.obj_name;
 	string dest =  "http://" + d->d3n_deterministic_hash(oid);
-	dout(10) << __func__   << "datacache HIT2 remote cache, key:" << oid<< " obj-ofs=" << obj_ofs << " read_ofs=" << read_ofs << " len=" << len << " dest=" << dest<< dendl;
+	dout(10) << __func__   << "datacache HIT2 remote cache, key:" << oid<< " obj-ofs=" << obj_ofs << " read_ofs=" << read_ofs << " len=" << len << " " <<read_len << " dest=" << dest<< dendl;
 	auto completed = d->aio->get(obj, rgw::Aio::remote_op(std::move(op) , d->yield, obj_ofs, read_ofs, read_len, dest, c, &c_block, path, datacache), cost, id);
 	 return d->flush(std::move(completed));
   }

@@ -748,10 +748,10 @@ done:
 bool DataCache::get(string oid) {
 
   string key = oid;
-  /*const char x = '/';
+  const char x = '/';
   const char y = '_';
   std::replace(key.begin(), key.end(), x, y);
-*/
+
   ldout(cct, 0) << __func__ << "key:"<< key << dendl;
   bool exist = false;
   int ret = 0;
@@ -885,10 +885,10 @@ void DataCache::put_obj(cache_obj* c_obj){
 void DataCache::put(bufferlist& bl, uint64_t len, string oid_orig, cache_block *c_block){
 
   string obj_id = oid_orig;
-/*  const char x = '/';
+  const char x = '/';
   const char y = '_';
   std::replace(obj_id.begin(), obj_id.end(), x, y);
-  */
+  
 //  string key2 = c_block.c_obj.bucket_name + "_"+tmp_oname+"_"+ std::to_string(c_block.block_id);
 
   ldout(cct, 10) << __func__  <<" oid:" << obj_id <<dendl;

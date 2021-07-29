@@ -1302,8 +1302,8 @@ int CopyRemoteS3Object::submit_http_put_coalesed_requests_s3(){
 int RemoteS3Request::submit_http_get_request_s3(){
   //int begin = req->ofs + req->read_ofs;
   //int end = req->ofs + req->read_ofs + req->read_len - 1;
-  int begin = req->ofs;
-  int end = req->ofs + req->read_len - 1;
+  off_t begin = req->ofs;
+  off_t end = req->ofs + req->read_len - 1;
   std::string range = std::to_string(begin)+ "-"+ std::to_string(end);
   //std::string range = std::to_string( (int)req->ofs + (int)(req->read_ofs))+ "-"+ std::to_string( (int)(req->ofs) + (int)(req->read_ofs) + (int)(req->read_len - 1));
   ldout(cct, 10) << __func__  << " key " << req->key << " range " << range  << dendl;

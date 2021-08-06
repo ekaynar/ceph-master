@@ -29,6 +29,7 @@
 #include "rgw_cacherequest.h"
 #include <curl/curl.h>
 #include "include/lru.h"
+#include <list>
 // #include <mutex> 
 // #include "common/RWLock.h"
 struct cache_obj;
@@ -346,7 +347,7 @@ class RemoteS3Request : public Task {
 };
 
 struct cacheAioWriteRequest{
-  std::string key;
+  string key;
   void *data;
   int fd;
   struct aiocb *cb;
@@ -361,11 +362,10 @@ struct cacheAioWriteRequest{
 
   void release() {
     ::close(fd);
-    cb->aio_buf = NULL;
+    cb->aio_buf = nullptr;
     free(data);
-    data = NULL;
-    free(cb);
-    free(this);
+    data = nullptr;
+    delete(cb);
   }
 };
 
@@ -384,17 +384,31 @@ struct ObjectDataInfo : public LRUObject {
   static void generate_test_instances(list<ObjectDataInfo*>& o);
 };
 
+
+struct ChunkDataInfo;
+/*using age_iterator   = typename std::list<ChunkDataInfo>::iterator;
+using key_iterator = typename std::unordered_map<string, age_iterator>::iterator;
+using lfu_iterator   = typename std::multimap<uint64_t, age_iterator>::iterator;
+*/
+
+
+	 
 struct ChunkDataInfo : public LRUObject {
   CephContext *cct;
   uint64_t size;
   time_t access_time;
   string address;
   string obj_id;
+//  const char * block_id;
   bool complete;
   struct ChunkDataInfo *lru_prev;
   struct ChunkDataInfo *lru_next;
 
-  ChunkDataInfo(): size(0) {}
+  cache_block c_block;
+//  key_iterator key_position;
+//  lfu_iterator lfu_position;
+
+  ChunkDataInfo(): size(0), obj_id("") {}
   void set_ctx(CephContext *_cct) {cct = _cct;}
   void dump(Formatter *f) const;
   static void generate_test_instances(list<ChunkDataInfo*>& o);
@@ -402,6 +416,28 @@ struct ChunkDataInfo : public LRUObject {
 
 struct DataCache {
   private:
+
+  struct element;
+  using age_iterator   = typename std::list<element>::iterator;
+  //using age_iterator   = typename std::list<ChunkDataInfo*>::iterator;
+  using key_iterator = typename std::unordered_map<string, age_iterator>::iterator;
+  using lfu_iterator   = typename std::multimap<size_t, age_iterator>::iterator;
+
+	struct element{
+	  key_iterator key_position;
+	  lfu_iterator lfu_position;
+	  string obj_id;
+	  uint64_t size_in_bytes;
+    };
+
+	std::unordered_map<string, age_iterator> m_key_map;
+    std::multimap<size_t, age_iterator> m_lfu_list;
+	std::list<element> m_dynamic_age_list;
+	//std::list<ChunkDataInfo*> m_dynamic_age_list;
+    age_iterator m_open_list_end;
+	size_t cache_weight;
+
+
     std::map<string, ObjectDataInfo*> write_cache_map;
     std::map<string, ChunkDataInfo*> cache_map;
     std::list<string> outstanding_write_list;
@@ -433,6 +469,7 @@ struct DataCache {
     void retrieve_block_info(cache_block* c_block, RGWRados *store);
     void submit_remote_req(struct RemoteRequest *c);
     size_t lru_eviction();
+    size_t lfuda_eviction();
 	int evict_from_directory(string key);
 	void put(bufferlist& bl, uint64_t len, string obj_id, cache_block* c_block);
 	void put_obj(cache_obj* c_obj);
@@ -460,6 +497,9 @@ struct DataCache {
       obj_tail = NULL;
       outstanding_small_write_list = new std::list<cache_obj*>;
       small_writes = new std::list<string>;
+	  m_open_list_end = m_dynamic_age_list.begin();
+	  cache_weight = 1;
+
 	}
     void set_block_directory(RGWBlockDirectory *_blkDirectory){
 	blkDirectory = _blkDirectory;

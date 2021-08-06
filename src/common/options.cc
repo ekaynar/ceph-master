@@ -7008,7 +7008,15 @@ std::vector<Option> get_rgw_options() {
     .set_default(false)
     .set_description("enabling rgw datacache"),
 
-    Option("remote_cache_addr", Option::TYPE_STR, Option::LEVEL_ADVANCED)
+    Option("rgw_lfuda", Option::TYPE_BOOL, Option::LEVEL_ADVANCED)
+    .set_default(false)
+    .set_description("enabling lfudafor datacache"),
+    
+    Option("rgw_remote_caches", Option::TYPE_STR, Option::LEVEL_ADVANCED)
+    .set_default("localhost")
+    .set_description("rgw address of remote caches"),
+	
+	Option("remote_cache_addr", Option::TYPE_STR, Option::LEVEL_ADVANCED)
     .set_default("localhost:8080")
     .set_description("rgw address as a remote cache"),
 

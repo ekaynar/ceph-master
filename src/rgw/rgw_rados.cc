@@ -9570,6 +9570,22 @@ int RGWRados::get_head_obj(cache_obj& c_obj){
   return ret;
   }
 
+bool RGWRados::is_remote_cache_req(string http_host)
+{
+  string location = g_conf()->rgw_remote_caches;
+  string delimiters(",");
+
+  std::vector<std::string> tokens;
+  boost::split(tokens, location, boost::is_any_of(","));
+  
+  if (std::find(tokens.begin(), tokens.end(), http_host) != tokens.end()){
+        return true;
+  }
+  return false;
+}
+
+
+
 int RGWRados::retrieve_obj_acls(cache_obj& c_obj){
   ldout(cct, 20) << __func__ <<dendl;
   get_s3_credentials(store->getRados(), c_obj.owner, c_obj.accesskey);

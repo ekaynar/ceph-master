@@ -8368,12 +8368,16 @@ bool RGWGetObj::cache_authorize(){
 }
 
 
+
 void RGWGetObj::cache_execute(){
   ldpp_dout(this, 10) << __func__  << dendl;
   RGWGetObj_CB cb(this);
   RGWGetObj_Filter* filter = (RGWGetObj_Filter *)&cb;
   bufferlist bl;
   s->obj_size = c_obj.size_in_bytes;
+  const string& hostname = s->info.env->get("REMOTE_ADDR", "");
+  //ldpp_dout(this, 10) << __func__  << host << " " <<  hostname<< dendl;
+  c_obj.is_remote_req = store->getRados()->is_remote_cache_req(hostname);
 
 if (!get_data){
   	this->total_len = c_obj.size_in_bytes;

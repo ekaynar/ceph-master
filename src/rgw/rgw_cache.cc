@@ -26,6 +26,7 @@ uint64_t expected_size = 0;
 #include <time.h>
 #include <algorithm>
 #include <string>
+#include <list>
 //#include "rgw_cacherequest.h"
 static const std::string base64_chars =
 "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -418,7 +419,7 @@ ObjectCache::~ObjectCache()
 
 /* datacache */
 
-DataCache::DataCache() : cct(NULL), free_data_cache_size(0), outstanding_write_size (0){}
+DataCache::DataCache() : cct(NULL), free_data_cache_size(0), outstanding_write_size (0), m_dynamic_age_list() {}
 
 void DataCache::submit_remote_req(RemoteRequest *c){
   ldout(cct, 0) << "submit_remote_req" <<dendl;
@@ -680,10 +681,55 @@ done:
 
 
 void DataCache::cache_aio_write_completion_cb(cacheAioWriteRequest* c){
-  ChunkDataInfo  *chunk_info = nullptr;
+
+     // LFUDA
+  if(cct->_conf->rgw_lfuda == true){
+	ldout(cct, 10) << __func__  << " oid " << c->key << dendl;
+    cache_lock.lock();
+    outstanding_write_list.remove(c->key);
+
+
+    ldout(cct, 10) << __func__  << " oid cache weight " << cache_weight << dendl;
+	size_t freq = this->cache_weight; 
+    
+	element el;
+	el.obj_id = c->key;
+	el.size_in_bytes = c->c_block.size_in_bytes;
+	m_dynamic_age_list.push_back(el);
+	++m_open_list_end;
+
+	auto key_position = m_key_map.emplace(c->key, m_open_list_end).first;
+	auto lfu_position = m_lfu_list.emplace(freq, m_open_list_end);
+	
+	element& t = *m_open_list_end;
+	t.key_position = key_position;
+	t.lfu_position = lfu_position;
+	
+	//ldout(cct, 10) << __func__  << " oid4 " << cache_weight <<  " " <<el.value << " "<< el.offset<<  dendl;
+	cache_lock.unlock();
+	
+	
+	/*update free size*/
+    eviction_lock.lock();
+    free_data_cache_size -= c->cb->aio_nbytes;
+    outstanding_write_size -=  c->cb->aio_nbytes;
+    eviction_lock.unlock();
+    
+	time_t rawTime = time(NULL);
+    c->c_block.lastAccessTime = mktime(gmtime(&rawTime));
+    c->c_block.access_count = 0;
+    int ret = blkDirectory->setValue(&(c->c_block));
+	c->release();
+	delete c;
+    c = nullptr;
+  }
+
+
+  //LRU
+  else {
+  ChunkDataInfo *chunk_info = nullptr;
   
   ldout(cct, 10) << __func__  << " oid " << c->key << dendl; 
-
   cache_lock.lock();
   outstanding_write_list.remove(c->key);
   chunk_info = new ChunkDataInfo;
@@ -706,6 +752,7 @@ void DataCache::cache_aio_write_completion_cb(cacheAioWriteRequest* c){
   int ret = blkDirectory->setValue(&(c->c_block));
 //  ldout(cct, 20) << __func__ <<"key:" <<c->key << " ret:"<< ret <<dendl; 
   c->release(); 
+ }
 
 }
 
@@ -756,6 +803,27 @@ bool DataCache::get(string oid) {
   bool exist = false;
   int ret = 0;
   string location = cct->_conf->rgw_datacache_path + "/"+ key;
+  //LFUDA
+   cache_lock.lock();
+  if(cct->_conf->rgw_lfuda == true){
+    auto key_position = m_key_map.find(key);
+    if ( key_position != m_key_map.end() ){
+      ldout(cct, 0) << __func__ << " block is exist:"<< key << dendl;
+      exist = true;
+      eviction_lock.lock();
+	  
+	  auto e =  *(key_position->second);
+	  auto use_count = e.lfu_position->first;	  
+      m_lfu_list.erase(e.lfu_position);
+      e.lfu_position = m_lfu_list.emplace(use_count + cache_weight, e.key_position->second);
+      eviction_lock.unlock();
+	  }
+
+	cache_lock.unlock();
+    return exist;
+    }
+
+  // LRU
   cache_lock.lock();
   map<string, ChunkDataInfo*>::iterator iter = cache_map.find(key);
   if (!(iter == cache_map.end())){
@@ -809,6 +877,49 @@ int DataCache::evict_from_directory(string key){
       ret = blkDirectory->updateField(key, "host_list", hosts);
     }
 	return 0;
+}
+
+size_t DataCache::lfuda_eviction(){
+  int n_entries = 0;
+  size_t freed_size = 0;
+  string del_oid, location;
+  cache_lock.lock();
+  eviction_lock.lock();
+  auto it = m_lfu_list.begin()->second;
+  auto e = *it;
+  del_oid = e.obj_id;
+  freed_size = e.size_in_bytes;
+  cache_weight = e.lfu_position->first;
+  
+  ldout(cct, 10) << __func__  <<" oid:" << e.obj_id  << dendl;
+  if (it != std::prev(m_open_list_end))
+        {
+            m_dynamic_age_list.splice(m_open_list_end, m_dynamic_age_list, it);
+        } 
+
+  --m_open_list_end;
+  ldout(cct, 10) << __func__  <<" oid1:" << del_oid  << dendl;
+  m_key_map.erase(e.key_position);
+  ldout(cct, 10) << __func__  <<" ===================="<< dendl;
+  for (auto itr = m_key_map.begin(); itr != m_key_map.end(); itr++)   
+        ldout(cct, 10) << __func__  << " " <<itr -> first  << dendl;     
+  ldout(cct, 10) << __func__  <<" ================"<< dendl;
+
+  ldout(cct, 10) << __func__  <<" oid2:" << del_oid  << dendl;
+  m_lfu_list.erase(e.lfu_position);
+  ldout(cct, 10) << __func__  <<" *********************"<< dendl;
+  for (auto itr = m_lfu_list.begin(); itr != m_lfu_list.end(); itr++)   
+        ldout(cct, 10) << __func__  << " " <<itr -> first  << dendl;     
+  ldout(cct, 10) << __func__  <<" *********************"<< dendl;
+
+  ldout(cct, 10) << __func__  <<" oid3:" << del_oid  << dendl;
+  int ret = evict_from_directory(del_oid);
+  eviction_lock.unlock();
+  cache_lock.unlock();
+  location = cct->_conf->rgw_datacache_path + "/" + e.obj_id;
+  remove(location.c_str());
+  return freed_size;
+
 }
 
 size_t DataCache::lru_eviction(){
@@ -895,20 +1006,34 @@ void DataCache::put(bufferlist& bl, uint64_t len, string oid_orig, cache_block *
   uint64_t freed_size = 0, _free_data_cache_size = 0, _outstanding_write_size = 0;
 
   cache_lock.lock(); 
-  map<string, ChunkDataInfo *>::iterator iter = cache_map.find(obj_id);
-  if (iter != cache_map.end()) {
-    cache_lock.unlock();
-    ldout(cct, 10) << "Warning: obj data already is cached, no re-write" << dendl;
-    return;
-  }
+  if(cct->_conf->rgw_lfuda == true){
+    auto key_position = m_key_map.find(obj_id);
+	ldout(cct, 10) << __func__  <<" oid:" << obj_id <<dendl;
+    if ( key_position != m_key_map.end() ){
+	   ldout(cct, 10) << "Warning: obj data already is cached, no re-write" << dendl;
+      cache_lock.unlock();
+      return;
+    }
 
+   }
+   else { 
+   map<string, ChunkDataInfo *>::iterator iter = cache_map.find(obj_id);
+   if (iter != cache_map.end()) {
+     cache_lock.unlock();
+     ldout(cct, 10) << "Warning: obj data already is cached, no re-write" << dendl;
+     return;
+   }
+  }
+  
+   ldout(cct, 10) << __func__  <<" oid16:" << obj_id <<dendl;
   std::list<std::string>::iterator it = std::find(outstanding_write_list.begin(), outstanding_write_list.end(),obj_id);
   if (it != outstanding_write_list.end()) {
     cache_lock.unlock();
     ldout(cct, 10) << "Warning: write is already issued, no re-write, obj_id="<< obj_id << dendl;
     return;
   }
-
+ 
+  ldout(cct, 10) << __func__  <<" oid2:" << obj_id <<dendl;
   outstanding_write_list.push_back(obj_id);
   cache_lock.unlock();
   
@@ -920,7 +1045,13 @@ void DataCache::put(bufferlist& bl, uint64_t len, string oid_orig, cache_block *
   ldout(cct, 20) << __func__ << "key: "<<obj_id<< "len: "<< len << "free_data_cache_size: "<<free_data_cache_size << "_:"<< free_data_cache_size << "outstanding_write_size  "<< outstanding_write_size << "_ " << _outstanding_write_size << dendl;
   while (len >= (_free_data_cache_size - _outstanding_write_size + freed_size)){
     ldout(cct, 20) << "Datacache Eviction r=" << ret << "key"<<obj_id <<dendl;
-    ret = lru_eviction();
+	if(cct->_conf->rgw_lfuda == true){
+       ret = lfuda_eviction();
+    
+	} else {
+      ret = lru_eviction();
+    }
+
     if(ret < 0)
       return;
     freed_size += ret;

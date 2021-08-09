@@ -792,7 +792,7 @@ done:
 
 
 }
-bool DataCache::get(string oid) {
+bool DataCache::get(string oid, bool isRemote) {
 
   string key = oid;
   const char x = '/';
@@ -810,14 +810,16 @@ bool DataCache::get(string oid) {
     if ( key_position != m_key_map.end() ){
       ldout(cct, 0) << __func__ << " block is exist:"<< key << dendl;
       exist = true;
+	  if (!isRemote){
       eviction_lock.lock();
-	  
 	  auto e =  *(key_position->second);
 	  auto use_count = e.lfu_position->first;	  
       m_lfu_list.erase(e.lfu_position);
       e.lfu_position = m_lfu_list.emplace(use_count + cache_weight, e.key_position->second);
+	  total_cache_weight += cache_weight;
       eviction_lock.unlock();
 	  }
+	}
 
 	cache_lock.unlock();
     return exist;
@@ -890,29 +892,17 @@ size_t DataCache::lfuda_eviction(){
   del_oid = e.obj_id;
   freed_size = e.size_in_bytes;
   cache_weight = e.lfu_position->first;
-  
-  ldout(cct, 10) << __func__  <<" oid:" << e.obj_id  << dendl;
+  total_cache_weight = total_cache_weight - cache_weight;
+  //FIXME :: update directory for global age 
+  ldout(cct, 10) << __func__  <<" LFUDA evicted item oid:" << e.obj_id  << dendl;
   if (it != std::prev(m_open_list_end))
         {
             m_dynamic_age_list.splice(m_open_list_end, m_dynamic_age_list, it);
         } 
 
   --m_open_list_end;
-  ldout(cct, 10) << __func__  <<" oid1:" << del_oid  << dendl;
   m_key_map.erase(e.key_position);
-  ldout(cct, 10) << __func__  <<" ===================="<< dendl;
-  for (auto itr = m_key_map.begin(); itr != m_key_map.end(); itr++)   
-        ldout(cct, 10) << __func__  << " " <<itr -> first  << dendl;     
-  ldout(cct, 10) << __func__  <<" ================"<< dendl;
-
-  ldout(cct, 10) << __func__  <<" oid2:" << del_oid  << dendl;
   m_lfu_list.erase(e.lfu_position);
-  ldout(cct, 10) << __func__  <<" *********************"<< dendl;
-  for (auto itr = m_lfu_list.begin(); itr != m_lfu_list.end(); itr++)   
-        ldout(cct, 10) << __func__  << " " <<itr -> first  << dendl;     
-  ldout(cct, 10) << __func__  <<" *********************"<< dendl;
-
-  ldout(cct, 10) << __func__  <<" oid3:" << del_oid  << dendl;
   int ret = evict_from_directory(del_oid);
   eviction_lock.unlock();
   cache_lock.unlock();

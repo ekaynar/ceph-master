@@ -9378,7 +9378,7 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
   
   int ret = 0;  
   // read block from local ssd cache
-  if (datacache->get(oid)){
+  if (datacache->get(oid, c_block.c_obj.is_remote_req)){
     d->add_pending_block(oid, c_block);
     dout(10) << __func__   << "ugur HIT local read cache, key:" << oid<< dendl; 
     rgw_pool pool("default.rgw.buckets.data");

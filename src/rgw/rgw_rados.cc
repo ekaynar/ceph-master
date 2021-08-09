@@ -9489,6 +9489,22 @@ vector<string> RGWRados::get_xml_data(string &text, string tag)
   }
 }
 
+
+
+int RGWRados::create_cache_request(cache_obj& c_obj, bufferlist&& bl){
+  bufferlist data = std::move(bl);
+  const uint64_t cost = data.length();
+  const uint64_t read_len = data.length();
+  off_t read_ofs = 0;
+  off_t obj_ofs = 0;
+  if (cost == 0) { // no empty writes, use aio directly for creates
+    return 0;
+  }
+  string oid = c_obj.bucket_name + "_"+c_obj.obj_name+"_"+ std::to_string(0);
+  cache_block c_block;  
+  datacache->put(data, read_len, oid, &c_block); 
+}
+
 int RGWRados::get_remote_buckets(cache_obj& c_obj, vector<string>& remote_bucket_list, string prefix, string marker, int max_b, string& next_marker, vector<rgw_bucket_dir_entry>& remote_buckets){
 	get_s3_credentials(store->getRados(), c_obj.owner, c_obj.accesskey);
 	ldout(cct, 20) << __func__ <<dendl;

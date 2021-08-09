@@ -680,6 +680,38 @@ done:
 }
 
 
+int DataCache::issue_io_write(bufferlist& bl ,uint64_t len, std::string oid){
+  string location =  cct->_conf->rgw_datacache_path;
+  FILE *cache_file = 0;
+  int r = 0;
+  cache_file = fopen(location.c_str(),"w+");
+  if (cache_file <= 0){
+	  ldout(cct, 0) << "ERROR: DataCache::open file has return error " << r << dendl;
+	  return -1;
+        }
+  r = fwrite(bl.c_str(), 1, len, cache_file);
+        if (r < 0) {
+        ldout(cct, 0) << "ERROR: DataCache::write: write in file has return error " << r << dendl;
+        goto END;
+        }
+
+  END:
+        fclose(cache_file);
+        return r;
+
+}
+
+int DataCache::create_io_write_request(bufferlist& bl ,uint64_t len, std::string oid, cache_block *c_b)
+{
+  int ret = 0;
+  ret = this->issue_io_write(bl, len, oid);
+  if (ret < 0 ) 
+		return ret;
+  
+
+
+}
+
 void DataCache::cache_aio_write_completion_cb(cacheAioWriteRequest* c){
 
      // LFUDA
@@ -1047,7 +1079,11 @@ void DataCache::put(bufferlist& bl, uint64_t len, string oid_orig, cache_block *
     freed_size += ret;
   }
 
-  ret = create_aio_write_request(bl, len, obj_id, c_block);
+  if(cct->_conf->rgw_lfuda == true) {
+	ret = create_io_write_request(bl, len, obj_id, c_block);
+  }
+  else{
+	ret = create_aio_write_request(bl, len, obj_id, c_block);}
   if (ret < 0) {
     cache_lock.lock();
     outstanding_write_list.remove(obj_id);

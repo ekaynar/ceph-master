@@ -1125,6 +1125,7 @@ public:
   int retrieve_oid(cache_obj& c_obj, rgw_raw_obj& read_obj, uint64_t obj_ofs, optional_yield y);
   int retrieve_obj_acls(cache_obj& c_obj);
   bool is_remote_cache_req(string http_host);
+  int create_cache_request(cache_obj& c_obj,bufferlist&& bl);
   int retrieve_obj_size(cache_obj& c_obj, RGWRados *store);
   int get_head_obj(cache_obj& c_obj);
   vector<string> get_xml_data(string &text, string tag);

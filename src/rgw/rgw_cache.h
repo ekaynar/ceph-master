@@ -474,6 +474,8 @@ struct DataCache {
 	void put(bufferlist& bl, uint64_t len, string obj_id, cache_block* c_block);
 	void put_obj(cache_obj* c_obj);
     bool get(string oid, bool isRemote);
+	int create_io_write_request(bufferlist& bl ,uint64_t len, std::string oid, cache_block *c_block);
+	int issue_io_write(bufferlist& bl ,uint64_t len, std::string oid);
 	int create_aio_write_request(bufferlist& bl, uint64_t len, std::string obj_id, cache_block* c_block);
     void cache_aio_write_completion_cb(cacheAioWriteRequest *c);
     size_t get_used_pool_capacity(string pool_name, RGWRados *store);

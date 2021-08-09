@@ -8421,3 +8421,66 @@ if (!get_data){
 
   return;
 }
+
+void RGWPutObj::remote_cache_put_execute(){
+  ldpp_dout(this, 10) << __func__  << dendl;
+  char supplied_md5_bin[CEPH_CRYPTO_MD5_DIGESTSIZE + 1];
+  char supplied_md5[CEPH_CRYPTO_MD5_DIGESTSIZE * 2 + 1];
+  char calc_md5[CEPH_CRYPTO_MD5_DIGESTSIZE * 2 + 1];
+  unsigned char m[CEPH_CRYPTO_MD5_DIGESTSIZE];
+  MD5 hash;
+  bool need_calc_md5 = (dlo_manifest == NULL) && (slo_info == NULL);
+  perfcounter->inc(l_rgw_put);
+  // report latency on return
+  auto put_lat = make_scope_guard([&] {
+      perfcounter->tinc(l_rgw_put_lat, s->time_elapsed());
+      });
+
+  if (s->object.empty()) {
+    return;
+  }
+
+  if (supplied_md5_b64) {
+    need_calc_md5 = true;
+
+    ldpp_dout(this, 15) << "supplied_md5_b64=" << supplied_md5_b64 << dendl;
+    op_ret = ceph_unarmor(supplied_md5_bin, &supplied_md5_bin[CEPH_CRYPTO_MD5_DIGESTSIZE + 1],
+    supplied_md5_b64, supplied_md5_b64 + strlen(supplied_md5_b64));
+    ldpp_dout(this, 15) << "ceph_armor ret=" << op_ret << dendl;
+    if (op_ret != CEPH_CRYPTO_MD5_DIGESTSIZE) {
+      op_ret = -ERR_INVALID_DIGEST;
+      return;
+    }
+
+    buf_to_hex((const unsigned char *)supplied_md5_bin, CEPH_CRYPTO_MD5_DIGESTSIZE, supplied_md5);
+    ldpp_dout(this, 15) << "supplied_md5=" << supplied_md5 << dendl;
+  }
+
+  if (supplied_etag) {
+    strncpy(supplied_md5, supplied_etag, sizeof(supplied_md5) - 1);
+    supplied_md5[sizeof(supplied_md5) - 1] = '\0';
+  }
+
+  bufferlist data;
+  op_ret = -EINVAL;
+  s->obj_size = c_obj.size_in_bytes;
+  
+  auto& obj_ctx = *static_cast<RGWObjectCtx*>(s->obj_ctx);
+  rgw_obj obj{s->bucket, s->object};
+
+  uint64_t len = s->obj_size;
+  off_t fst = 0;
+  off_t lst = fst + len -1;
+  op_ret = get_data(fst, lst, data);
+  if (op_ret < 0)
+    return;
+  op_ret = store->getRados()->create_cache_request(c_obj, std::move(data));
+  if (op_ret < 0) {
+      return;
+  } 
+  //  = s->info.env->get("REMOTE_ADDR", "");
+
+
+}
+
+

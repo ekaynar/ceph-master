@@ -680,8 +680,8 @@ done:
 }
 
 
-int DataCache::issue_io_write(bufferlist& bl ,uint64_t len, std::string oid){
-  string location =  cct->_conf->rgw_datacache_path;
+int DataCache::issue_io_write(bufferlist& bl ,uint64_t len, std::string key){
+  string location =  cct->_conf->rgw_datacache_path +  "/"+ key;
   FILE *cache_file = 0;
   int r = 0;
   cache_file = fopen(location.c_str(),"w+");
@@ -701,7 +701,7 @@ int DataCache::issue_io_write(bufferlist& bl ,uint64_t len, std::string oid){
 
 }
 
-int DataCache::create_io_write_request(bufferlist& bl ,uint64_t len, std::string oid, cache_block *c_b)
+int DataCache::create_io_write_request(bufferlist& bl ,uint64_t len, std::string oid, cache_block *c_block)
 {
   int ret = 0;
   ret = this->issue_io_write(bl, len, oid);

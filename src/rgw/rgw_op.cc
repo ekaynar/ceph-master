@@ -8463,18 +8463,28 @@ void RGWPutObj::remote_cache_put_execute(){
 
   bufferlist data;
   op_ret = -EINVAL;
-  s->obj_size = c_obj.size_in_bytes;
+  string content_length = s->info.env->get("HTTP_CONTENT_LENGTH");
+  c_obj.size_in_bytes = stoull(content_length);
+  c_obj.bucket_name = s->bucket_name;
+  c_obj.obj_name = s->object.name;
+  c_obj.backendProtocol =  S3;
+  c_obj.owner = s->user->get_info().user_id.id; 
+  string str_block_id =  s->info.env->get("HTTP_BLOCK_ID");
   
+  cache_block c_b;
+  c_b.block_id =  stoull(str_block_id); 
+  c_b.size_in_bytes = c_obj.size_in_bytes;
+  c_b.c_obj = c_obj;
   auto& obj_ctx = *static_cast<RGWObjectCtx*>(s->obj_ctx);
   rgw_obj obj{s->bucket, s->object};
 
-  uint64_t len = s->obj_size;
+  uint64_t len = c_obj.size_in_bytes;
   off_t fst = 0;
   off_t lst = fst + len -1;
   op_ret = get_data(fst, lst, data);
   if (op_ret < 0)
     return;
-  op_ret = store->getRados()->create_cache_request(c_obj, std::move(data));
+  op_ret = store->getRados()->create_cache_request(c_b, std::move(data));
   if (op_ret < 0) {
       return;
   } 

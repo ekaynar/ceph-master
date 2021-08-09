@@ -9491,7 +9491,7 @@ vector<string> RGWRados::get_xml_data(string &text, string tag)
 
 
 
-int RGWRados::create_cache_request(cache_obj& c_obj, bufferlist&& bl){
+int RGWRados::create_cache_request(cache_block& c_block, bufferlist&& bl){
   bufferlist data = std::move(bl);
   const uint64_t cost = data.length();
   const uint64_t read_len = data.length();
@@ -9500,8 +9500,7 @@ int RGWRados::create_cache_request(cache_obj& c_obj, bufferlist&& bl){
   if (cost == 0) { // no empty writes, use aio directly for creates
     return 0;
   }
-  string oid = c_obj.bucket_name + "_"+c_obj.obj_name+"_"+ std::to_string(0);
-  cache_block c_block;  
+  string oid = c_block.c_obj.bucket_name + "_"+c_block.c_obj.obj_name+"_"+ std::to_string(c_block.block_id);
   datacache->put(data, read_len, oid, &c_block); 
 }
 

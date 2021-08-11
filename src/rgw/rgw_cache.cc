@@ -727,6 +727,7 @@ void DataCache::cache_aio_write_completion_cb(cacheAioWriteRequest* c){
 	element el;
 	el.obj_id = c->key;
 	el.size_in_bytes = c->c_block.size_in_bytes;
+	el.c_block = &(c->c_block);
 	m_dynamic_age_list.push_back(el);
 	++m_open_list_end;
 
@@ -922,6 +923,10 @@ size_t DataCache::lfuda_eviction(){
   auto it = m_lfu_list.begin()->second;
   auto e = *it;
   del_oid = e.obj_id;
+  cache_block *c_block = e.c_block;
+   ldout(cct,10) << "__func__ " << del_oid << dendl;
+  submit_http_put_request_s3(c_block, "172.24.0.1:8081");
+   ldout(cct,10) << "__func__ "<< " 2 " << del_oid << dendl;
   freed_size = e.size_in_bytes;
   cache_weight = e.lfu_position->first;
   total_cache_weight = total_cache_weight - cache_weight;
@@ -1079,7 +1084,7 @@ void DataCache::put(bufferlist& bl, uint64_t len, string oid_orig, cache_block *
     freed_size += ret;
   }
 
-  if(cct->_conf->rgw_lfuda == true) {
+  if ((cct->_conf->rgw_lfuda == true) && (c_block->c_obj.is_remote_req)) {
 	ret = create_io_write_request(bl, len, obj_id, c_block);
   }
   else{
@@ -1389,6 +1394,71 @@ int DataCache::submit_http_head_requests_s3(cache_obj *c_obj){
   return ret;
 
 }
+
+static size_t read_callback(char *ptr, size_t size, size_t nmemb, FILE *stream)
+{
+  size_t retcode;
+  curl_off_t nread;
+  retcode = fread(ptr, size, nmemb, stream);
+  nread = (curl_off_t)retcode;
+  return retcode;
+}
+
+int DataCache::submit_http_put_request_s3(cache_block *c_block, string location)
+{
+  CURL *curl_handle;
+  CURLcode res;
+
+  string uri="/"+c_block->c_obj.bucket_name+"/"+c_block->c_obj.obj_name;
+  string loc =  "http://" + location + uri;
+  string AWSAccessKeyId="TX2XS2M6LVH5WJWBCW53";
+  string YourSecretAccessKeyID="BKg6KC5DpUhWDRukuINZidEv06vbTyZQybj2NiIu";
+  string date = get_date();
+  string timestamp="Date: " + date;
+  string signature = sign_s3_request("PUT", uri, date, YourSecretAccessKeyID, AWSAccessKeyId);
+  string Authorization = "AWS "+ AWSAccessKeyId +":" + signature;
+  string auth="Authorization: " + Authorization;
+  string user_agent="User-Agent: rgw_datacache";
+  string content_type="Content-Type: text/plain";
+  string custom_header="X-block-id" + std::to_string(c_block->block_id) + ";";
+  
+  string file = "";
+  FILE * hd_src;
+  hd_src = fopen(file.c_str(), "r");
+  
+  curl_handle = curl_easy_init();
+  if(curl_handle) {
+    struct curl_slist *chunk = NULL;
+    chunk = curl_slist_append(chunk, auth.c_str());
+    chunk = curl_slist_append(chunk, timestamp.c_str());
+    chunk = curl_slist_append(chunk, user_agent.c_str());
+    chunk = curl_slist_append(chunk, content_type.c_str());
+	chunk = curl_slist_append(chunk, custom_header.c_str());
+	chunk = curl_slist_append(chunk, "HTTP_CACHE_PUT_REQ;");
+    res = curl_easy_setopt(curl_handle, CURLOPT_HTTPHEADER, chunk); //set headers
+    curl_easy_setopt(curl_handle, CURLOPT_URL, loc.c_str());
+    curl_easy_setopt(curl_handle, CURLOPT_UPLOAD, 1L);
+    curl_easy_setopt(curl_handle, CURLOPT_READFUNCTION, read_callback);
+	curl_easy_setopt(curl_handle, CURLOPT_READDATA, hd_src);
+	curl_easy_setopt(curl_handle, CURLOPT_NOSIGNAL, 1L);
+    curl_easy_setopt(curl_handle, CURLOPT_FAILONERROR, 1L);
+//	curl_easy_setopt(curl, CURLOPT_INFILESIZE_LARGE, (curl_off_t)file_info.st_size);
+    curl_easy_setopt(curl_handle, CURLOPT_INFILESIZE, c_block->size_in_bytes);
+    res = curl_easy_perform(curl_handle); //run the curl command
+    curl_easy_cleanup(curl_handle);
+  }
+  fclose(hd_src);
+  curl_global_cleanup();
+  if(res == CURLE_HTTP_RETURNED_ERROR) {
+    ldout(cct,10) << "__func__ " << " CURLE_HTTP_RETURNED_ERROR" <<curl_easy_strerror(res) << dendl;
+    return -1;
+  } 
+  if (res != CURLE_OK)
+        return -1;
+  return 0;
+  }
+
+
 
 int CopyRemoteS3Object::submit_http_put_coalesed_requests_s3(){
   

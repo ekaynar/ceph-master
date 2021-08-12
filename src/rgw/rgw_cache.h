@@ -428,7 +428,6 @@ struct DataCache {
 	  lfu_iterator lfu_position;
 	  string obj_id;
 	  uint64_t size_in_bytes;
-	  cache_block *c_block; 
     };
 
 	std::unordered_map<string, age_iterator> m_key_map;
@@ -484,11 +483,12 @@ struct DataCache {
 	void init_writecache_aging(RGWRados *store);
     void timer_start(RGWRados *store, uint64_t interval);
 	string sign_s3_request(string HTTP_Verb, string uri, string date, string YourSecretAccessKeyID, string AWSAccessKeyId);
+	string sign_s3_request2(string HTTP_Verb, string uri, string date, string YourSecretAccessKeyID, string AWSAccessKeyId);
 	int getUid();
 	string get_date();
 	int submit_http_head_requests_s3(cache_obj *c_obj);
 	int submit_http_get_requests_s3(cache_obj *c_obj, string prefix, string marker, int max_b);
-	int submit_http_put_request_s3(cache_block *c_block, string location);
+	int submit_http_put_request_s3(string block_id, uint64_t block_size, string location);
 	void init(CephContext *_cct) {
       cct = _cct;
       free_data_cache_size = cct->_conf->rgw_cache_size;

@@ -129,6 +129,8 @@ int rgw_process_authenticated(RGWHandler_REST * const handler,
 		op->complete();
 		return 0;
 	  }
+	   ldpp_dout(op, 2) << "no in " << 
+	  s->info.env->get("HTTP_CACHE_PUT_REQ") << dendl;
 	}
 
 

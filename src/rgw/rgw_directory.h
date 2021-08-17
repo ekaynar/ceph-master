@@ -73,11 +73,12 @@ public:
 	int existKey(string key, cpp_redis::client *client);
 	int setValue(cache_block *ptr);
 	int getValue(cache_block *ptr);
+	int getValue(cache_block *ptr, string key);
 	int updateField(cache_block *ptr, string field, string value);
 	int updateField(string key, string field, string value);
 	int delValue(cache_block *ptr);
 	int delValue(string key);
-	int updateAccessCount(string key);
+	int updateAccessCount(string key, int incr);
 	int setTTL(cache_block *ptr, int seconds);
 	int getHosts(string key, string hosts);
 private:

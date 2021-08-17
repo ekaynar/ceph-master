@@ -7012,10 +7012,6 @@ std::vector<Option> get_rgw_options() {
     .set_default(false)
     .set_description("enabling lfudafor datacache"),
     
-    Option("rgw_remote_caches", Option::TYPE_STR, Option::LEVEL_ADVANCED)
-    .set_default("localhost")
-    .set_description("rgw address of remote caches"),
-	
 	Option("remote_cache_addr", Option::TYPE_STR, Option::LEVEL_ADVANCED)
     .set_default("localhost:8080")
     .set_description("rgw address as a remote cache"),
@@ -7075,6 +7071,10 @@ std::vector<Option> get_rgw_options() {
     Option("cache_threadpool_size", Option::TYPE_INT, Option::LEVEL_ADVANCED)
     .set_default(32)
     .set_description("cache threadpool size for remote requests"),
+
+    Option("remote_cache_list", Option::TYPE_STR, Option::LEVEL_ADVANCED)
+    .set_default("localhost:8000")
+    .set_description("d4n list of remote cache"),
 
     Option("cache_aging_threadpool_size", Option::TYPE_INT, Option::LEVEL_ADVANCED)
     .set_default(32)

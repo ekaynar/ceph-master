@@ -437,6 +437,8 @@ struct DataCache {
     age_iterator m_open_list_end;
 	size_t cache_weight;
 	size_t total_cache_weight;
+	std::vector<string> remote_cache_list;
+	int remote_cache_count;
 
     std::map<string, ObjectDataInfo*> write_cache_map;
     std::map<string, ChunkDataInfo*> cache_map;
@@ -489,6 +491,20 @@ struct DataCache {
 	int submit_http_head_requests_s3(cache_obj *c_obj);
 	int submit_http_get_requests_s3(cache_obj *c_obj, string prefix, string marker, int max_b);
 	int submit_http_put_request_s3(string block_id, uint64_t block_size, string location);
+	
+	void set_remote_cache_list();
+	/*{
+	  stringstream sloction(cct->_conf->remote_cache_list);
+	  string tmp;
+	  while(getline(sloction, tmp, ',')){
+		if (tmp.compare(cct->_conf->remote_cache_addr) != 0)
+		  remote_cache_list.push_back(tmp);
+	  }
+	for (auto i = remote_cache_list.begin(); i != remote_cache_list.end(); ++i)
+		int aa =5;
+		//ldout(cct,10) << __func__  << i* << dendl;
+	}
+*/
 	void init(CephContext *_cct) {
       cct = _cct;
       free_data_cache_size = cct->_conf->rgw_cache_size;
@@ -503,8 +519,11 @@ struct DataCache {
       small_writes = new std::list<string>;
 	  m_open_list_end = m_dynamic_age_list.begin();
 	  cache_weight = 1;
-
+	  set_remote_cache_list();
 	}
+
+
+
     void set_block_directory(RGWBlockDirectory *_blkDirectory){
 	blkDirectory = _blkDirectory;
     }

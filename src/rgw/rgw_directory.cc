@@ -323,6 +323,7 @@ int RGWBlockDirectory::existKey(string key,cpp_redis::client *client){
   return result;
 }
 
+
 int RGWBlockDirectory::updateField(string key, string field, string value){
 
   vector<pair<string, string>> list;
@@ -411,9 +412,9 @@ int RGWBlockDirectory::delValue(cache_block *ptr){
   return result-1;
 }
 
-int RGWBlockDirectory::updateAccessCount(string key){
+int RGWBlockDirectory::updateAccessCount(string key, int incr){
   int result = 0;
-  int incr = 1;
+//  int incr = 1;
   cpp_redis::client client;
   findClient(key, &client);
   client.hincrby(key, "accessCount", incr,  [&result](cpp_redis::reply &reply){
@@ -771,7 +772,8 @@ int RGWBlockDirectory::getValue(cache_block *ptr){
   ptr->access_count = stoull(access_count);
   return 0;
   }
-  else{return -1;}
+
+  else {return -1;}
 }
 
 
@@ -831,6 +833,75 @@ vector<pair<vector<string>, time_t>> RGWObjectDirectory::get_aged_keys(time_t st
 */
   return keys;
 }
+
+int RGWBlockDirectory::getValue(cache_block *ptr, string key){
+  cpp_redis::client client;
+  findClient(key, &client);
+  ldout(cct,10) << __func__ <<" key:" << key <<dendl;
+  if (existKey(key, &client))
+  {
+	  string owner;
+  string hosts;
+  string size;
+  string bucket_name;
+  string obj_name;
+  string block_id;
+  string access_count;
+  int key_exist = 0;
+  std::vector<std::string> fields;
+  fields.push_back("key");
+  fields.push_back("owner");
+  fields.push_back("hosts");
+  fields.push_back("size");
+  fields.push_back("bucket_name");
+  fields.push_back("obj_name");
+  fields.push_back("block_id");
+  fields.push_back("accessCount");
+
+  client.hmget(key, fields, [&key, &owner, &hosts, &size, &bucket_name, &obj_name, &block_id, &access_count, &key_exist](cpp_redis::reply &reply){
+    auto arr = reply.as_array();
+    if (arr[0].is_null()) {
+      key_exist = -1;
+    } else {
+      key = arr[0].as_string();
+      owner = arr[1].as_string();
+      hosts = arr[2].as_string();
+      size = arr[3].as_string();
+      bucket_name = arr[4].as_string();
+      obj_name = arr[5].as_string();
+      block_id  = arr[6].as_string();
+      access_count = arr[7].as_string();
+      }
+  });
+  
+  client.sync_commit();
+  if (key_exist < 0 ){
+    ldout(cct,10) << __func__ << "no entry in the block directory for key:" << key<< dendl;
+    return key_exist;
+  }
+  
+  stringstream sloction(hosts);
+  string tmp;
+    //passing the values to the requester
+  ptr->c_obj.owner = owner;
+
+  //host1_host2_host3_...
+  while(getline(sloction, tmp, '_'))
+    ptr->hosts_list.push_back(tmp);
+
+  ptr->size_in_bytes = stoull(size);
+  ptr->c_obj.bucket_name = bucket_name;
+  ptr->c_obj.obj_name = obj_name;
+  ptr->block_id = stoull(block_id);
+  ptr->access_count = stoull(access_count);
+  return 0;
+  }
+  else{return -1;}
+
+
+  }
+
+
 
 
 

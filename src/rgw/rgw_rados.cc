@@ -9375,10 +9375,11 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
   d->add_pending_key(oid);
   d->cache_enable = true;
   c_block.size_in_bytes = read_len;
-  
+  c_block.cachedOnRemote = false; 
   int ret = 0;  
   // read block from local ssd cache
   if (datacache->get(oid, c_block.c_obj.is_remote_req)){
+	
     d->add_pending_block(oid, c_block);
     dout(10) << __func__   << "ugur HIT local read cache, key:" << oid<< dendl; 
     rgw_pool pool("default.rgw.buckets.data");
@@ -9412,6 +9413,7 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
 	if (ret == 0) { // read from remote cache
 	  dout(10) << __func__   << "datacache HIT remote cache, key:" << oid<< dendl; 
 	  rgw_user user_id(c_block.c_obj.owner);
+	  c_block.cachedOnRemote = true;
 	  string dest= "http://" + c_block.hosts_list[0];
 	  rgw_bucket bucket;
 	  bucket.name = c_block.c_obj.bucket_name;
@@ -9501,6 +9503,7 @@ int RGWRados::create_cache_request(cache_block& c_block, bufferlist&& bl){
     return 0;
   }
   string oid = c_block.c_obj.bucket_name + "_"+c_block.c_obj.obj_name+"_"+ std::to_string(c_block.block_id);
+  c_block.cachedOnRemote=false;
   datacache->put(data, read_len, oid, &c_block); 
 }
 
@@ -9587,7 +9590,7 @@ int RGWRados::get_head_obj(cache_obj& c_obj){
 
 bool RGWRados::is_remote_cache_req(string http_host)
 {
-  string location = g_conf()->rgw_remote_caches;
+  string location = g_conf()->remote_cache_list;
   string delimiters(",");
 
   std::vector<std::string> tokens;

@@ -2470,6 +2470,7 @@ struct cache_block {
   vector<string> hosts_list; // list of hostnames <ip:post> of block locations
   uint64_t access_count;
   time_t lastAccessTime;
+  bool cachedOnRemote;
   //CacheLocation cache_location;  
  // string host; // hostname of remote cache
 };

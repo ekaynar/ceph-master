@@ -334,9 +334,11 @@ class RemoteS3Request : public Task {
       curl_handle = (CURL *)handle;
     }
     string sign_s3_request(string HTTP_Verb, string uri, string date, string YourSecretAccessKeyID, string AWSAccessKeyId);
+	string sign_s3_request2(string HTTP_Verb, string uri, string date, string YourSecretAccessKeyID, string AWSAccessKeyId);
     string get_date();
   private:
     int submit_http_get_request_s3();
+	int submit_http_put_request_s3();
   private:
     pthread_mutex_t qmtx;
     pthread_cond_t wcond;
@@ -479,18 +481,21 @@ struct DataCache {
 	int create_io_write_request(bufferlist& bl ,uint64_t len, std::string oid, cache_block *c_block);
 	int issue_io_write(bufferlist& bl ,uint64_t len, std::string oid);
 	int create_aio_write_request(bufferlist& bl, uint64_t len, std::string obj_id, cache_block* c_block);
+	int create_aio_read_request(bufferlist& bl, uint64_t len, std::string obj_id, cache_block* c_block);
     void cache_aio_write_completion_cb(cacheAioWriteRequest *c);
+    void cache_aio_read_completion_cb(cacheAioWriteRequest *c);
     size_t get_used_pool_capacity(string pool_name, RGWRados *store);
     void copy_aged_obj(RGWRados *store, uint64_t interval);
 	void init_writecache_aging(RGWRados *store);
     void timer_start(RGWRados *store, uint64_t interval);
 	string sign_s3_request(string HTTP_Verb, string uri, string date, string YourSecretAccessKeyID, string AWSAccessKeyId);
-	string sign_s3_request2(string HTTP_Verb, string uri, string date, string YourSecretAccessKeyID, string AWSAccessKeyId);
+	//string sign_s3_request2(string HTTP_Verb, string uri, string date, string YourSecretAccessKeyID, string AWSAccessKeyId);
 	int getUid();
 	string get_date();
 	int submit_http_head_requests_s3(cache_obj *c_obj);
 	int submit_http_get_requests_s3(cache_obj *c_obj, string prefix, string marker, int max_b);
-	int submit_http_put_request_s3(string block_id, uint64_t block_size, string location);
+//	int submit_http_put_request_s3(string block_id, uint64_t block_size, string location);
+
 	
 	void set_remote_cache_list();
 	/*{

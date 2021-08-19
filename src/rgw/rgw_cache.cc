@@ -705,8 +705,12 @@ int DataCache::create_io_write_request(bufferlist& bl ,uint64_t len, std::string
   ret = this->issue_io_write(bl, len, oid);
   if (ret < 0 ) 
 		return ret;
-  
+}
 
+void DataCache::cache_aio_read_completion_cb(cacheAioWriteRequest* c){
+
+  ldout(cct, 10) << __func__  << " oid " << c->c_block.c_obj.bucket_name << dendl;
+  ldout(cct, 10) << __func__  << " oid " << c->c_block.c_obj.obj_name << dendl;
 
 }
 
@@ -791,10 +795,47 @@ void DataCache::cache_aio_write_completion_cb(cacheAioWriteRequest* c){
 
 }
 
+void _cache_aio_read_completion_cb(sigval_t sigval) {
+  cacheAioWriteRequest *c = (cacheAioWriteRequest *)sigval.sival_ptr;
+  c->priv_data->cache_aio_read_completion_cb(c);
+}
 
 void _cache_aio_write_completion_cb(sigval_t sigval) {
   cacheAioWriteRequest *c = (cacheAioWriteRequest *)sigval.sival_ptr;
   c->priv_data->cache_aio_write_completion_cb(c);
+}
+
+
+int DataCache::create_aio_read_request(bufferlist& bl, uint64_t read_len, std::string key, cache_block *c_b){
+  ldout(cct, 10) << __func__  << " oid " << c_b->c_obj.obj_name <<  " blockid "<<  c_b->block_id <<dendl;
+  int ret = 0;
+  struct cacheAioWriteRequest *wr= new struct cacheAioWriteRequest(cct);
+  wr->c_block = *c_b;
+  struct aiocb *cb = new struct aiocb;
+  memset(cb, 0, sizeof(struct aiocb));
+  string loc = cct->_conf->rgw_datacache_path + "/"+ key; 
+  wr->cb->aio_fildes = ::open(loc.c_str(), O_RDONLY);
+
+  if (cb->aio_fildes < 0) {
+	return -1;
+  }
+  wr->cb->aio_buf = malloc(read_len);
+  wr->cb->aio_nbytes = read_len;
+  wr->cb->aio_offset = 0;
+  wr->cb->aio_sigevent.sigev_notify = SIGEV_THREAD;
+  wr->cb->aio_sigevent.sigev_notify_function = _cache_aio_read_completion_cb;
+  wr->cb->aio_sigevent.sigev_notify_attributes = NULL;
+  wr->cb->aio_sigevent.sigev_value.sival_ptr = (void*)wr;
+  if((ret = ::aio_read(wr->cb)) != 0) {
+	ldout(cct, 0) << "Error: aio_read failed "<< ret << dendl;
+	goto error;
+  }
+  return 0;
+error:
+  free((void *)wr->cb->aio_buf);
+  wr->cb->aio_buf = nullptr;
+  ::close(wr->cb->aio_fildes);
+   delete(wr->cb);
 }
 
 int DataCache::create_aio_write_request(bufferlist& bl, uint64_t len, std::string key, cache_block *c_b){
@@ -952,7 +993,13 @@ size_t DataCache::lfuda_eviction(){
 	  srand (time(NULL));
 	  int iRand = rand() % remote_cache_count; 
 	  ldout(cct,10) << __func__  << "copy block to remote cache oid3: " << del_oid << " "<< e.size_in_bytes << " " << remote_cache_list[iRand] << dendl;
-	  ret = submit_http_put_request_s3(del_oid, e.size_in_bytes, remote_cache_list[iRand]);
+	  RemoteRequest *c =  new RemoteRequest();
+	  c->req_type = 0;
+	  c->path = del_oid;
+	  c->dest =  remote_cache_list[iRand];
+	  c->sizeleft = e.size_in_bytes;
+	  tp->addTask(new RemoteS3Request(c, cct));
+	  //ret = submit_http_put_request_s3(del_oid, e.size_in_bytes, remote_cache_list[iRand]);
 	  ldout(cct,10) << __func__  << " ugur  copy block to remote cache oid3: " << del_oid << " "<< e.size_in_bytes << " " << ret << dendl;
 	}
   } 
@@ -960,7 +1007,7 @@ size_t DataCache::lfuda_eviction(){
   ret = evict_from_directory(del_oid);
   ret = blkDirectory->updateAccessCount(del_oid, cache_weight);
   location = cct->_conf->rgw_datacache_path + "/" + e.obj_id;
-  remove(location.c_str());
+//  remove(location.c_str());
   return freed_size;
 }
 
@@ -1196,7 +1243,7 @@ string CopyRemoteS3Object::get_date(){
   return date;
 }
 
-string DataCache::sign_s3_request2(string HTTP_Verb, string uri, string date, string YourSecretAccessKeyID, string AWSAccessKeyId){
+string RemoteS3Request::sign_s3_request2(string HTTP_Verb, string uri, string date, string YourSecretAccessKeyID, string AWSAccessKeyId){
   std::string Content_Type = "text/plain";
   std::string Content_MD5 ="";
   std::string CanonicalizedResource = uri.c_str();
@@ -1446,15 +1493,19 @@ static size_t read_callback(char *ptr, size_t size, size_t nmemb, FILE *stream)
   return retcode;
 }
 
-int DataCache::submit_http_put_request_s3(string block_id, uint64_t block_size, string location)
+int RemoteS3Request::submit_http_put_request_s3()
 {
   CURL *curl_handle;
   CURLcode res;
- 
+
+  string block_id = req->path; 
+  string location = req->dest;
+  size_t block_size = req->sizeleft;
   ldout(cct,10) << __func__  << block_id << dendl;
    
   std::size_t found = block_id.find_last_of("_");
-  string uri = "/test/" + block_id;
+  //string uri = "/test/" + block_id;
+  string uri =  block_id;
   string AWSAccessKeyId="TX2XS2M6LVH5WJWBCW53";
   string YourSecretAccessKeyID="BKg6KC5DpUhWDRukuINZidEv06vbTyZQybj2NiIu";
   string date = get_date();
@@ -1632,30 +1683,36 @@ void RemoteS3Request::run() {
   ldout(cct, 20) << __func__  <<dendl;
   int max_retries = cct->_conf->max_remote_retries;
   int r = 0;
+
+  if (req->req_type == 1) {
   for (int i=0; i<max_retries; i++ ){
     if(!(r = submit_http_get_request_s3()) && (req->s.size() == req->read_len)){
        ldout(cct, 0) <<  __func__  << "remote get success"<<req->key << " r-id "<< req->r->id << dendl;
-//       req->func(req);
         req->finish();
       	return;
     }
     if(req->s.size() != req->read_len){
-//#if(req->bl->length() != r->read_len){
        req->s.clear();
     }
     req->s.clear();
     }
 
     if (r == ECANCELED) {
-    ldout(cct, 0) << "ERROR: " << __func__  << "(): remote s3 request for failed, obj="<<req->key << dendl;
+    ldout(cct, 0) << "ERROR: " << __func__  << " obj="<<req->key << dendl;
     req->r->result = -1;
     req->aio->put(*(req->r));
     return;
     }
+  }
+  else{
+	for (int i=0; i<max_retries; i++ ){
+	  if(!(r = submit_http_put_request_s3()))
+       return;
   
+      ldout(cct, 0) << "ERROR: " << __func__  << dendl;
+      return;
+      }	
+  }
   
- 
-
-
 }
 

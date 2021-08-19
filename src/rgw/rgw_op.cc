@@ -8474,10 +8474,10 @@ void RGWPutObj::remote_cache_put_execute(){
   const string& hostname = s->info.env->get("REMOTE_ADDR", "");
   c_obj.is_remote_req = store->getRados()->is_remote_cache_req(hostname);
   
-  //string str_block_id =  s->info.env->get("HTTP_BLOCK_ID");
+  string str_block_id =  s->info.env->get("HTTP_BLOCK_ID");
   cache_block c_b;
-//  c_b.block_id =  stoull(str_block_id); 
-  c_b.block_id = 0;
+  c_b.block_id =  stoull(str_block_id); 
+//  c_b.block_id = 0;
   
   auto& obj_ctx = *static_cast<RGWObjectCtx*>(s->obj_ctx);
   rgw_obj obj{s->bucket, s->object};

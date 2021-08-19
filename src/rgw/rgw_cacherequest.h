@@ -130,10 +130,10 @@ struct RemoteRequest : public CacheRequest{
   std::string s;
   size_t sizeleft;
   const char *readptr;
-  f func; 
+  f func;
+  bool req_type = 1; // req_type GET=1, PUT=0 
   cache_block *c_block;
   RemoteRequest() :  CacheRequest(), c_block(nullptr) {}
-
 
   ~RemoteRequest(){}
   int prepare_op(std::string key,  bufferlist *bl, off_t read_len, off_t ofs, off_t read_ofs, string dest, rgw::Aio* aio, rgw::AioResult* r, cache_block *c_block, string path, void(*f)(RemoteRequest*));

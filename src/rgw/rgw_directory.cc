@@ -402,6 +402,7 @@ int RGWBlockDirectory::delValue(cache_block *ptr){
   
   cpp_redis::client client;
   string key = buildIndex(ptr);
+  ldout(cct,10) << __func__ << " key " << key << dendl;
   keys.push_back(key);
   findClient(key, &client);
   client.del(keys, [&result](cpp_redis::reply &reply){
@@ -431,6 +432,7 @@ int RGWBlockDirectory::delValue(string key){
   cpp_redis::client client;
   keys.push_back(key);
   findClient(key, &client);
+  ldout(cct,10) << __func__ << " key " << key << dendl;
   client.del(keys, [&result](cpp_redis::reply &reply){
       result = reply.as_integer();
       });

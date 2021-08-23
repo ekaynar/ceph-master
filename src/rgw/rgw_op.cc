@@ -8477,8 +8477,8 @@ void RGWPutObj::remote_cache_put_execute(){
   string str_block_id =  s->info.env->get("HTTP_BLOCK_ID");
   cache_block c_b;
   c_b.block_id =  stoull(str_block_id); 
-//  c_b.block_id = 0;
-  
+ // c_b.block_id = 0;
+   
   auto& obj_ctx = *static_cast<RGWObjectCtx*>(s->obj_ctx);
   rgw_obj obj{s->bucket, s->object};
 
@@ -8516,8 +8516,6 @@ void RGWPutObj::remote_cache_put_execute(){
 
   etag = calc_md5;
 
-  //  = s->info.env->get("REMOTE_ADDR", "");
-  
 
 }
 

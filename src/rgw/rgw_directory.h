@@ -76,11 +76,15 @@ public:
 	int getValue(cache_block *ptr, string key);
 	int updateField(cache_block *ptr, string field, string value);
 	int updateField(string key, string field, string value);
+	int updateGlobalWeight(string key,  size_t weight , bool evict);
+	int resetGlobalWeight(string key);
 	int delValue(cache_block *ptr);
 	int delValue(string key);
 	int updateAccessCount(string key, int incr);
 	int setTTL(cache_block *ptr, int seconds);
 	int getHosts(string key, string hosts);
+	int setAvgCacheWeight(size_t avg_weight);
+	int getAvgCacheWeight(string endpoint);
 private:
 	string buildIndex(cache_block *ptr);
 };

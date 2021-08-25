@@ -1004,6 +1004,7 @@ void DataCache::getRemoteCacheWeight(){
   for (auto it=remote_cache_list.begin(); it!=remote_cache_list.end(); ++it)
   {
 	int remote_weight = blkDirectory->getAvgCacheWeight(*it);
+	ldout(cct, 10) << __func__  <<" name " << *it << " remote_weight " << remote_weight<<dendl;
 	remote_cache_weight_map.insert(pair<string, int>(*it, remote_weight));
   }
 
@@ -1073,16 +1074,20 @@ size_t DataCache::lfuda_eviction(){
 	this->getRemoteCacheWeight();
 	  int min = INT_MAX;
 	  string cache_id = "";
-	  for (auto i : remote_cache_weight_map)
+	  ldout(cct, 10) << __func__  <<" map size " << remote_cache_weight_map.size() << dendl;
+	  for (auto it = remote_cache_weight_map.begin(); it != remote_cache_weight_map.end(); ++it)
 	  {
-		 if (min < i.second )
+		//ldout(cct, 10) << __func__  <<" del w " << it->second << "remo "<< it->first << dendl;
+		 if (min > it->second )
 		 {
-		   cache_id = i.first;
-		   min = i.second;
+		ldout(cct, 10) << __func__  <<" del w " << it->second << "remo "<< it->first << dendl;
+		   cache_id = it->first;
+		   min = it->second;
 		 }
 	  }
 	  
-
+	  
+	  ldout(cct, 10) << __func__  <<" del w " << del_weight << "remo w" << min << "name " << cache_id <<dendl;
 	  if ( del_weight > min )
 	  {
 	    ldout(cct, 10) << __func__  <<" last copy, no dw, remote copy : " << del_oid <<dendl;
@@ -1124,8 +1129,10 @@ void DataCache::set_remote_cache_list(){
       string tmp;
       while(getline(sloction, tmp, ',')){
         if (tmp.compare(cct->_conf->remote_cache_addr) != 0)
+		{
           remote_cache_list.push_back(tmp);
 		  remote_cache_weight_map.insert(pair<string, int>(tmp, 0));
+		}
       }
 	  remote_cache_count = remote_cache_list.size();
     }

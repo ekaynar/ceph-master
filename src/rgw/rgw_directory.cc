@@ -601,7 +601,8 @@ int RGWBlockDirectory::getAvgCacheWeight(string endpoint){
   });
 
   client.sync_commit();
-  return stoull(val);
+  //return stoull(val);
+  return stoi(val);
 }
 /*
   int min = INT_MAX;

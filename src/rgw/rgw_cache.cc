@@ -1074,20 +1074,15 @@ size_t DataCache::lfuda_eviction(){
 	this->getRemoteCacheWeight();
 	  int min = INT_MAX;
 	  string cache_id = "";
-	  ldout(cct, 10) << __func__  <<" map size " << remote_cache_weight_map.size() << dendl;
 	  for (auto it = remote_cache_weight_map.begin(); it != remote_cache_weight_map.end(); ++it)
 	  {
-		//ldout(cct, 10) << __func__  <<" del w " << it->second << "remo "<< it->first << dendl;
 		 if (min > it->second )
 		 {
-		ldout(cct, 10) << __func__  <<" del w " << it->second << "remo "<< it->first << dendl;
 		   cache_id = it->first;
 		   min = it->second;
 		 }
 	  }
 	  
-	  
-	  ldout(cct, 10) << __func__  <<" del w " << del_weight << "remo w" << min << "name " << cache_id <<dendl;
 	  if ( del_weight > min )
 	  {
 	    ldout(cct, 10) << __func__  <<" last copy, no dw, remote copy : " << del_oid <<dendl;
@@ -1097,6 +1092,19 @@ size_t DataCache::lfuda_eviction(){
 		c->dest =  cache_id;
 		c->sizeleft = e.size_in_bytes;
 		tp->addTask(new RemoteS3Request(c, cct));
+		cache_lock.lock();
+		freed_size = del_size;
+		m_dynamic_age_list.erase(it);
+		m_key_map.erase(e.key_position);
+		cache_weight = del_weight;
+		total_cache_weight = total_cache_weight - cache_weight;
+        size_t avg_w = round (total_cache_weight/m_dynamic_age_list.size());
+		cache_lock.unlock();
+
+        ret = blkDirectory->updateGlobalWeight(del_oid, del_weight, true);
+        ret = blkDirectory->setAvgCacheWeight(avg_w);
+        location = cct->_conf->rgw_datacache_path + "/" + del_oid;
+        remove(location.c_str());
 		return freed_size;	
 	  } 
 	  else 
@@ -1618,6 +1626,7 @@ int RemoteS3Request::submit_http_put_request_s3()
   string location = req->dest;
   size_t block_size = req->sizeleft;
   ldout(cct,10) << __func__  << block_id << dendl;
+  ldout(cct,10) << __func__  << "dest : " << req->dest << dendl;
    
   std::size_t pos = block_id.find_first_of("_");
   string bucket = block_id.substr(0, pos);

@@ -185,90 +185,66 @@ void RGWObjectDirectory::findClient(string key, cpp_redis::client *client){
   int slot = 0;
   slot = hash_slot(key.c_str(), key.size());
 
+  /* if you had four *4* redis masters */
+  if (slot < 4096)
+    client->connect(cct->_conf->rgw_directory_address, cct->_conf->rgw_directory_port);
+  //client = &client1;
+  else if (slot < 8192)
+    client->connect(cct->_conf->rgw_directory_address2, cct->_conf->rgw_directory_port2);
+  //client = &client2;
+  else if (slot < 12288)
+    client->connect(cct->_conf->rgw_directory_address3, cct->_conf->rgw_directory_port3);
+  else
+    client->connect(cct->_conf->rgw_directory_address4, cct->_conf->rgw_directory_port4);
+  //client = &client3;
+
+
+  /* if you had THREE *3* redis masters */
+  /*
   if (slot < 5461)
     client->connect(cct->_conf->rgw_directory_address, cct->_conf->rgw_directory_port);
   //client = &client1;
   else if (slot < 10923)
-    client->connect(cct->_conf->rgw_directory_address2, cct->_conf->rgw_directory_port);
+    client->connect(cct->_conf->rgw_directory_address2, cct->_conf->rgw_directory_port2);
   //client = &client2;
   else
-    client->connect(cct->_conf->rgw_directory_address3, cct->_conf->rgw_directory_port);
+    client->connect(cct->_conf->rgw_directory_address3, cct->_conf->rgw_directory_port3);
   //client = &client3;
-
-  /*
-  vector<string> servers (10);
-  string tmpServers;
-  tmpServers = cct->_conf->rgw_directory_address;
-  int count = 0;
-  size_t end = 0;
-  size_t start;
-  string delimiter = ",";
-  string reply;
-
-  while ((start = tmpServers.find_first_not_of(delimiter, end)) != std::string::npos){
-    end = tmpServers.find(delimiter, start);
-    servers[count] = tmpServers.substr(start, end - start);
-    count++;
-  }
-
-  int edge = 16385/count;
-  for (int i = 0; i < count; i++){
-    if (slot < (i+1)*edge && slot >= i*edge){
-      const string server = servers[i];
-      client->connect(server, cct->_conf->rgw_directory_port,
-                     [&reply](const std::string &host, std::size_t port, cpp_redis::client::connect_state status) {
-                                       if (status == cpp_redis::client::connect_state::dropped) {
-                                               reply = "client disconnected from " + host;
-                                       }
-                       });
-    }
-  }*/
+  */
 }
 
 
 void RGWBlockDirectory::findClient(string key, cpp_redis::client *client){
   int slot = 0;
   slot = hash_slot(key.c_str(), key.size());
+
+  /* if you had four *4* redis masters */
+  if (slot < 4096)
+    client->connect(cct->_conf->rgw_directory_address, cct->_conf->rgw_directory_port);
+  //client = &client1;
+  else if (slot < 8192)
+    client->connect(cct->_conf->rgw_directory_address2, cct->_conf->rgw_directory_port2);
+  //client = &client2;
+  else if (slot < 12288)
+    client->connect(cct->_conf->rgw_directory_address3, cct->_conf->rgw_directory_port3);
+  else
+    client->connect(cct->_conf->rgw_directory_address4, cct->_conf->rgw_directory_port4);
+  //client = &client3;
+
+
+  /* if you had THREE *3* redis masters */
+  /*
   if (slot < 5461)
     client->connect(cct->_conf->rgw_directory_address, cct->_conf->rgw_directory_port);
   //client = &client1;
   else if (slot < 10923)
-    //client = &client2;
-    client->connect(cct->_conf->rgw_directory_address2, cct->_conf->rgw_directory_port);
+    client->connect(cct->_conf->rgw_directory_address2, cct->_conf->rgw_directory_port2);
+  //client = &client2;
   else
-    //client = &client3;
-    client->connect(cct->_conf->rgw_directory_address3, cct->_conf->rgw_directory_port);
-  /*
-  //vector<string> servers (cct->_conf->rgw_directory_serverCount);
-  vector<string> servers (10);
-  string tmpServers;
-  tmpServers = cct->_conf->rgw_directory_address;
-  int count = 0;
-  size_t end = 0;
-  size_t start;
-  string delimiter = ",";
-  string reply;
+    client->connect(cct->_conf->rgw_directory_address3, cct->_conf->rgw_directory_port3);
+  //client = &client3;
+  */
 
-  while ((start = tmpServers.find_first_not_of(delimiter, end)) != std::string::npos){
-    end = tmpServers.find(delimiter, start);
-    servers[count] = tmpServers.substr(start, end - start);
-    count++;
-  }
-
-  int edge = 16385/count;
-  for (int i = 0; i < count; i++){
-    if (slot < (i+1)*edge && slot >= i*edge){
-      const string server = servers[i];
-      client->connect(server, cct->_conf->rgw_directory_port,
-                     [&reply](const std::string &host, std::size_t port, cpp_redis::client::connect_state status) {
-                                       if (status == cpp_redis::client::connect_state::dropped) {
-                                               reply = "client disconnected from " + host;
-                                       }
-                       });
-    ldout(cct, 10) << "reply is " << reply << dendl;
-    }
-  }
-*/
 }
 
 

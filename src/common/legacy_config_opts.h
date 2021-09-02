@@ -1255,7 +1255,11 @@ OPTION(rgw_cache_size ,OPT_INT) // rgw local read cache capacity
 OPTION(rgw_directory_address ,OPT_STR) // cache directory address 
 OPTION(rgw_directory_address2 ,OPT_STR) // cache directory address 
 OPTION(rgw_directory_address3 ,OPT_STR) // cache directory address 
+OPTION(rgw_directory_address4 ,OPT_STR) // cache directory address 
 OPTION(rgw_directory_port ,OPT_INT) // cache directory port
+OPTION(rgw_directory_port2 ,OPT_INT) // cache directory port
+OPTION(rgw_directory_port3 ,OPT_INT) // cache directory port
+OPTION(rgw_directory_port4 ,OPT_INT) // cache directory port
 OPTION(rgw_directory_serverCount,OPT_INT) // cache directory port
 OPTION(coalesing_write_size,OPT_INT) // cache directory port
 OPTION(enable_coalesing_write,OPT_BOOL) // cache directory port

@@ -402,6 +402,8 @@ struct ChunkDataInfo : public LRUObject {
 
 struct DataCache {
   private:
+	std::vector<string> remote_cache_list;
+	int remote_cache_count;
     std::map<string, ObjectDataInfo*> write_cache_map;
     std::map<string, ChunkDataInfo*> cache_map;
     std::list<string> outstanding_write_list;
@@ -448,6 +450,7 @@ struct DataCache {
 	string get_date();
 	int submit_http_head_requests_s3(cache_obj *c_obj);
 	int submit_http_get_requests_s3(cache_obj *c_obj, string prefix, string marker, int max_b);
+	void set_remote_cache_list();
 	void init(CephContext *_cct) {
       cct = _cct;
       free_data_cache_size = cct->_conf->rgw_cache_size;
@@ -460,6 +463,7 @@ struct DataCache {
       obj_tail = NULL;
       outstanding_small_write_list = new std::list<cache_obj*>;
       small_writes = new std::list<string>;
+	  set_remote_cache_list();
 	}
     void set_block_directory(RGWBlockDirectory *_blkDirectory){
 	blkDirectory = _blkDirectory;

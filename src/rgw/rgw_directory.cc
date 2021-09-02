@@ -489,45 +489,81 @@ int RGWBlockDirectory::setValue(cache_block *ptr){
   string key = buildIndex(ptr);
   cpp_redis::client client;
   string result;
-
+  string endpoint=cct->_conf->remote_cache_addr;
   ldout(cct,10) <<__func__<<" key " << key <<dendl;
-
-  vector<pair<string, string>> list;
-  vector<string> options;
+  int exist = 0;
+  bool a =false;
+  vector<string> keys;
+  keys.push_back(key);
   string hosts;
-
-  stringstream ss;
-  for(size_t i = 0; i < ptr->hosts_list.size(); ++i)
-  {
-    if(i != 0)
-      ss << "_";
-    ss << ptr->hosts_list[i];
-  }
-  hosts = ss.str();
-
-  //creating a list of key's properties
-  list.push_back(make_pair("key", key));
-  list.push_back(make_pair("owner", ptr->c_obj.owner));
-  list.push_back(make_pair("hosts", hosts));
-  list.push_back(make_pair("size", to_string(ptr->size_in_bytes)));
-  list.push_back(make_pair("bucket_name", ptr->c_obj.bucket_name));
-  list.push_back(make_pair("obj_name", ptr->c_obj.obj_name));
-  list.push_back(make_pair("block_id", to_string(ptr->block_id)));
-  list.push_back(make_pair("lastAccessTime", to_string(ptr->lastAccessTime)));
-  list.push_back(make_pair("accessCount", to_string(ptr->access_count)));
-  findClient(key, &client);
-  client.hmset(key, list, [&result](cpp_redis::reply &reply){
-	  result = reply.as_string();
-  });
-
-  // synchronous commit, no timeout
+  client.exists(keys, [&exist, &a](cpp_redis::reply &reply){
+      exist = reply.as_integer();
+          if (reply.is_error())
+          a = true;
+      });
   client.sync_commit();
-//  ldout(cct,10) <<__func__<<" we set key " << key <<dendl;
-  if (result.find("OK") != std::string::npos)
-	return 0;
+  //client.sync_commit(std::chrono::milliseconds(3000));
+  ldout(cct,10) <<__func__<<" update directory for block:  " << key <<  dendl;
+  if (!exist)
+  {
+        vector<pair<string, string>> list;
+    //creating a list of key's properties
+        list.push_back(make_pair("key", key));
+        list.push_back(make_pair("owner", ptr->c_obj.owner));
+        list.push_back(make_pair("hosts", endpoint));
+        list.push_back(make_pair("size", to_string(ptr->size_in_bytes)));
+        list.push_back(make_pair("bucket_name", ptr->c_obj.bucket_name));
+        list.push_back(make_pair("obj_name", ptr->c_obj.obj_name));
+        list.push_back(make_pair("block_id", to_string(ptr->block_id)));
+        list.push_back(make_pair("lastAccessTime", to_string(ptr->lastAccessTime)));
+        list.push_back(make_pair("accessCount", "0"));
+        //list.push_back(make_pair("accessCount", to_string(ptr->access_count)));
+        client.hmset(key, list, [&result](cpp_redis::reply &reply){
+          if (!reply.is_null())
+                result = reply.as_string();
+        });
+		if (result.find("OK") != std::string::npos)
+          ldout(cct,10) <<__func__<<" new key res  " << result <<dendl;
+        else
+          ldout(cct,10) <<__func__<<" else key res  " << result <<dendl;
+        client.sync_commit();
+    return 0;
+  }
   else
-	return -1;
+  {ldout(cct,10) <<__func__<<" existing key  " << key <<dendl;
+        string old_val;
+        std::vector<std::string> fields;
+        fields.push_back("hosts");
+        client.hmget(key, fields, [&old_val](cpp_redis::reply &reply){
+          auto arr = reply.as_array();
+          if (!arr[0].is_null())
+                old_val = arr[0].as_string();
+        });
+        client.sync_commit();
 
+        string hosts;
+        stringstream ss;
+        bool new_cache = true;
+    stringstream sloction(old_val);
+        string tmp;
+        while(getline(sloction, tmp, '_'))
+        {
+          if (tmp.compare(endpoint) == 0)
+                new_cache=false;
+        }
+        if(new_cache)
+          hosts = old_val +"_"+ endpoint;
+        vector<pair<string, string>> list;
+        list.push_back(make_pair("hosts", hosts));
+        list.push_back(make_pair("lastAccessTime", to_string(ptr->lastAccessTime)));
+        client.hmset(key, list, [&result](cpp_redis::reply &reply){
+          result = reply.as_string();
+      });
+        client.sync_commit();
+        //client.exec();
+        return 0;
+
+  }
 }
 
 int RGWObjectDirectory::setTTL(cache_obj *ptr, int seconds){

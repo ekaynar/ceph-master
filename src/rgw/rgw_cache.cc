@@ -811,6 +811,21 @@ int DataCache::evict_from_directory(string key){
 	return 0;
 }
 
+void DataCache::set_remote_cache_list(){
+      remote_cache_count = 0;
+          stringstream sloction(cct->_conf->remote_cache_list);
+      string tmp;
+      while(getline(sloction, tmp, ',')){
+        if (tmp.compare(cct->_conf->remote_cache_addr) != 0)
+                {
+          remote_cache_list.push_back(tmp);
+                  //remote_cache_weight_map.insert(pair<string, int>(tmp, 0));
+                }
+      }
+          remote_cache_count = remote_cache_list.size();
+    }
+
+
 size_t DataCache::lru_eviction(){
 
   int n_entries = 0;

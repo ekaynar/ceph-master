@@ -1110,7 +1110,7 @@ int DataCache::submit_http_get_requests_s3(cache_obj *c_obj, string prefix, stri
   string YourSecretAccessKeyID="BKg6KC5DpUhWDRukuINZidEv06vbTyZQybj2NiIu";
   string signature = sign_s3_request("GET", uri, date, YourSecretAccessKeyID, AWSAccessKeyId);
   string Authorization = "AWS "+ AWSAccessKeyId +":" + signature;
-  ldout(cct,10) << __func__ << " bucketname " << c_obj->bucket_name <<" objname  "<< c_obj->obj_name<< dendl; 
+  ldout(cct,10) << __func__ << " bucketname " << c_obj->bucket_name <<" objname  "<< c_obj->obj_name<<  " dest " << dendl; 
   ldout(cct,10) << __func__ << " marker " << marker  <<" prefix  "<< prefix << dendl; 
   uri = "/"+c_obj->bucket_name+"/?delimiter=%2F";
 
@@ -1321,7 +1321,7 @@ int RemoteS3Request::submit_http_get_request_s3(){
   off_t end = req->ofs + req->read_len - 1;
   std::string range = std::to_string(begin)+ "-"+ std::to_string(end);
   //std::string range = std::to_string( (int)req->ofs + (int)(req->read_ofs))+ "-"+ std::to_string( (int)(req->ofs) + (int)(req->read_ofs) + (int)(req->read_len - 1));
-  ldout(cct, 10) << __func__  << " key " << req->key << " range " << range  << dendl;
+  ldout(cct, 10) << __func__  << " key " << req->key << " range " << range  << " dest "<< req->dest <<dendl;
   
   CURLcode res;
   string uri = "/"+ req->path;;

@@ -9620,7 +9620,12 @@ int RGWRados::retrieve_obj_acls(cache_obj& c_obj){
 
     if (ret < 0 )
     return ret;
-  ret = conn->complete_request(in_stream_req, nullptr, &set_mtime, &obj_size, nullptr, &pheaders);
+	string etag;
+
+  ret = conn->complete_request(in_stream_req, &etag, &set_mtime, &obj_size, nullptr, &pheaders);
+
+  dout(10)  << "after get_obj  ugur etag " << etag << dendl;
+  c_obj.etag =etag;
   if (ret < 0 )
     return ret;
 

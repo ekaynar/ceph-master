@@ -794,7 +794,7 @@ int DataCache::evict_from_directory(string key){
     vector<string> hosts_list;
     size_t i = 0;
     while(getline(sloction, tmp, '_')){
-      if (tmp != cct->_conf->host){
+      if (tmp != cct->_conf->remote_cache_addr){
         hosts_list.push_back(tmp);
         if(i != 0)
           ss << "_";

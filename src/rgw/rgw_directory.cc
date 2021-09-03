@@ -772,8 +772,11 @@ int RGWBlockDirectory::getValue(cache_block *ptr){
   ptr->c_obj.owner = owner;
 
   //host1_host2_host3_...
-  while(getline(sloction, tmp, '_'))
+  while(getline(sloction, tmp, '_')){
+	if (tmp != cct->_conf->remote_cache_addr){
     ptr->hosts_list.push_back(tmp);
+	}
+  }
 
   ptr->size_in_bytes = stoull(size);
   ptr->c_obj.bucket_name = bucket_name;

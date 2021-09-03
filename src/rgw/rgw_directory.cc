@@ -488,14 +488,13 @@ int RGWBlockDirectory::setValue(cache_block *ptr){
   //creating the index based on bucket_name, obj_name, and chunk_id
   string key = buildIndex(ptr);
   cpp_redis::client client;
+  findClient(key, &client);
   string result;
   string endpoint=cct->_conf->remote_cache_addr;
-  ldout(cct,10) <<__func__<<" key " << key <<dendl;
   int exist = 0;
   bool a =false;
   vector<string> keys;
   keys.push_back(key);
-  string hosts;
   client.exists(keys, [&exist, &a](cpp_redis::reply &reply){
       exist = reply.as_integer();
           if (reply.is_error())

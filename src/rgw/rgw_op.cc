@@ -8387,6 +8387,7 @@ if (!get_data){
   RGWRados::Object op_target(store->getRados(), dest_bucket_info, *static_cast<RGWObjectCtx *>(s->obj_ctx), obj);
   RGWRados::Object::Read read_op(&op_target);
   this->lo_etag = c_obj.etag;
+  ldpp_dout(this, 10) << __func__  << "etag of obj" <<  c_obj.etag <<dendl;
   range_str = s->info.env->get("HTTP_RANGE");
   op_ret = init_common();
   if (op_ret < 0)

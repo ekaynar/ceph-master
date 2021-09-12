@@ -685,6 +685,10 @@ void DataCache::cache_aio_write_completion_cb(cacheAioWriteRequest* c){
   ldout(cct, 10) << __func__  << " oid " << c->key << dendl; 
 
   cache_lock.lock();
+  /*auto it = outstanding_write_list.find(c->key);
+    if (it != outstanding_write_list.end()) {
+      outstanding_write_list.erase(it);
+  }*/
   outstanding_write_list.remove(c->key);
   chunk_info = new ChunkDataInfo;
   chunk_info->obj_id = c->key;
@@ -704,7 +708,9 @@ void DataCache::cache_aio_write_completion_cb(cacheAioWriteRequest* c){
   c->c_block.lastAccessTime = mktime(gmtime(&rawTime));  
   c->c_block.access_count = 0;
   int ret = blkDirectory->setValue(&(c->c_block));
-//  ldout(cct, 20) << __func__ <<"key:" <<c->key << " ret:"<< ret <<dendl; 
+  ldout(cct, 20) << __func__ <<"key done:" <<c->key << " ret:"<< ret <<dendl; 
+  //delete c;
+  //c = nullptr;
   c->release(); 
 
 }
@@ -768,17 +774,23 @@ bool DataCache::get(string oid) {
  	  eviction_lock.lock();
  	  lru_remove(chdo);
  	  lru_insert_head(chdo);
-	  ret = blkDirectory->updateAccessCount(oid);
+	  local_hit += 1;
  	  eviction_lock.unlock();
-     } else { /*LRU*/
+     } 
+	 else { /*LRU*/
+	  ldout(cct, 0) << __func__ << " in map but file not exist:"<< key << dendl;
 	  ret = evict_from_directory(oid);
 	  cache_map.erase(key);
  	  eviction_lock.lock();
-	  lru_remove(chdo);
-          exist = false;
  	  free_data_cache_size += chdo->size;
+	  lru_remove(chdo);
+      delete chdo;
+	  exist = false;
  	  eviction_lock.unlock();
      }
+  }
+  else{
+  ldout(cct, 0) << __func__ << "key not in map:"<< key << dendl;
   }
   cache_lock.unlock();
   return exist;
@@ -832,9 +844,16 @@ size_t DataCache::lru_eviction(){
   size_t freed_size = 0;
   ChunkDataInfo *del_entry;
   string del_oid, location;
- 
+
+  ldout(cct, 10) << __func__  <<" del_id1:"  <<dendl; 
   eviction_lock.lock();
   del_entry = tail;
+  if (del_entry == nullptr) {
+    ldout(cct, 10) << "D3nDataCache: lru_eviction: del_entry=null_ptr" << dendl;
+    return 0;
+  }
+
+  ldout(cct, 10) << __func__  <<" del_id:" << del_entry->obj_id <<dendl;
   lru_remove(del_entry);
   eviction_lock.unlock();
 
@@ -847,14 +866,14 @@ size_t DataCache::lru_eviction(){
   del_oid = del_entry->obj_id;
   map<string, ChunkDataInfo*>::iterator iter = cache_map.find(del_entry->obj_id);
   if (iter != cache_map.end()) {
-    int ret = evict_from_directory(del_oid);
 	cache_map.erase(del_oid); // oid
+    int ret = evict_from_directory(del_oid);
   }
 
   cache_lock.unlock();
   freed_size = del_entry->size;
-  //free(del_entry);
-  delete del_entry;
+  free(del_entry);
+  //delete del_entry;
   location = cct->_conf->rgw_datacache_path + "/" + del_oid; /*replace tmp with the correct path from config file*/
   remove(location.c_str());
   return freed_size;

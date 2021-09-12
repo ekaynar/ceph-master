@@ -9412,7 +9412,17 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
 	if (ret == 0) { // read from remote cache
 	  dout(10) << __func__   << "datacache HIT remote cache, key:" << oid<< dendl; 
 	  rgw_user user_id(c_block.c_obj.owner);
-	  string dest= "http://" + c_block.hosts_list[0];
+	  dout(10) << __func__   << "datacache HIT remote cache, c_block.hosts_list.size:" << c_block.hosts_list.size() << dendl; 
+	  int random_val = rand() % c_block.hosts_list.size();
+	  string add = c_block.hosts_list[random_val];
+	  if (add.compare(cct->_conf->remote_cache_addr) != 0)
+	  {
+		add = cct->_conf->backend_url;	
+	  }
+	  //string dest= "http://" + c_block.hosts_list[0];
+	  string dest= "http://" + add;
+	  dest= add;
+	  dout(10) << __func__   << "dest :"<< dest << " key :"<< oid  << dendl;
 	  rgw_bucket bucket;
 	  bucket.name = c_block.c_obj.bucket_name;
 	  d->add_pending_block(oid, c_block);

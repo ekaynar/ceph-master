@@ -778,6 +778,9 @@ int RGWBlockDirectory::getValue(cache_block *ptr){
 	}
   }
 
+  if (ptr->hosts_list.size() <= 0){
+	return -1;
+  }
   ptr->size_in_bytes = stoull(size);
   ptr->c_obj.bucket_name = bucket_name;
   ptr->c_obj.obj_name = obj_name;

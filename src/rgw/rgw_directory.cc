@@ -274,7 +274,7 @@ int RGWObjectDirectory::existKey(string key, cpp_redis::client *client){
       if (reply.is_error())
 	  a = true;
       });
-  client->sync_commit(std::chrono::milliseconds(3000));  
+  client->sync_commit(std::chrono::milliseconds(1500));  
 
   ldout(cct,10) << __func__ << " res " << result << " key " << key << " " << a<< dendl;
   return result;
@@ -294,7 +294,7 @@ int RGWBlockDirectory::existKey(string key,cpp_redis::client *client){
       if (reply.is_error())
           a = true;
       });
-  client->sync_commit(std::chrono::milliseconds(3000));	
+  client->sync_commit(std::chrono::milliseconds(1500));	
   ldout(cct,10) << __func__ << " res dir " << result << " key " << key << " " << a<< dendl;
   return result;
 }
@@ -308,7 +308,7 @@ int RGWBlockDirectory::updateField(string key, string field, string value){
   findClient(key, &client);
   client.hmset(key, list, [](cpp_redis::reply &reply){
       });
-  client.sync_commit();
+  client->sync_commit(std::chrono::milliseconds(1500));
 
   return 0;
 }
@@ -383,7 +383,7 @@ int RGWBlockDirectory::delValue(cache_block *ptr){
       auto arr = reply.as_array();
       result = arr[0].as_integer();
       });
-  client.sync_commit();	
+  client->sync_commit(std::chrono::milliseconds(1500));	
   return result-1;
 }
 
@@ -395,7 +395,7 @@ int RGWBlockDirectory::updateAccessCount(string key){
   client.hincrby(key, "accessCount", incr,  [&result](cpp_redis::reply &reply){
       result = reply.as_integer();
       });
-  client.sync_commit();
+  client->sync_commit(std::chrono::milliseconds(1500));
   return result-1;
 
 }
@@ -409,7 +409,7 @@ int RGWBlockDirectory::delValue(string key){
   client.del(keys, [&result](cpp_redis::reply &reply){
       result = reply.as_integer();
       });
-  client.sync_commit();
+  client->sync_commit(std::chrono::milliseconds(1500));
   return result-1;
 }
 
@@ -470,7 +470,7 @@ int RGWObjectDirectory::setValue(cache_obj *ptr){
 
 
   // synchronous commit, no timeout
-  client.sync_commit(std::chrono::milliseconds(3000));
+  client.sync_commit(std::chrono::milliseconds(1500));
 
   //this will be used for aging policy
   //clientzadd("keyObjectDirectory", options, timeKey, [](cpp_redis::reply &reply){
@@ -500,7 +500,7 @@ int RGWBlockDirectory::setValue(cache_block *ptr){
           if (reply.is_error())
           a = true;
       });
-  client.sync_commit();
+  client->sync_commit(std::chrono::milliseconds(1500));
   //client.sync_commit(std::chrono::milliseconds(3000));
   ldout(cct,10) <<__func__<<" update directory for block:  " << key <<  dendl;
   if (!exist)
@@ -525,7 +525,7 @@ int RGWBlockDirectory::setValue(cache_block *ptr){
           ldout(cct,10) <<__func__<<" new key res  " << result <<dendl;
         else
           ldout(cct,10) <<__func__<<" else key res  " << result <<dendl;
-        client.sync_commit();
+        client->sync_commit(std::chrono::milliseconds(1500));
     return 0;
   }
   else
@@ -538,7 +538,7 @@ int RGWBlockDirectory::setValue(cache_block *ptr){
           if (!arr[0].is_null())
                 old_val = arr[0].as_string();
         });
-        client.sync_commit();
+		client->sync_commit(std::chrono::milliseconds(1500));
 
         string hosts;
         stringstream ss;
@@ -558,8 +558,8 @@ int RGWBlockDirectory::setValue(cache_block *ptr){
         client.hmset(key, list, [&result](cpp_redis::reply &reply){
           result = reply.as_string();
       });
-        client.sync_commit();
-        //client.exec();
+        client->sync_commit(std::chrono::milliseconds(1500));
+		//client.exec();
         return 0;
 
   }
@@ -680,7 +680,7 @@ int RGWObjectDirectory::getValue(cache_obj *ptr){
   });
 
   //client.sync_commit();
-  client.sync_commit(std::chrono::milliseconds(3000));
+  client.sync_commit(std::chrono::milliseconds(1500));
   //	client.disconnect(true);
   if (key_exist < 0){
     ldout(cct,10) << __func__ << "no entry in the object directory for key:" << key<< dendl;
@@ -758,7 +758,7 @@ int RGWBlockDirectory::getValue(cache_block *ptr){
   });
   
   //client.sync_commit();
-  client.sync_commit(std::chrono::milliseconds(3000));
+  client.sync_commit(std::chrono::milliseconds(1500));
   if (key_exist < 0 ){
 	ldout(cct,10) << __func__ << "no entry in the block directory for key:" << key<< dendl;
 	return key_exist;

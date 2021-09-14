@@ -9415,7 +9415,7 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
 	  dout(10) << __func__   << "datacache HIT remote cache, c_block.hosts_list.size:" << c_block.hosts_list.size() << dendl; 
 	  int random_val = rand() % c_block.hosts_list.size();
 	  string add = c_block.hosts_list[random_val];
-	  if (add.compare(cct->_conf->remote_cache_addr) != 0)
+	  if (add.compare(cct->_conf->remote_cache_addr) == 0)
 	  {
 		add = cct->_conf->backend_url;	
 	  }

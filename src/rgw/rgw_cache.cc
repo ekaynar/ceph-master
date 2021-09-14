@@ -423,6 +423,8 @@ DataCache::DataCache() : cct(NULL), free_data_cache_size(0), outstanding_write_s
 void DataCache::submit_remote_req(RemoteRequest *c){
   string endpoint=cct->_conf->backend_url;
   cache_lock.lock();
+
+  ldout(cct, 0) << "submit_remote_req, dest " << c->dest << " endpoint "<< endpoint<< dendl;
   if ((c->dest).compare(endpoint) == 0) {
         datalake_hit ++;
 	    ldout(cct, 0) << "submit_remote_req, datalake_hit " << datalake_hit<< dendl;

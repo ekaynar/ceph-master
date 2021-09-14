@@ -422,7 +422,7 @@ struct DataCache {
     ceph::mutex eviction_lock = ceph::make_mutex("DataCache::eviction_lock");
     RGWBlockDirectory *blkDirectory;
     RGWObjectDirectory *objDirectory;
-	int local_hit;
+	int local_hit ;
 	int remote_hit;
 	int datalake_hit;
 
@@ -467,6 +467,15 @@ struct DataCache {
       outstanding_small_write_list = new std::list<cache_obj*>;
       small_writes = new std::list<string>;
 	  set_remote_cache_list();
+	  local_hit = 0;
+	  remote_hit = 0;
+	  datalake_hit = 0;
+	}
+
+	void increase_remote_hit(){
+	   cache_lock.lock();
+	   remote_hit ++;
+	   cache_lock.unlock();
 	}
     void set_block_directory(RGWBlockDirectory *_blkDirectory){
 	blkDirectory = _blkDirectory;

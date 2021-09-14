@@ -421,7 +421,17 @@ ObjectCache::~ObjectCache()
 DataCache::DataCache() : cct(NULL), free_data_cache_size(0), outstanding_write_size (0){}
 
 void DataCache::submit_remote_req(RemoteRequest *c){
-  ldout(cct, 0) << "submit_remote_req" <<dendl;
+  string endpoint=cct->_conf->backend_url;
+  cache_lock.lock();
+  if ((c->dest).compare(endpoint) == 0) {
+        datalake_hit ++;
+	    ldout(cct, 0) << "submit_remote_req, datalake_hit " << datalake_hit<< dendl;
+  } else {
+        remote_hit++;
+	    ldout(cct, 0) << "submit_remote_req, remote_hit " <<  remote_hit<< dendl;
+  }
+  cache_lock.unlock();
+
   tp->addTask(new RemoteS3Request(c, cct));
 }
 
@@ -768,13 +778,13 @@ bool DataCache::get(string oid) {
      // check inside cache whether file exists or not!!!! then make exist true;
      struct ChunkDataInfo *chdo = iter->second;
      if(access(location.c_str(), F_OK ) != -1 ) { // file exists
-	   ldout(cct, 0) << __func__ << " filexist:"<< key << dendl;
  	  exist = true;
  	  /* LRU */
  	  eviction_lock.lock();
  	  lru_remove(chdo);
  	  lru_insert_head(chdo);
 	  local_hit += 1;
+	  ldout(cct, 0) << __func__ << " filexist:"<< key << " local_hit " << local_hit << dendl;
  	  eviction_lock.unlock();
      } 
 	 else { /*LRU*/
@@ -845,7 +855,8 @@ size_t DataCache::lru_eviction(){
   ChunkDataInfo *del_entry;
   string del_oid, location;
 
-  ldout(cct, 10) << __func__  <<" del_id1:"  <<dendl; 
+  n_entries = cache_map.size();
+  ldout(cct, 10) << __func__  <<" del_id1 map size:" << n_entries <<  dendl; 
   eviction_lock.lock();
   del_entry = tail;
   if (del_entry == nullptr) {

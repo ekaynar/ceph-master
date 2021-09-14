@@ -361,9 +361,9 @@ struct cacheAioWriteRequest{
 
   void release() {
     ::close(fd);
-    cb->aio_buf = NULL;
+    cb->aio_buf = nullptr;
     free(data);
-    data = NULL;
+    data = nullptr;
     free(cb);
     free(this);
   }
@@ -460,10 +460,10 @@ struct DataCache {
       path = cct->_conf->rgw_datacache_path;
       tp = new CacheThreadPool(cct->_conf->cache_threadpool_size);
       aging_tp = new CacheThreadPool(cct->_conf->cache_aging_threadpool_size);
-      head = NULL;
-      tail = NULL;
-      obj_head = NULL;
-      obj_tail = NULL;
+      head = nullptr;
+      tail = nullptr;
+      obj_head = nullptr;
+      obj_tail = nullptr;
       outstanding_small_write_list = new std::list<cache_obj*>;
       small_writes = new std::list<string>;
 	  set_remote_cache_list();
@@ -487,7 +487,7 @@ struct DataCache {
 	 
 	void lru_insert_head(struct ChunkDataInfo *o) {
         o->lru_next = head;
-        o->lru_prev = NULL;
+        o->lru_prev = nullptr;
         if (head) {
                 head->lru_prev = o;
         } else {
@@ -496,7 +496,7 @@ struct DataCache {
         head = o;
     }
     void lru_insert_tail(struct ChunkDataInfo *o) {
-        o->lru_next = NULL;
+        o->lru_next = nullptr;
         o->lru_prev = tail;
         if (tail) {
                 tail->lru_next = o;
@@ -514,12 +514,12 @@ struct DataCache {
                 o->lru_prev->lru_next = o->lru_next;
         else
                 head = o->lru_next;
-        o->lru_next = o->lru_prev = NULL;
+        o->lru_next = o->lru_prev = nullptr;
      }
 
 	  void obj_lru_insert_head(struct ObjectDataInfo *o) {
         o->lru_next = obj_head;
-        o->lru_prev = NULL;
+        o->lru_prev = nullptr;
         if (obj_head) {
                 obj_head->lru_prev = o;
         } else {
@@ -536,7 +536,7 @@ struct DataCache {
                 o->lru_prev->lru_next = o->lru_next;
         else
                 obj_head = o->lru_next;
-        o->lru_next = o->lru_prev = NULL;
+        o->lru_next = o->lru_prev = nullptr;
      }
 
 };

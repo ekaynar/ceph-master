@@ -855,12 +855,14 @@ size_t DataCache::lru_eviction(){
   ChunkDataInfo *del_entry;
   string del_oid, location;
 
+  cache_lock.lock();
   n_entries = cache_map.size();
   ldout(cct, 10) << __func__  <<" del_id1 map size:" << n_entries <<  dendl; 
   eviction_lock.lock();
   del_entry = tail;
   if (del_entry == nullptr) {
     ldout(cct, 10) << "D3nDataCache: lru_eviction: del_entry=null_ptr" << dendl;
+    cache_lock.unlock();
     return 0;
   }
 
@@ -868,7 +870,6 @@ size_t DataCache::lru_eviction(){
   lru_remove(del_entry);
   eviction_lock.unlock();
 
-  cache_lock.lock();
   n_entries = cache_map.size();
   if (n_entries <= 0){
     cache_lock.unlock();

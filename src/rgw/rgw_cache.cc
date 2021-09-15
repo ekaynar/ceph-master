@@ -864,8 +864,8 @@ size_t DataCache::lru_eviction(){
   del_entry = tail;
   if (del_entry == nullptr) {
     ldout(cct, 10) << "D3nDataCache: lru_eviction: del_entry=null_ptr" << dendl;
-    cache_lock.unlock();
 	eviction_lock.unlock();
+    cache_lock.unlock();
     return 0;
   }
 
@@ -1380,6 +1380,7 @@ int RemoteS3Request::submit_http_get_request_s3(){
     chunk = curl_slist_append(chunk, timestamp.c_str());
     chunk = curl_slist_append(chunk, user_agent.c_str());
     chunk = curl_slist_append(chunk, content_type.c_str());
+    chunk = curl_slist_append(chunk, "CACHE_GET_REQ:rgw_datacache");
     curl_easy_setopt(curl_handle, CURLOPT_RANGE, range.c_str());
     res = curl_easy_setopt(curl_handle, CURLOPT_HTTPHEADER, chunk); //set headers
     curl_easy_setopt(curl_handle, CURLOPT_URL, loc.c_str());

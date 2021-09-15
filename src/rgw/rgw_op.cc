@@ -8374,6 +8374,10 @@ void RGWGetObj::cache_execute(){
   RGWGetObj_Filter* filter = (RGWGetObj_Filter *)&cb;
   bufferlist bl;
   s->obj_size = c_obj.size_in_bytes;
+  c_obj.is_remote_req = false;
+  if (s->info.env->get("HTTP_CACHE_GET_REQ")) {
+  c_obj.is_remote_req = true;
+  }
 
 if (!get_data){
   	this->total_len = c_obj.size_in_bytes;

@@ -9409,6 +9409,10 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
 	  
   else {
 	ret = blkDirectory->getValue(&c_block);
+	if ( c_block.c_obj.is_remote_req == true) {
+	  ret = -1;
+	}
+
 	if (ret == 0) { // read from remote cache
 	  dout(10) << __func__   << "datacache HIT remote cache, key:" << oid<< dendl; 
 	  rgw_user user_id(c_block.c_obj.owner);

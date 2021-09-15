@@ -865,6 +865,7 @@ size_t DataCache::lru_eviction(){
   if (del_entry == nullptr) {
     ldout(cct, 10) << "D3nDataCache: lru_eviction: del_entry=null_ptr" << dendl;
     cache_lock.unlock();
+	eviction_lock.unlock();
     return 0;
   }
 
@@ -1397,7 +1398,7 @@ int RemoteS3Request::submit_http_get_request_s3(){
    ldout(cct,10) << "__func__ " << " CURLE_HTTP_RETURNED_ERROR" <<curl_easy_strerror(res) << " key " << req->key << dendl;
    return -1;
   } 
- 
+  ldout(cct,10) << "__func__ " << " done" << dendl; 
   if (res != CURLE_OK) { return -1;}
   else { return 0; }
 

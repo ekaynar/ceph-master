@@ -6372,23 +6372,9 @@ struct get_obj_data {
         key = get_pending_key();
         cache_block c_block = get_pending_block(key); 	
 		ldout(cct, 20) << "before_handle key " << key << " obj.length=" << c_block.c_obj.size_in_bytes << " block lenght  "<< bl.length()  <<dendl;
-//        if (false){
         if (bl.length() == 0x400000){
-/*		  string tmp_oname = c_block.c_obj.obj_name;
-		  const char x = '/';
-		  const char y = '_';
-		  std::replace(tmp_oname.begin(), tmp_oname.end(), x, y);
-		  string key2 = c_block.c_obj.bucket_name + "_"+tmp_oname+"_"+ std::to_string(c_block.block_id);
-*/
-		  ldout(cct, 20) << "after_handle key " << key << " obj.length=" << c_block.c_obj.size_in_bytes << " block lenght  "<< bl.length()  <<dendl;
-/*      		string str = cct->_conf->rgw_frontends;
-		  std::size_t pos = str.find("endpoint=");
-		  std::string str2 = str.substr(pos);
-		  //std::string endpoint = str2.substr(9); 
-		  string endpoint=cct->_conf->remote_cache_addr;
-		  c_block.hosts_list.push_back(endpoint);
-*/		  store->put_data(key, bl , bl.length(), &c_block); 
-//		  store->put_data(key, chunk_buffer, chunk_buffer.length(), &c_block); 
+		  store->put_data(key, bl , bl.length(), &c_block); 
+		  ldout(cct, 20) << "after_handle key " << key << " obj.length=" << c_block.c_obj.size_in_bytes << " block lenght  "<< bl.length() << " offset " << offset <<dendl;
         }
       }
      

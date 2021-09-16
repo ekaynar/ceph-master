@@ -649,7 +649,8 @@ int RGWObjectDirectory::getValue(cache_obj *ptr){
   fields.push_back("intermediate");
   fields.push_back("mapping_id");
   fields.push_back("offset");
-
+  
+  ldout(cct,10) << __func__ << " key exist so read field "<< key << dendl;
 
   client.hmget(key, fields, [&key, &owner, &obj_acl, &aclTimeStamp, &hosts, &dirty, &size, &creationTime, &lastAccessTime, &etag, &backendProtocol, &bucket_name, &obj_name, &home_location, &intermediate, &mapping_id, &offset, &key_exist](cpp_redis::reply& reply){
 

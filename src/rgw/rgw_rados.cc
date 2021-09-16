@@ -9426,7 +9426,9 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
 	  auto completed = d->aio->get(obj, rgw::Aio::remote_op(std::move(op) , d->yield, obj_ofs, read_ofs, read_len, dest, c, &c_block, path, datacache), cost, id);
 //	  datacache->submit_remote_req(c);
 //	return d->drain();
-         return d->flush(std::move(completed));
+      auto res =  d->flush(std::move(completed));
+	  dout(10) << __func__   << "datacache HIT Error: failed to drain/flush" << res << dendl;
+	  return res;
 	}		
 	
 	else if(c_block.c_obj.home_location == 0) { // read from write-back cache

@@ -875,7 +875,7 @@ size_t DataCache::lru_eviction(){
   lru_remove(del_entry);
   eviction_lock.unlock();
 
- // cache_lock.lock();
+  //cache_lock.lock();
   n_entries = cache_map.size();
   if (n_entries <= 0){
     cache_lock.unlock();

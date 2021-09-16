@@ -857,9 +857,10 @@ size_t DataCache::lru_eviction(){
   ChunkDataInfo *del_entry;
   string del_oid, location;
 
-  cache_lock.lock();
   n_entries = cache_map.size();
   ldout(cct, 10) << __func__  <<" del_id1 map size:" << n_entries <<  dendl; 
+  
+  cache_lock.lock();
   eviction_lock.lock();
   del_entry = tail;
   if (del_entry == nullptr) {
@@ -869,10 +870,12 @@ size_t DataCache::lru_eviction(){
     return 0;
   }
 
+ 
   ldout(cct, 10) << __func__  <<" del_id:" << del_entry->obj_id <<dendl;
   lru_remove(del_entry);
   eviction_lock.unlock();
 
+ // cache_lock.lock();
   n_entries = cache_map.size();
   if (n_entries <= 0){
     cache_lock.unlock();
@@ -882,10 +885,10 @@ size_t DataCache::lru_eviction(){
   map<string, ChunkDataInfo*>::iterator iter = cache_map.find(del_entry->obj_id);
   if (iter != cache_map.end()) {
 	cache_map.erase(del_oid); // oid
-    int ret = evict_from_directory(del_oid);
   }
-
   cache_lock.unlock();
+  
+  int ret = evict_from_directory(del_oid);
   freed_size = del_entry->size;
   free(del_entry);
   //delete del_entry;

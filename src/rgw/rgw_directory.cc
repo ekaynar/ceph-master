@@ -611,7 +611,7 @@ int RGWBlockDirectory::setAvgCacheWeight(size_t weight){
   int result = 0;
   client.incrby(key, weight, [&result](cpp_redis::reply &reply){
         if (reply.is_integer())
-          result =  reply;
+          result = reply.as_integer();
   });
   client.sync_commit();
   }

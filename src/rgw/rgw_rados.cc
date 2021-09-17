@@ -6372,25 +6372,10 @@ struct get_obj_data {
         key = get_pending_key();
         cache_block c_block = get_pending_block(key); 	
 		ldout(cct, 20) << "before_handle key " << key << " obj.length=" << c_block.c_obj.size_in_bytes << " block lenght  "<< bl.length()  <<dendl;
-//        if (false){
         if (bl.length() == 0x400000){
-/*		  string tmp_oname = c_block.c_obj.obj_name;
-		  const char x = '/';
-		  const char y = '_';
-		  std::replace(tmp_oname.begin(), tmp_oname.end(), x, y);
-		  string key2 = c_block.c_obj.bucket_name + "_"+tmp_oname+"_"+ std::to_string(c_block.block_id);
-*/
-		  ldout(cct, 20) << "after_handle key " << key << " obj.length=" << c_block.c_obj.size_in_bytes << " block lenght  "<< bl.length()  <<dendl;
-      	//	string str = cct->_conf->rgw_frontends;
-		  //std::size_t pos = str.find("endpoint=");
-		  //std::string str2 = str.substr(pos);
-		  //std::string endpoint = str2.substr(9); 
-//		  string endpoint=cct->_conf->remote_cache_addr;
-//		  c_block.hosts_list.clear()
-//		  c_block.hosts_list.push_back(endpoint);
 		  store->put_data(key, bl , bl.length(), &c_block); 
-//		  store->put_data(key, chunk_buffer, chunk_buffer.length(), &c_block); 
-        }
+		  ldout(cct, 20) << "after_handle key " << key << " obj.length=" << c_block.c_obj.size_in_bytes << " block lenght  "<< bl.length() << " offset " << offset <<dendl;
+		}
       }
      
 	  
@@ -9389,7 +9374,6 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
     ret = obj.open();
     auto completed = d->aio->get(obj, rgw::Aio::cache_op(std::move(op) , d->yield, obj_ofs, read_ofs, read_len, cct->_conf->rgw_datacache_path), cost, id);
     return d->flush(std::move(completed));
-//    return d->drain();
     }
 
   else if( (c_block.c_obj.size_in_bytes < 0x400000) && c_block.c_obj.dirty == false && cct->_conf->enable_coalesing_write) {
@@ -9410,12 +9394,22 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
 
 	  
   else {
-	ret = blkDirectory->getValue(&c_block);
+	 ret = blkDirectory->getValue(&c_block);
+        if ( c_block.c_obj.is_remote_req == true) {
+          ret = -1;
+        }
 	if (ret == 0) { // read from remote cache
 	  dout(10) << __func__   << "datacache HIT remote cache, key:" << oid<< dendl; 
 	  rgw_user user_id(c_block.c_obj.owner);
 	  c_block.cachedOnRemote = true;
-	  string dest= "http://" + c_block.hosts_list[0];
+	  int random_val = rand() % c_block.hosts_list.size();
+      string add = c_block.hosts_list[random_val];
+      if (add.compare(cct->_conf->remote_cache_addr) == 0){
+		add = cct->_conf->backend_url;
+      }
+
+	  string dest= "http://" + add;
+	  dest= add;
 	  rgw_bucket bucket;
 	  bucket.name = c_block.c_obj.bucket_name;
 	  d->add_pending_block(oid, c_block);
@@ -9427,9 +9421,9 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
 	  ret = obj.open();
 	  string path = c_block.c_obj.bucket_name + "/"+c_block.c_obj.obj_name;
 	  auto completed = d->aio->get(obj, rgw::Aio::remote_op(std::move(op) , d->yield, obj_ofs, read_ofs, read_len, dest, c, &c_block, path, datacache), cost, id);
-//	  datacache->submit_remote_req(c);
-//	return d->drain();
-         return d->flush(std::move(completed));
+      auto res =  d->flush(std::move(completed));
+	  dout(10) << __func__   << "datacache HIT Error: failed to drain/flush" << res << dendl;
+      return res;
 	}		
 	
 	else if(c_block.c_obj.home_location == 0) { // read from write-back cache

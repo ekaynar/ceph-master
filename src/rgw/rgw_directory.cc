@@ -586,23 +586,28 @@ int RGWObjectDirectory::setValue(cache_obj *ptr){
 }
 
 int RGWBlockDirectory::getAvgCacheWeight(string endpoint){
-
+  ldout(cct,10) <<__func__<<" endpoint: " << endpoint<<  dendl;
   cpp_redis::client client;
   findClient(endpoint, &client);
   if (!client.is_connected()){
     return INT_MAX;
   }
   string val;
-  client.get(endpoint, [&val](cpp_redis::reply& reply) {
-        if ( reply.is_string() )
+  bool exist = false;
+  client.get(endpoint, [&val,&exist](cpp_redis::reply& reply) {
+        if (reply.is_string()){
           val = reply.as_string();
+		  exist = true;
+		}
   });
-
   client.sync_commit();
+  if(!exist)
+	return INT_MAX;
   return stoi(val);
 }
 
 int RGWBlockDirectory::setAvgCacheWeight(size_t weight){
+  ldout(cct,10) <<__func__<<" weight:   " << weight <<  dendl;
   string key = cct->_conf->remote_cache_addr;
   cpp_redis::client client;
   findClient(key, &client);
@@ -615,6 +620,7 @@ int RGWBlockDirectory::setAvgCacheWeight(size_t weight){
           result = reply.as_integer();
   });
   client.sync_commit();
+  return result;
   }
 
 int RGWBlockDirectory::setValue(cache_block *ptr){
@@ -637,8 +643,6 @@ int RGWBlockDirectory::setValue(cache_block *ptr){
 		  }
       });
   client.sync_commit();
-
-
   ldout(cct,10) <<__func__<<" update directory for block:  " << key <<  dendl;
   if (!exist)
   {
@@ -923,13 +927,19 @@ int RGWBlockDirectory::getValue(cache_block *ptr, string key){
     //passing the values to the requester
   ptr->c_obj.owner = owner;
 
-  //host1_host2_host3_...
-  while(getline(sloction, tmp, '_'))
-    ptr->hosts_list.push_back(tmp);
+  //ldout(cct,10) << __func__<< "key " << key<< "host2 before "<<ptr->hosts_list.size()<<  dendl;
 
-  ldout(cct,10) << __func__<< "key " << key<< "host1"<<hosts<<  dendl;
-  ldout(cct,10) << __func__<< "key " << key<< "host2"<<ptr->hosts_list.size()<<  dendl;
-  ldout(cct,10) << __func__<< "key " << key<< "host3"<<hosts<<  dendl;
+  //host1_host2_host3_...
+  while(getline(sloction, tmp, '_')){
+
+	//if (tmp != cct->_conf->remote_cache_addr){
+	  ptr->hosts_list.push_back(tmp);
+      //}
+  }
+  /*ldout(cct,10) << __func__<< "key " << key<< "host1 "<<hosts<<  dendl;
+  ldout(cct,10) << __func__<< "key " << key<< "host2 "<< ptr->hosts_list.size() <<  dendl;
+  ldout(cct,10) << __func__<< "key " << key<< "host3 "<<hosts<<  dendl;
+  */
   ptr->size_in_bytes = stoull(size);
   ptr->c_obj.bucket_name = bucket_name;
   ptr->c_obj.obj_name = obj_name;

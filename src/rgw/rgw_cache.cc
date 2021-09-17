@@ -753,7 +753,7 @@ void DataCache::cache_aio_write_completion_cb(cacheAioWriteRequest* c){
 
      // LFUDA
   if(cct->_conf->rgw_lfuda == true){
-	ldout(cct, 10) << __func__  << " oid " << c->key << dendl;
+	ldout(cct, 10) << __func__  << " oid " << c->key << " size " << c->cb->aio_nbytes << dendl;
     cache_lock.lock();
     outstanding_write_list.remove(c->key);
 	string obj_id = c->key;	
@@ -777,12 +777,13 @@ void DataCache::cache_aio_write_completion_cb(cacheAioWriteRequest* c){
 
 //      for (auto it = m_key_map.cbegin(); it != m_key_map.cend(); ++it)
  //       ldout(cct, 0) << __func__ << "keys----&&:"<< (*it).first << dendl;
-	cache_lock.unlock();
 	
 	  /*update free size*/
 	free_data_cache_size -= c->cb->aio_nbytes;
 	outstanding_write_size -=  c->cb->aio_nbytes;
 	eviction_lock.unlock();
+	cache_lock.unlock();
+
 	c->c_block.access_count = cache_weight;
 	 
 	time_t rawTime = time(NULL);
@@ -996,7 +997,7 @@ int DataCache::evict_from_directory(string key){
 }
 
 void DataCache::getRemoteCacheWeight(){
-
+ ldout(cct, 10) << __func__  << "remote_cache_list_size " << remote_cache_list.size() << " remote_cache_count " << remote_cache_count<< dendl;
   for (auto it=remote_cache_list.begin(); it!=remote_cache_list.end(); ++it)
   {
 	int remote_weight = blkDirectory->getAvgCacheWeight(*it);
@@ -1007,6 +1008,7 @@ void DataCache::getRemoteCacheWeight(){
 }
 
 size_t DataCache::lfuda_eviction(){
+  ldout(cct, 10) << __func__  << dendl;
   int n_entries = 0;
   size_t freed_size = 0;
   string del_oid, location;
@@ -1027,7 +1029,8 @@ size_t DataCache::lfuda_eviction(){
 
   cache_block *victim = new cache_block();
   ret = blkDirectory->getValue(victim, del_oid);
-  
+   ldout(cct, 10) << __func__  <<  " hostlist size " << victim->hosts_list.size() << 
+   " victim->access_count " << victim->access_count <<  dendl; 
   //The block has a copy on another remote cache
   if ( victim->hosts_list.size() > 1)
   {
@@ -1048,9 +1051,8 @@ size_t DataCache::lfuda_eviction(){
   }
 
   // Last copy of the block
-  else if ( (victim->hosts_list.size() == 1) and (victim->hosts_list[0].compare(cct->_conf->remote_cache_addr) == 0) ){
-	if (victim->access_count != 0)
-	{
+  else if ( (victim->hosts_list.size() == 1) && (victim->hosts_list[0].compare(cct->_conf->remote_cache_addr) == 0) ){
+	if (victim->access_count != 0) {
 	  ldout(cct, 10) << __func__  <<" last copy with global access : " << del_oid <<dendl;
 	  cache_lock.lock();
 	  del_weight += victim->access_count;
@@ -1062,25 +1064,21 @@ size_t DataCache::lfuda_eviction(){
 	  ret = blkDirectory->setAvgCacheWeight(avg_w);
 	  freed_size = 0;
 	  return freed_size; 
-	}
-
 	
-	else if (victim->access_count == 0 )  
-	{
-	this->getRemoteCacheWeight();
+	} else if (victim->access_count == 0 ) {
+	  ldout(cct, 10) << __func__  <<" last copy, no dw" << dendl;
+	  this->getRemoteCacheWeight();
+	  ldout(cct, 10) << __func__  <<" last copy, no dw2" << dendl;
 	  int min = INT_MAX;
 	  string cache_id = "";
-	  for (auto it = remote_cache_weight_map.begin(); it != remote_cache_weight_map.end(); ++it)
-	  {
-		 if (min > it->second )
-		 {
+	  for (auto it = remote_cache_weight_map.begin(); it != remote_cache_weight_map.end(); ++it) {
+		 if (min > it->second ) {
 		   cache_id = it->first;
 		   min = it->second;
 		 }
 	  }
 	  
-	  if ( del_weight > min )
-	  {
+	  if ( del_weight > min ) {
 	    ldout(cct, 10) << __func__  <<" last copy, no dw, remote copy : " << del_oid <<dendl;
 		RemoteRequest *c =  new RemoteRequest();
 		c->req_type = 0;

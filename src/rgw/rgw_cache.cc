@@ -917,8 +917,8 @@ bool DataCache::get(string oid, bool isRemote) {
   int ret = 0;
   string location = cct->_conf->rgw_datacache_path + "/"+ key;
   //LFUDA
-   cache_lock.lock();
   if(cct->_conf->rgw_lfuda == true){
+	cache_lock.lock();
     auto key_position = m_key_map.find(key);
     if ( key_position != m_key_map.end() ){
       exist = true;
@@ -932,14 +932,10 @@ bool DataCache::get(string oid, bool isRemote) {
 		total_cache_weight += cache_weight;
 		size_t avg_w = round (total_cache_weight/m_dynamic_age_list.size());
 		eviction_lock.unlock();
-		cache_lock.unlock();
 		ret = blkDirectory->setAvgCacheWeight(avg_w);
 		}
-	  else
-		cache_lock.unlock();
 	}
-  else
-	cache_lock.unlock();
+  cache_lock.unlock();
   return exist;
   }
 

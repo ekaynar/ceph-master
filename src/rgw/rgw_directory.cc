@@ -311,6 +311,7 @@ int RGWBlockDirectory::updateGlobalWeight(string key,  size_t weight , bool evic
   cpp_redis::client client;
   findClient(key, &client);
    if (!client.is_connected()){
+	  ldout(cct,10) << __func__ << " Error: redis connect " << dendl;
     return 0;
   }
   string old_val;

@@ -581,7 +581,10 @@ void DataCache::timer_start_get_weight(RGWRados *store, uint64_t interval)
   ldout(cct, 20) << __func__ << dendl;
   std::thread([store, interval, this]() {
   while(true){
-    this->getRemoteCacheWeight();
+    size_t avg_w = round(total_cache_weight/m_dynamic_age_list.size());
+    int ret = blkDirectory->setAvgCacheWeight(avg_w);
+	this->getRemoteCacheWeight();
+
     std::this_thread::sleep_for(std::chrono::minutes(interval));
   }
   }).detach();
@@ -761,8 +764,8 @@ int DataCache::create_io_write_request(bufferlist& bl ,uint64_t len, std::string
   time_t rawTime = time(NULL);
   c_block->lastAccessTime = mktime(gmtime(&rawTime));
   ret = blkDirectory->setValue(c_block);
-  ret = blkDirectory->setAvgCacheWeight(avg_w);
-
+//  ret = blkDirectory->setAvgCacheWeight(avg_w);
+  return 0;
 }
 
 void DataCache::cache_aio_read_completion_cb(cacheAioWriteRequest* c){
@@ -951,10 +954,10 @@ bool DataCache::get(string oid, bool isRemote) {
 		total_cache_weight += cache_weight;
 		size_t avg_w = round (total_cache_weight/m_dynamic_age_list.size());
 		eviction_lock.unlock();
-		ret = blkDirectory->setAvgCacheWeight(avg_w);
 		}
 	}
   cache_lock.unlock();
+ // ret = blkDirectory->setAvgCacheWeight(avg_w);
   return exist;
   }
 
@@ -1061,7 +1064,7 @@ size_t DataCache::lfuda_eviction(){
 	 size_t avg_w = round (total_cache_weight/m_dynamic_age_list.size());
   	 cache_lock.unlock();
   	 ret = blkDirectory->updateGlobalWeight(del_oid, del_weight, true);
-	 ret = blkDirectory->setAvgCacheWeight(avg_w);
+//	 ret = blkDirectory->setAvgCacheWeight(avg_w);
   	 location = cct->_conf->rgw_datacache_path + "/" + del_oid;
   	 remove(location.c_str());
   	 return freed_size; 	
@@ -1078,7 +1081,7 @@ size_t DataCache::lfuda_eviction(){
 	  size_t avg_w = round (total_cache_weight/m_dynamic_age_list.size());
 	  cache_lock.unlock();
 	  ret = blkDirectory->resetGlobalWeight(del_oid); 
-	  ret = blkDirectory->setAvgCacheWeight(avg_w);
+//	  ret = blkDirectory->setAvgCacheWeight(avg_w);
 	  freed_size = 0;
 	  return freed_size; 
 	
@@ -1111,7 +1114,7 @@ size_t DataCache::lfuda_eviction(){
 		cache_lock.unlock();
 
         ret = blkDirectory->updateGlobalWeight(del_oid, del_weight, true);
-        ret = blkDirectory->setAvgCacheWeight(avg_w);
+//        ret = blkDirectory->setAvgCacheWeight(avg_w);
         location = cct->_conf->rgw_datacache_path + "/" + del_oid;
         remove(location.c_str());
 		return freed_size;	
@@ -1129,7 +1132,7 @@ size_t DataCache::lfuda_eviction(){
 		cache_lock.unlock();
 
 		ret = blkDirectory->updateGlobalWeight(del_oid, del_weight, true);
-		ret = blkDirectory->setAvgCacheWeight(avg_w);
+//		ret = blkDirectory->setAvgCacheWeight(avg_w);
 		location = cct->_conf->rgw_datacache_path + "/" + del_oid;
 		remove(location.c_str());
 		return freed_size;	
@@ -1148,7 +1151,7 @@ void DataCache::set_remote_cache_list(){
         if (tmp.compare(cct->_conf->remote_cache_addr) != 0)
 		{
           remote_cache_list.push_back(tmp);
-		  remote_cache_weight_map.insert(pair<string, int>(tmp, 0));
+		  remote_cache_weight_map.insert(pair<string, int>(tmp, INT_MAX));
 		}
       }
 	  remote_cache_count = remote_cache_list.size();

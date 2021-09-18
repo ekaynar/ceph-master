@@ -462,6 +462,9 @@ struct DataCache {
     ceph::mutex eviction_lock = ceph::make_mutex("DataCache::eviction_lock");
     RGWBlockDirectory *blkDirectory;
     RGWObjectDirectory *objDirectory;
+	        int local_hit ;
+        int remote_hit;
+        int datalake_hit;
 
     struct ChunkDataInfo *head;
     struct ChunkDataInfo *tail;
@@ -516,6 +519,9 @@ struct DataCache {
 	  m_open_list_end = m_dynamic_age_list.begin();
 	  cache_weight = 1;
 	  set_remote_cache_list();
+	       local_hit = 0;
+          remote_hit = 0;
+          datalake_hit = 0;
 	}
 
 

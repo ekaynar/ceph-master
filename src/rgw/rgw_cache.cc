@@ -422,7 +422,19 @@ ObjectCache::~ObjectCache()
 DataCache::DataCache() : cct(NULL), free_data_cache_size(0), outstanding_write_size (0), m_dynamic_age_list() {}
 
 void DataCache::submit_remote_req(RemoteRequest *c){
-  ldout(cct, 0) << "submit_remote_req" <<dendl;
+  string endpoint=cct->_conf->backend_url;
+  cache_lock.lock();
+
+  ldout(cct, 0) << "submit_remote_req, dest " << c->dest << " endpoint "<< endpoint<< dendl;
+  if ((c->dest).compare(endpoint) == 0) {
+        datalake_hit ++;
+            ldout(cct, 0) << "submit_remote_req, datalake_hit " << datalake_hit<< dendl;
+  } else {
+        remote_hit++;
+            ldout(cct, 0) << "submit_remote_req, remote_hit " <<  remote_hit<< dendl;
+  }
+  cache_lock.unlock();
+
   tp->addTask(new RemoteS3Request(c, cct));
 }
 
@@ -928,6 +940,7 @@ bool DataCache::get(string oid, bool isRemote) {
     auto key_position = m_key_map.find(key);
     if ( key_position != m_key_map.end() ){
       exist = true;
+	  local_hit += 1;
 	  if (!isRemote){
 		ldout(cct, 0) << __func__ << " block is exist and app request:"<< key << dendl;
 		eviction_lock.lock();
@@ -1755,7 +1768,7 @@ int RemoteS3Request::submit_http_get_request_s3(){
   off_t end = req->ofs + req->read_len - 1;
   std::string range = std::to_string(begin)+ "-"+ std::to_string(end);
   //std::string range = std::to_string( (int)req->ofs + (int)(req->read_ofs))+ "-"+ std::to_string( (int)(req->ofs) + (int)(req->read_ofs) + (int)(req->read_len - 1));
-  ldout(cct, 10) << __func__  << " key " << req->key << " range " << range  << dendl;
+   ldout(cct, 10) << __func__  << " key " << req->key << " range " << range  << " dest "<< req->dest <<dendl;
   
   CURLcode res;
   string uri = "/"+ req->path;;
@@ -1780,6 +1793,7 @@ int RemoteS3Request::submit_http_get_request_s3(){
     chunk = curl_slist_append(chunk, timestamp.c_str());
     chunk = curl_slist_append(chunk, user_agent.c_str());
     chunk = curl_slist_append(chunk, content_type.c_str());
+	chunk = curl_slist_append(chunk, "CACHE_GET_REQ:rgw_datacache");
     curl_easy_setopt(curl_handle, CURLOPT_RANGE, range.c_str());
     res = curl_easy_setopt(curl_handle, CURLOPT_HTTPHEADER, chunk); //set headers
     curl_easy_setopt(curl_handle, CURLOPT_URL, loc.c_str());

@@ -876,6 +876,7 @@ int RGWBlockDirectory::getValue(cache_block *ptr, string key){
   cpp_redis::client client;
   findClient(key, &client);
   if (!client.is_connected()){
+	ldout(cct,10) << __func__ <<" Error key:" << key <<dendl;
     return -1;
   }
   ldout(cct,10) << __func__ <<" key:" << key <<dendl;

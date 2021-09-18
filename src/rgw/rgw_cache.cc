@@ -581,11 +581,14 @@ void DataCache::timer_start_get_weight(RGWRados *store, uint64_t interval)
   ldout(cct, 20) << __func__ << dendl;
   std::thread([store, interval, this]() {
   while(true){
-    size_t avg_w = round(total_cache_weight/m_dynamic_age_list.size());
-    int ret = blkDirectory->setAvgCacheWeight(avg_w);
+	if( m_dynamic_age_list.size() != 0){
+	  size_t avg_w = round(total_cache_weight/m_dynamic_age_list.size());
+	  int ret = blkDirectory->setAvgCacheWeight(avg_w);
+	}
 	this->getRemoteCacheWeight();
-
+	
     std::this_thread::sleep_for(std::chrono::minutes(interval));
+
   }
   }).detach();
 
@@ -1090,7 +1093,7 @@ size_t DataCache::lfuda_eviction(){
 	  int min = INT_MAX;
 	  string cache_id = "";
 	  for (auto it = remote_cache_weight_map.begin(); it != remote_cache_weight_map.end(); ++it) {
-		 if (min > it->second ) {
+		 if (min > it->second && it->second > 0) {
 		   cache_id = it->first;
 		   min = it->second;
 		 }

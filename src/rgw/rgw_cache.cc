@@ -564,7 +564,17 @@ void DataCache::copy_aged_obj(RGWRados *store, uint64_t interval){
   //ldout(cct, 20) << __func__ << "out of while loop "<< dendl;
 }
 
+void DataCache::timer_start_get_weight(RGWRados *store, uint64_t interval)
+{
+  ldout(cct, 20) << __func__ << dendl;
+  std::thread([store, interval, this]() {
+  while(true){
+    this->getRemoteCacheWeight();
+    std::this_thread::sleep_for(std::chrono::minutes(interval));
+  }
+  }).detach();
 
+}
 
 void DataCache::timer_start(RGWRados *store, uint64_t interval)
 {
@@ -621,6 +631,7 @@ void CopyRemoteS3Object::run() {
 void DataCache::init_writecache_aging(RGWRados *store){
   ldout(cct, 0) << __func__ <<dendl;
   timer_start(store, cct->_conf->aging_interval_in_minutes);
+  timer_start_get_weight(store, 3);
 }
 
 /*void DataCache::init_average_cache_weight(RGWRados *store){
@@ -757,6 +768,7 @@ void DataCache::cache_aio_write_completion_cb(cacheAioWriteRequest* c){
     cache_lock.lock();
     outstanding_write_list.remove(c->key);
 	string obj_id = c->key;	
+	
 	
 	eviction_lock.lock();
 	element el;
@@ -907,13 +919,6 @@ bool DataCache::get(string oid, bool isRemote) {
   const char y = '_';
   std::replace(key.begin(), key.end(), x, y);
 
-/*  ldout(cct, 0) << __func__ << "keys----*********"<< key << dendl;
-  cache_lock.lock();
-  for (auto it = m_key_map.cbegin(); it != m_key_map.cend(); ++it) 
-		ldout(cct, 0) << __func__ << "keys----:"<< (*it).first << dendl;
-  cache_lock.unlock();
-  ldout(cct, 0) << __func__ << "keys----$$$*********"<< key << dendl;
- */ 
   bool exist = false;
   int ret = 0;
   string location = cct->_conf->rgw_datacache_path + "/"+ key;
@@ -1023,7 +1028,6 @@ size_t DataCache::lfuda_eviction(){
   int ret = 0;
   
   m_lfu_list.erase(e.lfu_position);
- 
   eviction_lock.unlock();
   cache_lock.unlock();
 
@@ -1066,9 +1070,7 @@ size_t DataCache::lfuda_eviction(){
 	  return freed_size; 
 	
 	} else if (victim->access_count == 0 ) {
-	  ldout(cct, 10) << __func__  <<" last copy, no dw" << dendl;
-	  this->getRemoteCacheWeight();
-	  ldout(cct, 10) << __func__  <<" last copy, no dw2" << dendl;
+//	  this->getRemoteCacheWeight();
 	  int min = INT_MAX;
 	  string cache_id = "";
 	  for (auto it = remote_cache_weight_map.begin(); it != remote_cache_weight_map.end(); ++it) {

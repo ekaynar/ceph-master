@@ -491,6 +491,7 @@ struct DataCache {
 	void init_writecache_aging(RGWRados *store);
 //	void init_average_cache_weight(RGWRados *store);
     void timer_start(RGWRados *store, uint64_t interval);
+	void timer_start_get_weight(RGWRados *store, uint64_t interval);
 	string sign_s3_request(string HTTP_Verb, string uri, string date, string YourSecretAccessKeyID, string AWSAccessKeyId);
 	//string sign_s3_request2(string HTTP_Verb, string uri, string date, string YourSecretAccessKeyID, string AWSAccessKeyId);
 	int getUid();

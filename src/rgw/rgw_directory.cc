@@ -590,7 +590,7 @@ int RGWBlockDirectory::getAvgCacheWeight(string endpoint){
   cpp_redis::client client;
   findClient(endpoint, &client);
   if (!client.is_connected()){
-    return INT_MAX;
+    return -1;
   }
   string val;
   bool exist = false;
@@ -602,7 +602,7 @@ int RGWBlockDirectory::getAvgCacheWeight(string endpoint){
   });
   client.sync_commit();
   if(!exist)
-	return INT_MAX;
+	return -1;
   return stoi(val);
 }
 

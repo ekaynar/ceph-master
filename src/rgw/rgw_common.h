@@ -2459,6 +2459,7 @@ struct cache_obj {
   string mapping_id;
   uint64_t offset;
   bool is_remote_req;
+  bool is_remote_req_put;
 };
 
 struct cache_block {

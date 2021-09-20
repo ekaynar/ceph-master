@@ -649,7 +649,7 @@ void CopyRemoteS3Object::run() {
 void DataCache::init_writecache_aging(RGWRados *store){
   ldout(cct, 0) << __func__ <<dendl;
   timer_start(store, cct->_conf->aging_interval_in_minutes);
-  timer_start_get_weight(store, 3);
+ // timer_start_get_weight(store, 3);
 }
 
 /*void DataCache::init_average_cache_weight(RGWRados *store){
@@ -736,6 +736,7 @@ int DataCache::issue_io_write(bufferlist& bl ,uint64_t len, std::string key){
 
 int DataCache::create_io_write_request(bufferlist& bl ,uint64_t len, std::string oid, cache_block *c_block)
 {
+   ldout(cct, 0) << __func__ << dendl;
   int ret = 0;
   ret = this->issue_io_write(bl, len, oid);
   if (ret < 0 ) 
@@ -792,6 +793,7 @@ void DataCache::cache_aio_write_completion_cb(cacheAioWriteRequest* c){
 	element el;
 	el.obj_id = c->key;
 	el.size_in_bytes = c->c_block.size_in_bytes;
+	ldout(cct, 10) << __func__  << " cblock " << c->c_block.size_in_bytes << " size " << c->cb->aio_nbytes << dendl;
 	m_dynamic_age_list.push_back(el);
 	if (!m_dynamic_age_list.empty())
 	  ++m_open_list_end;
@@ -802,6 +804,8 @@ void DataCache::cache_aio_write_completion_cb(cacheAioWriteRequest* c){
 	element& t = *m_open_list_end;
 	t.key_position = key_position;
 	t.lfu_position = lfu_position;
+	eviction_lock.unlock();
+	cache_lock.unlock();
 	total_cache_weight += cache_weight;
 	size_t avg_w = round (total_cache_weight/m_dynamic_age_list.size());
 
@@ -809,17 +813,18 @@ void DataCache::cache_aio_write_completion_cb(cacheAioWriteRequest* c){
  //       ldout(cct, 0) << __func__ << "keys----&&:"<< (*it).first << dendl;
 	
 	  /*update free size*/
+	eviction_lock.lock();
 	free_data_cache_size -= c->cb->aio_nbytes;
 	outstanding_write_size -=  c->cb->aio_nbytes;
+	   ldout(cct, 10) << __func__  << " after oid " << obj_id<< " free_data_cache_size" << free_data_cache_size << "  c_block->size_in_bytes " << c->cb->aio_nbytes <<  " outstanding_write_size "<< outstanding_write_size << dendl;
 	eviction_lock.unlock();
-	cache_lock.unlock();
 
 	c->c_block.access_count = cache_weight;
 	 
 	time_t rawTime = time(NULL);
     c->c_block.lastAccessTime = mktime(gmtime(&rawTime));
     int ret = blkDirectory->setValue(&(c->c_block));
-    ret = blkDirectory->setAvgCacheWeight(avg_w);
+//    ret = blkDirectory->setAvgCacheWeight(avg_w);
 	c->release();
 	delete c;
     c = nullptr;
@@ -830,7 +835,7 @@ void DataCache::cache_aio_write_completion_cb(cacheAioWriteRequest* c){
   else {
   ChunkDataInfo *chunk_info = nullptr;
   
-  ldout(cct, 10) << __func__  << " oid " << c->key << dendl; 
+  ldout(cct, 10) << __func__  << " oid LRU" << c->key << dendl; 
   cache_lock.lock();
   outstanding_write_list.remove(c->key);
   chunk_info = new ChunkDataInfo;
@@ -952,7 +957,10 @@ bool DataCache::get(string oid, bool isRemote) {
 		eviction_lock.lock();
 		auto e =  *(key_position->second);
 		auto use_count = e.lfu_position->first;	  
+		ldout(cct, 0) << __func__ << " before keymaprequest:"<< key << " usecount "<< use_count << dendl;
 		m_lfu_list.erase(e.lfu_position);
+		ldout(cct, 0) << __func__ << " before afterprequest:"<< key << " usecount "<< use_count << dendl;
+		
 		e.lfu_position = m_lfu_list.emplace(use_count + cache_weight, e.key_position->second);
 		total_cache_weight += cache_weight;
 		size_t avg_w = round (total_cache_weight/m_dynamic_age_list.size());
@@ -997,21 +1005,23 @@ int DataCache::evict_from_directory(string key){
    /*update directory*/
     string hosts;
     int ret = blkDirectory->getHosts(key, hosts);
+	ldout(cct, 10) << __func__  << "ibefore delete direc host list "<< hosts << dendl;
     stringstream sloction(hosts);
     string tmp;
     stringstream ss;
     vector<string> hosts_list;
     size_t i = 0;
     while(getline(sloction, tmp, '_')){
-      if (tmp != cct->_conf->remote_cache_addr){
+      if (tmp.compare(cct->_conf->remote_cache_addr) != 0){
         hosts_list.push_back(tmp);
         if(i != 0)
           ss << "_";
         ss << tmp;
-        i+=1;
+        i++;
       }
     }
     hosts = ss.str();
+	 ldout(cct, 10) << __func__  << "host list "<< hosts << dendl;
 	if (hosts_list.size() <= 0){
       ret = blkDirectory->delValue(key);
     } else {
@@ -1032,7 +1042,7 @@ void DataCache::getRemoteCacheWeight(){
 }
 
 size_t DataCache::lfuda_eviction(){
-  ldout(cct, 10) << __func__  << dendl;
+//  ldout(cct, 10) << __func__  << dendl;
   int n_entries = 0;
   size_t freed_size = 0;
   string del_oid, location;
@@ -1053,11 +1063,10 @@ size_t DataCache::lfuda_eviction(){
   cache_block *victim = new cache_block();
   ret = blkDirectory->getValue(victim, del_oid);
    ldout(cct, 10) << __func__  <<  " hostlist size " << victim->hosts_list.size() << 
-   " victim->access_count " << victim->access_count <<  dendl; 
+   " victim->access_count " << victim->access_count <<  " del_size:  " << del_size<< dendl; 
   //The block has a copy on another remote cache
-  if ( victim->hosts_list.size() > 1)
+  if ( victim->hosts_list.size() >= 1)
   {
-	 ldout(cct, 10) << __func__  <<" remote copy exists: " << del_oid <<dendl;
   	 freed_size = del_size;
   	 cache_lock.lock();
 	 m_dynamic_age_list.erase(it);
@@ -1070,36 +1079,37 @@ size_t DataCache::lfuda_eviction(){
 //	 ret = blkDirectory->setAvgCacheWeight(avg_w);
   	 location = cct->_conf->rgw_datacache_path + "/" + del_oid;
   	 remove(location.c_str());
+	 ldout(cct, 10) << __func__  <<" remote copy exists: " << del_oid << "del_size "<< del_size << " freed_size: " << freed_size <<dendl;
   	 return freed_size; 	
-  }
 
   // Last copy of the block
-  else if ( (victim->hosts_list.size() == 1) && (victim->hosts_list[0].compare(cct->_conf->remote_cache_addr) == 0) ){
+  } else {
+  //else if ( (victim->hosts_list.size() == 1) && (victim->hosts_list[0].compare(cct->_conf->remote_cache_addr) == 0) ){
 	if (victim->access_count != 0) {
 	  ldout(cct, 10) << __func__  <<" last copy with global access : " << del_oid <<dendl;
-	  cache_lock.lock();
+	  eviction_lock.lock();
 	  del_weight += victim->access_count;
 	  e.lfu_position = m_lfu_list.emplace(del_weight, e.key_position->second);	
 	  total_cache_weight += victim->access_count;
 	  size_t avg_w = round (total_cache_weight/m_dynamic_age_list.size());
-	  cache_lock.unlock();
+	  eviction_lock.unlock();
 	  ret = blkDirectory->resetGlobalWeight(del_oid); 
 //	  ret = blkDirectory->setAvgCacheWeight(avg_w);
-	  freed_size = 0;
-	  return freed_size; 
+	  ldout(cct, 10) << __func__  <<" remote copy exists: " << del_oid << "del_size "<< del_size << " freed_size: " << freed_size << " new weight " <<  del_weight << dendl;
+	  return 0; 
 	
-	} else if (victim->access_count == 0 ) {
-//	  this->getRemoteCacheWeight();
-	  int min = INT_MAX;
+	//} else if (victim->access_count == 0 ) {
+	} else {
 	  string cache_id = "";
+//	  this->getRemoteCacheWeight();
+/*	  int min = INT_MAX;
 	  for (auto it = remote_cache_weight_map.begin(); it != remote_cache_weight_map.end(); ++it) {
 		 if (min > it->second && it->second > 0) {
 		   cache_id = it->first;
 		   min = it->second;
-		 }
-	  }
-	  
-	  if ( del_weight > min ) {
+	}	 } */	  
+	  if ( false ) {
+	  //if ( del_weight > min ) {
 	    ldout(cct, 10) << __func__  <<" last copy, no dw, remote copy : " << del_oid <<dendl;
 		RemoteRequest *c =  new RemoteRequest();
 		c->req_type = 0;
@@ -1121,9 +1131,8 @@ size_t DataCache::lfuda_eviction(){
         location = cct->_conf->rgw_datacache_path + "/" + del_oid;
         remove(location.c_str());
 		return freed_size;	
-	  } 
-	  else 
-	  {
+	  
+	  } else {
 	    ldout(cct, 10) << __func__  <<" last copy, no dw, eviction : " << del_oid <<dendl;
 		freed_size = del_size;
 		cache_lock.lock();
@@ -1131,19 +1140,17 @@ size_t DataCache::lfuda_eviction(){
 		m_key_map.erase(e.key_position);
 		cache_weight = del_weight;
 		total_cache_weight = total_cache_weight - cache_weight;
-		size_t avg_w = round (total_cache_weight/m_dynamic_age_list.size());
+		size_t avg_w = round(total_cache_weight/m_dynamic_age_list.size());
 		cache_lock.unlock();
-
 		ret = blkDirectory->updateGlobalWeight(del_oid, del_weight, true);
 //		ret = blkDirectory->setAvgCacheWeight(avg_w);
 		location = cct->_conf->rgw_datacache_path + "/" + del_oid;
 		remove(location.c_str());
+		ldout(cct, 10) << __func__  <<" remote copy exists: " << del_oid << "del_size "<< del_size << " freed_size: " << freed_size <<  dendl;
 		return freed_size;	
 	  }
-	  
 	}
   }
-
 }
 
 void DataCache::set_remote_cache_list(){
@@ -1241,7 +1248,7 @@ void DataCache::put(bufferlist& bl, uint64_t len, string oid_orig, cache_block *
 
   ldout(cct, 10) << __func__  <<" oid:" << obj_id <<dendl;
   int ret = 0;
-  uint64_t freed_size = 0, _free_data_cache_size = 0, _outstanding_write_size = 0;
+  int64_t freed_size = 0, _free_data_cache_size = 0, _outstanding_write_size = 0;
 
   cache_lock.lock(); 
   if(cct->_conf->rgw_lfuda == true){
@@ -1280,24 +1287,34 @@ void DataCache::put(bufferlist& bl, uint64_t len, string oid_orig, cache_block *
   _outstanding_write_size = outstanding_write_size;
   eviction_lock.unlock();
   
-  ldout(cct, 20) << __func__ << "key: "<<obj_id<< "len: "<< len << "free_data_cache_size: "<<free_data_cache_size << "_:"<< free_data_cache_size << "outstanding_write_size  "<< outstanding_write_size << "_ " << _outstanding_write_size << dendl;
+
+  ldout(cct, 20) << __func__ << "key: "<<obj_id<< "len: "<< len << "free_data_cache_size: "<<free_data_cache_size << " : "<<_free_data_cache_size << " outstanding_write_size  "<< outstanding_write_size << "_ " << _outstanding_write_size << " diff " << (_free_data_cache_size - _outstanding_write_size + freed_size) << dendl;
+  int a = (_free_data_cache_size - _outstanding_write_size + freed_size);
+    ldout(cct, 20) << "Datacache Eviction girdir valu a= " << a<< "key"<< len <<dendl;
+  if (len >= (_free_data_cache_size - _outstanding_write_size + freed_size))
+  {
+	  ldout(cct, 20) << "Datacache Eviction girdir=" << "key"<<obj_id <<dendl;
+  }
+  else {  ldout(cct, 20) << "Datacache Eviction elser=" << "key"<<obj_id <<dendl;}
+
   while (len >= (_free_data_cache_size - _outstanding_write_size + freed_size)){
     ldout(cct, 20) << "Datacache Eviction r=" << ret << "key"<<obj_id <<dendl;
-	if(cct->_conf->rgw_lfuda == true)
+	//if(cct->_conf->rgw_lfuda == true)
        ret = lfuda_eviction();
-    
-	else 
-      ret = lru_eviction();
-
-    if(ret < 0)
-      return;
+	//else 
+    //  ret = lru_eviction();
+    if(ret < 0){
+     ldout(cct, 20) << "Datacache Eviction ERROR"  <<dendl;
+	  return;
+	}
     freed_size += ret;
+	 ldout(cct, 20) << "Datacache Eviction r=" << ret << "key"<<obj_id << "  freed_size " << ret <<dendl;
   }
 
-  if ((cct->_conf->rgw_lfuda == true) && (c_block->c_obj.is_remote_req))
+  /*if ((cct->_conf->rgw_lfuda == true) && (c_block->c_obj.is_remote_req_put))
 	ret = create_io_write_request(bl, len, obj_id, c_block);
   
-  else
+  else*/
 	ret = create_aio_write_request(bl, len, obj_id, c_block);
   
 
@@ -1312,6 +1329,7 @@ void DataCache::put(bufferlist& bl, uint64_t len, string oid_orig, cache_block *
    eviction_lock.lock();
    free_data_cache_size += freed_size;
    outstanding_write_size += len;
+   ldout(cct, 20) << __func__ << "key: "<<obj_id<< "len: "<< len << "free_data_cache_size: "<<free_data_cache_size <<  " outstanding_write_size  "<< outstanding_write_size   << " freed_size " << freed_size<< dendl;
    eviction_lock.unlock();
 
 }
@@ -1774,7 +1792,10 @@ int RemoteS3Request::submit_http_get_request_s3(){
   off_t end = req->ofs + req->read_len - 1;
   std::string range = std::to_string(begin)+ "-"+ std::to_string(end);
   //std::string range = std::to_string( (int)req->ofs + (int)(req->read_ofs))+ "-"+ std::to_string( (int)(req->ofs) + (int)(req->read_ofs) + (int)(req->read_len - 1));
-   ldout(cct, 10) << __func__  << " key " << req->key << " range " << range  << " dest "<< req->dest <<dendl;
+  ldout(cct, 10) << __func__  << " key " << req->key << " range " << range  << " dest "<< req->dest <<dendl;
+  if (req->dest.compare("")==0)
+	req->dest = cct->_conf->backend_url;
+  ldout(cct, 10) << __func__  << " key " << req->key << " range " << range  << "after dest "<< req->dest <<dendl;
   
   CURLcode res;
   string uri = "/"+ req->path;;

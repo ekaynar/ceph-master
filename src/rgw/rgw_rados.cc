@@ -9652,10 +9652,12 @@ int RGWRados::retrieve_obj_acls(cache_obj& c_obj){
 
     if (ret < 0 )
     return ret;
-  ret = conn->complete_request(in_stream_req, nullptr, &set_mtime, &obj_size, nullptr, &pheaders);
+  string etag;
+  ret = conn->complete_request(in_stream_req, &etag, &set_mtime, &obj_size, nullptr, &pheaders);
   if (ret < 0 )
     return ret;
 
+  c_obj.etag =etag;
   bufferlist& extra_data_bl = cb.get_extra_data();
   if (extra_data_bl.length()) {
     JSONParser jp;

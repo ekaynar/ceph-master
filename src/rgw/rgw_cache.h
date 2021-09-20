@@ -452,8 +452,8 @@ struct DataCache {
 	uint64_t total_write_size = 0;
 	CephContext *cct;
     std::string path;
-    uint64_t free_data_cache_size;
-    uint64_t outstanding_write_size;
+    int64_t free_data_cache_size;
+    int64_t outstanding_write_size;
     CacheThreadPool *tp;
     CacheThreadPool *aging_tp;
     ceph::mutex obj_cache_lock = ceph::make_mutex("DataCache::obj_cache_lock");

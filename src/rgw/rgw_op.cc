@@ -8378,6 +8378,7 @@ void RGWGetObj::cache_execute(){
   c_obj.is_remote_req = false;
   if (s->info.env->get("HTTP_CACHE_GET_REQ")) {
 	c_obj.is_remote_req = true;
+	c_obj.is_remote_req_put = false;
   }
 
 
@@ -8473,9 +8474,9 @@ void RGWPutObj::remote_cache_put_execute(){
   c_obj.backendProtocol =  S3;
   c_obj.owner = s->user->get_info().user_id.id; 
   
-  c_obj.is_remote_req = true;
-  const string& hostname = s->info.env->get("REMOTE_ADDR", "");
-  c_obj.is_remote_req = store->getRados()->is_remote_cache_req(hostname);
+  c_obj.is_remote_req_put = true;
+//  const string& hostname = s->info.env->get("REMOTE_ADDR", "");
+//  c_obj.is_remote_req_put= store->getRados()->is_remote_cache_req(hostname);
   
   string str_block_id =  s->info.env->get("HTTP_BLOCK_ID");
   cache_block c_b;

@@ -423,22 +423,23 @@ struct DataCache {
   using age_iterator   = typename std::list<element>::iterator;
   //using age_iterator   = typename std::list<ChunkDataInfo*>::iterator;
   using key_iterator = typename std::unordered_map<string, age_iterator>::iterator;
-  using lfu_iterator   = typename std::multimap<size_t, age_iterator>::iterator;
+  using lfu_iterator   = typename std::multimap<int64_t, age_iterator>::iterator;
 
 	struct element{
 	  key_iterator key_position;
 	  lfu_iterator lfu_position;
 	  string obj_id;
-	  uint64_t size_in_bytes;
+	  size_t size_in_bytes;
     };
 
 	std::unordered_map<string, age_iterator> m_key_map;
-    std::multimap<size_t, age_iterator> m_lfu_list;
+    std::multimap<int64_t, age_iterator> m_lfu_list;
 	std::list<element> m_dynamic_age_list;
+	std::list<string> victim_list;
 	//std::list<ChunkDataInfo*> m_dynamic_age_list;
     age_iterator m_open_list_end;
-	size_t cache_weight;
-	size_t total_cache_weight;
+	int64_t cache_weight;
+	int64_t total_cache_weight;
 	std::vector<string> remote_cache_list;
 	std::unordered_map<string, int> remote_cache_weight_map;
 	int last_directory_query_time;

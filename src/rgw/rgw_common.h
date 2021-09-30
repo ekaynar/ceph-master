@@ -2469,7 +2469,7 @@ struct cache_block {
   uint64_t size_in_bytes; // block size_in_bytes
   string etag; //etag for s3 object
   vector<string> hosts_list; // list of hostnames <ip:post> of block locations
-  uint64_t access_count;
+  int64_t access_count;
   time_t lastAccessTime;
   bool cachedOnRemote;
   //CacheLocation cache_location;  

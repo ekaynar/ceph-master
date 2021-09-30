@@ -8353,12 +8353,13 @@ bool RGWGetObj::cache_authorize(){
   c_obj.backendProtocol =  S3;
   c_obj.owner = s->user->get_info().user_id.id;
   int op_ret;
-  
+  ldpp_dout(this, 10) << __func__  << "11"<<  dendl;
   op_ret = store->getRados()->objDirectory->getValue(&c_obj);
-  if (op_ret < 0){
+  ldpp_dout(this, 10) << __func__  <<"22 "<< op_ret <<  dendl;
+  if (op_ret <= 0) {
 	op_ret = store->getRados()->retrieve_obj_acls(c_obj);
 	if (op_ret < 0)
-      return false;
+	  return false;
 	op_ret = store->getRados()->objDirectory->setValue(&c_obj);
     return compare_acls();
   

@@ -9422,7 +9422,6 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
 	  string path = c_block.c_obj.bucket_name + "/"+c_block.c_obj.obj_name;
 	  auto completed = d->aio->get(obj, rgw::Aio::remote_op(std::move(op) , d->yield, obj_ofs, read_ofs, read_len, dest, c, &c_block, path, datacache), cost, id);
       auto res =  d->flush(std::move(completed));
-	  dout(10) << __func__   << "datacache HIT remote cache Error: failed to drain/flush" << res << dendl;
       return res;
 	}		
 	

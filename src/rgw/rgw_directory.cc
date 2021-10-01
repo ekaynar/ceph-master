@@ -629,19 +629,20 @@ int RGWBlockDirectory::getAvgCacheWeight(string endpoint){
   return stoi(val);
 }
 
-int RGWBlockDirectory::setAvgCacheWeight(size_t weight){
-  ldout(cct,10) <<__func__<<" weight:   " << weight <<  dendl;
+
+int RGWBlockDirectory::setAvgCacheWeight(int64_t weight){
+  int result = 0;
+  if (weight == 0)
+	return result;
+  ldout(cct,10) <<__func__<< " weight: " << weight <<  dendl;
   string key = cct->_conf->remote_cache_addr;
   cpp_redis::client client;
   findClient(key, &client);
   if (!client.is_connected()){
-	return 0;
+	return result;
   }
-  int result = 0;
-  client.incrby(key, weight, [&result](cpp_redis::reply &reply){
-	  if (reply.is_integer())
-	  result = reply.as_integer();
-	  });
+  client.set(key, std::to_string(weight), [&result](cpp_redis::reply &reply){});
+//  client.commit();
   client.sync_commit(std::chrono::milliseconds(1000));
   return result;
 }

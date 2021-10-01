@@ -27,6 +27,7 @@ uint64_t expected_size = 0;
 #include <algorithm>
 #include <string>
 #include <list>
+#include <cmath>
 //#include "rgw_cacherequest.h"
 static const std::string base64_chars =
 "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -760,7 +761,8 @@ int DataCache::create_io_write_request(bufferlist& bl ,uint64_t len, std::string
   
   total_cache_weight += cache_weight;
   c_block->access_count = cache_weight;
-  int64_t avg_w = round (total_cache_weight/m_dynamic_age_list.size());
+  if( m_dynamic_age_list.size() != 0)
+	int64_t avg_w = round(total_cache_weight/m_dynamic_age_list.size());
   eviction_lock.unlock();
   cache_lock.unlock(); 
 
@@ -787,8 +789,7 @@ void DataCache::cache_aio_read_completion_cb(cacheAioWriteRequest* c){
 }
 
 void DataCache::cache_aio_write_completion_cb(cacheAioWriteRequest* c){
-
-     // LFUDA
+  // LFUDA
   if(cct->_conf->rgw_lfuda == true){
     
 	cache_lock.lock();
@@ -804,12 +805,11 @@ void DataCache::cache_aio_write_completion_cb(cacheAioWriteRequest* c){
 					<< " size " << c->cb->aio_nbytes << dendl;
 
 	m_dynamic_age_list.push_back(el);
-	ldout(cct, 20) << __func__ << "1 " <<  el.obj_id << dendl;
 //	if (!m_dynamic_age_list.empty())
 //	  ++m_open_list_end;
 	m_open_list_end = m_dynamic_age_list.end();
 	--m_open_list_end;
-	ldout(cct, 20) << __func__ << "1 " << m_open_list_end->obj_id << dendl;
+	
 	auto key_position = m_key_map.emplace(obj_id, m_open_list_end).first;
 	auto lfu_position = m_lfu_list.emplace(cache_weight, m_open_list_end);
   
@@ -819,31 +819,23 @@ void DataCache::cache_aio_write_completion_cb(cacheAioWriteRequest* c){
 	t.key_position = key_position;
 	t.lfu_position = lfu_position;
 */	total_cache_weight += cache_weight;
-	size_t avg_w = round (total_cache_weight/m_dynamic_age_list.size());
+    int64_t avg_w = 0;
+	if( m_dynamic_age_list.size() != 0)
+	  avg_w = round(total_cache_weight/m_dynamic_age_list.size());
 	c->c_block.access_count = cache_weight;
 	cache_lock.unlock();
-
-//      for (auto it = m_key_map.cbegin(); it != m_key_map.cend(); ++it)
- //       ldout(cct, 0) << __func__ << "keys----&&:"<< (*it).first << dendl;
-	
 
 	/*update free size*/
 	eviction_lock.lock();
 	free_data_cache_size -= c->cb->aio_nbytes;
 	outstanding_write_size -=  c->cb->aio_nbytes;
 	eviction_lock.unlock();
-	ldout(cct, 20) << __func__  << "key"<<obj_id <<
-     "free_data_cache_size "<< free_data_cache_size <<
-     "outstanding_write_size "<< outstanding_write_size << dendl;
-
-	 
 	time_t rawTime = time(NULL);
     c->c_block.lastAccessTime = mktime(gmtime(&rawTime));
     int ret = blkDirectory->setValue(&(c->c_block));
-//    ret = blkDirectory->setAvgCacheWeight(avg_w);
+//	ret = blkDirectory->setAvgCacheWeight(avg_w);
+
 	c->release();
-//	delete c;
-//    c = nullptr;
   }
 
 
@@ -953,7 +945,7 @@ done:
 }
 bool DataCache::get(string oid, bool isRemote) {
 
-  ldout(cct, 0) << __func__ << " cache check :"<< oid << dendl;
+  ldout(cct, 0) << __func__ << " oid: "<< oid << dendl;
   string key = oid;
   const char x = '/';
   const char y = '_';
@@ -961,34 +953,31 @@ bool DataCache::get(string oid, bool isRemote) {
 
   bool exist = false;
   int ret = 0;
+  int64_t avg_w = 0;
   string location = cct->_conf->rgw_datacache_path + "/"+ key;
   //LFUDA
   if(cct->_conf->rgw_lfuda == true){
 	cache_lock.lock();
-	//eviction_lock.lock();
-/*	for (auto it2 = m_key_map.cbegin(); it2 != m_key_map.cend(); ++it2) {
-	   ldout(cct, 0) << __func__ << "{keymap " << (*it2).first << ": " <<   dendl;
-    }*/
     auto key_position = m_key_map.find(key);
     if ( key_position != m_key_map.end() ){
-
         exist = true;
 		local_hit += 1;
+		ldout(cct, 0) << __func__ << " local_hit: "<< local_hit << dendl;
 		if (!isRemote){
-		  ldout(cct, 0) << __func__ << " local request request:"<< key << " local_hit :"<< local_hit << dendl;
+		  ldout(cct, 0) << __func__ << "local request:"<< key  << dendl;
 		  element& e =  *(key_position->second);
 		  auto use_count = e.lfu_position->first;	  
 		  m_lfu_list.erase(e.lfu_position);
 		  int64_t new_w = use_count + cache_weight;
 		  e.lfu_position = m_lfu_list.emplace(new_w, e.key_position->second);
-		  ldout(cct, 0) << __func__ << " ugur afterprequest:"<< key << " usecount "<< use_count << " cache_weight " << cache_weight << "  e.obj_id " <<  e.obj_id << " new_w " << new_w << " e.lfu " << e.lfu_position->first  << dendl;
-
 		  total_cache_weight += cache_weight;
-		  int64_t avg_w = round(total_cache_weight/m_dynamic_age_list.size());
-	  }
+		  avg_w = round(total_cache_weight/m_dynamic_age_list.size());
+		}
+		ldout(cct, 0) << __func__ << "remote cache request:"<< key  << dendl;
 	}
   cache_lock.unlock();
- // ret = blkDirectory->setAvgCacheWeight(avg_w);
+//  if (!isRemote)
+//	ret = blkDirectory->setAvgCacheWeight(avg_w);
   return exist;
   }
 
@@ -1062,7 +1051,6 @@ void DataCache::getRemoteCacheWeight(){
 }
 
 size_t DataCache::lfuda_eviction(){
-  ldout(cct, 10) << __func__  << dendl;
   int n_entries = 0;
   size_t freed_size = 0;
   string del_oid, location;
@@ -1075,7 +1063,7 @@ size_t DataCache::lfuda_eviction(){
   size_t del_size = e.size_in_bytes;
   int64_t del_weight = e.lfu_position->first;
   int ret = 0;
-  
+  int64_t avg_w = 0; 
   ldout(cct, 10) << __func__  << "victim id: "<< del_oid << dendl;
   m_lfu_list.erase(e.lfu_position);
   
@@ -1084,49 +1072,42 @@ size_t DataCache::lfuda_eviction(){
   victim->access_count = 0;
   ret = blkDirectory->getValue(victim, del_oid);
   if (ret < 0)
-	ldout(cct, 10) << __func__  <<" directory lookup: " << del_oid << "ERROR " <<dendl;
-  ldout(cct, 10) << __func__  <<" after lookup " << victim->cachedOnRemote  <<dendl;
+	ldout(cct, 10) << __func__  <<" ERROR: not in directory: " << del_oid << dendl;
+  
   //The block has a copy on another remote cache
-//  if ( true) {
   if (victim->cachedOnRemote) {
+	 ldout(cct, 10) << __func__  <<" remote copy exists: " << del_oid << dendl;
   	 freed_size = del_size;
 	 m_dynamic_age_list.erase(it);
 	 //m_key_map.erase(e.key_position);
 	 m_key_map.erase(del_oid);
 	 cache_weight = del_weight;
   	 total_cache_weight = total_cache_weight - cache_weight;
-	 int64_t avg_w = round (total_cache_weight/m_dynamic_age_list.size());
-	 ldout(cct, 10) << __func__  <<" remote copy exists: " << del_oid << "del_size "<< del_size << " freed_size: " << freed_size <<dendl;
+	 if( m_dynamic_age_list.size() != 0)
+		avg_w = round(total_cache_weight/m_dynamic_age_list.size());
   	 cache_lock.unlock();
-//	 ret = blkDirectory->setAvgCacheWeight(avg_w);
   	 location = cct->_conf->rgw_datacache_path + "/" + del_oid;
   	 remove(location.c_str());
   	 ret = blkDirectory->updateGlobalWeight(del_oid, del_weight, true);
-	 ldout(cct, 10) << __func__  <<" after updateGlobalWeight: " << del_oid  <<dendl;
+//	 ret = blkDirectory->setAvgCacheWeight(avg_w);
   	 return freed_size; 	
 
   // Last copy of the block
   } else {
-	
 	if (victim->access_count != 0) {
 	  del_weight += victim->access_count;
-	  ldout(cct, 10) << __func__  <<" last copy with global access : " << del_oid 
-								<<"new weight " << del_weight << dendl;
-
+	  ldout(cct, 10) << __func__  <<" last copy with global access: " << del_oid << " new weight: "<< del_weight << dendl;
 	  auto key_position = m_key_map.find(del_oid);
 	  if ( key_position != m_key_map.end() ){ 
 		element& el =  *(key_position->second);
 		el.lfu_position = m_lfu_list.emplace(del_weight, el.key_position->second);	
 	  } 
-//	  e.lfu_position = m_lfu_list.emplace(static_cast<size_t>(del_weight), e.key_position->second);	
-	  
-	  cache_lock.unlock();
-	  ldout(cct, 10) << __func__  <<" last copy with dw update lfu: " << del_oid << "new w" << del_weight<< dendl;
 	  total_cache_weight += victim->access_count;
-	  int64_t avg_w = round(total_cache_weight/m_dynamic_age_list.size());
+	  if( m_dynamic_age_list.size() != 0)
+		avg_w = round(total_cache_weight/m_dynamic_age_list.size());
+	  cache_lock.unlock();
 	  ret = blkDirectory->resetGlobalWeight(del_oid); 
 //	  ret = blkDirectory->setAvgCacheWeight(avg_w);
-	  ldout(cct, 10) << __func__  <<" remote copy exists: " << del_oid << "del_size "<< del_size << " freed_size: " << freed_size << " new weight " <<  del_weight << dendl;
 	  return 0; 
 	
 	} else {
@@ -1153,11 +1134,7 @@ size_t DataCache::lfuda_eviction(){
 		freed_size = del_size;
 */
 //		m_key_map.erase(e.key_position);
-/*	for (auto it2 = m_key_map.cbegin(); it2 != m_key_map.cend(); ++it2) {
-	   ldout(cct, 0) << __func__ << "{keymap lastcopy" << (*it2).first << ": " <<   dendl;
-    }*/
 		m_dynamic_age_list.erase(it);
-//		victim_list.remove(del_oid);
 		cache_weight = del_weight;
 		total_cache_weight = total_cache_weight - cache_weight;
         size_t avg_w = round (total_cache_weight/m_dynamic_age_list.size());
@@ -1168,17 +1145,16 @@ size_t DataCache::lfuda_eviction(){
         remove(location.c_str());
         ret = blkDirectory->updateGlobalWeight(del_oid, del_weight, true);
 		return freed_size;	
-	  
 	  } else {
+	    ldout(cct, 10) << __func__  <<" last copy, no global access : " << del_oid <<dendl;
 		freed_size = del_size;
 		m_dynamic_age_list.erase(it);
 		//m_key_map.erase(e.key_position);
 		m_key_map.erase(del_oid);
-	    ldout(cct, 10) << __func__  <<" last copy, no dw, 1 : " << del_oid <<dendl;
 		cache_weight = del_weight;
 		total_cache_weight = total_cache_weight - cache_weight;
-		int64_t avg_w = round(total_cache_weight/m_dynamic_age_list.size());
-	    ldout(cct, 10) << __func__  <<" last copy, no dw, 2 : " << del_oid <<dendl;
+		if( m_dynamic_age_list.size() != 0)
+		  avg_w = round(total_cache_weight/m_dynamic_age_list.size());
 		cache_lock.unlock();
 //		ret = blkDirectory->setAvgCacheWeight(avg_w);
 		location = cct->_conf->rgw_datacache_path + "/" + del_oid;

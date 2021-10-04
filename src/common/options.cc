@@ -7008,6 +7008,10 @@ std::vector<Option> get_rgw_options() {
     .set_default(false)
     .set_description("enabling rgw datacache"),
 
+    Option("rgw_lfuda", Option::TYPE_BOOL, Option::LEVEL_ADVANCED)
+    .set_default(false)
+    .set_description("enabling lfudafor datacache"),
+
 	Option("remote_cache_list", Option::TYPE_STR, Option::LEVEL_ADVANCED)
     .set_default("localhost:8000")
     .set_description("d4n list of remote cache"),

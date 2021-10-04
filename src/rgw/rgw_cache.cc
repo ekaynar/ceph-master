@@ -722,6 +722,10 @@ void DataCache::cache_aio_write_completion_cb(cacheAioWriteRequest* c){
                                         << " cache_weight  " << cache_weight
                                         << " size " << c->cb->aio_nbytes << dendl;
 
+  lfu_cache_map[c->key] = {el,cache_weight} ;
+  freq_map[cache_weight].push_back(c->key);
+  key_iter[c->key] = --freq_map[cache_weight].end();
+/*
     m_dynamic_age_list.push_back(el);
     m_open_list_end = m_dynamic_age_list.end();
     --m_open_list_end;
@@ -730,6 +734,7 @@ void DataCache::cache_aio_write_completion_cb(cacheAioWriteRequest* c){
 
     m_open_list_end->key_position =  key_position;
     m_open_list_end->lfu_position =  lfu_position;	
+*/
 	total_cache_weight += cache_weight;
 	cache_lock.unlock();
 	
@@ -839,11 +844,8 @@ bool DataCache::get(string oid, bool isRemote) {
   int64_t avg_w = 0;
   auto start = chrono::steady_clock::now();
   cache_lock.lock();
-  /*
-  std::list<std::string>::iterator it = std::find(victim_list.begin(), victim_list.end(), key);
-  if (it != victim_list.end()) { ldout(cct, 0) << __func__ << "in victim queue key:"<< key << dendl;}
- else {*/
-    auto key_position = m_key_map.find(key);
+    /*
+	auto key_position = m_key_map.find(key);
     if ( key_position != m_key_map.end() ){
         exist = true;
         local_hit += 1;
@@ -858,7 +860,20 @@ bool DataCache::get(string oid, bool isRemote) {
           total_cache_weight += cache_weight;
           avg_w = round(total_cache_weight/m_dynamic_age_list.size());
 		  }
-    
+    */
+	 if (lfu_cache_map.find(key) != lfu_cache_map.end()) {
+		exist = true;
+        local_hit += 1;
+        ldout(cct, 0) << __func__ << " local_hit: "<< local_hit << dendl;
+        if (!isRemote){
+          ldout(cct, 0) << __func__ << "local request:"<< key  << dendl;
+		  freq_map[lfu_cache_map[key].second].erase(key_iter[key]);
+		  int64_t new_freq = lfu_cache_map[key].second + cache_weight;
+		  freq_map[new_freq].push_back(key);
+		  key_iter[key] = --freq_map[new_freq].end();		
+		  total_cache_weight += cache_weight;
+//		  avg_w = round(total_cache_weight/m_dynamic_age_list.size());
+		}
 	auto end2 = chrono::steady_clock::now();
 	ldout(cct,10) << __func__  << " lfuda hit ms " << chrono::duration_cast<chrono::microseconds>(end2 - start).count()  << dendl;
 	}
@@ -948,6 +963,45 @@ void DataCache::set_remote_cache_list(){
       }
           remote_cache_count = remote_cache_list.size();
     }
+size_t DataCache::lfuda_eviction2(){
+  int n_entries = 0, ret = 0;
+  size_t freed_size = 0;
+  int64_t avg_w = 0;
+  string del_oid, location;
+  auto start = chrono::steady_clock::now();
+  cache_lock.lock();
+  int64_t del_weight = freq_map.begin()->first;
+  del_oid = freq_map[del_weight].front();
+  element tmp; 
+  tmp.obj_id = lfu_cache_map[del_oid].first.obj_id;
+  tmp.size_in_bytes = lfu_cache_map[del_oid].first.size_in_bytes; 
+  lfu_cache_map.erase(del_oid);
+  key_iter.erase(del_oid);
+  freq_map[del_weight].pop_front();
+  ldout(cct, 10) << __func__  << "victim id: "<< del_oid << dendl;
+
+  cache_block *victim = new cache_block();
+  victim->cachedOnRemote = false;
+  victim->access_count = 0;
+
+  ret = blkDirectory->getValue(victim, del_oid);
+  if (ret < 0)
+	ldout(cct, 10) << __func__  <<" ERROR: not in directory: " << del_oid << dendl;
+  if(true){
+//  if (victim->cachedOnRemote) {
+	ldout(cct, 10) << __func__  <<" remote copy exists: " << del_oid << dendl;
+    freed_size = tmp.size_in_bytes;
+    cache_weight = del_weight;
+    total_cache_weight = total_cache_weight - cache_weight;
+	cache_lock.unlock();
+	auto end2 = chrono::steady_clock::now();
+    ldout(cct,10) << __func__  << " remote_copy ms " << chrono::duration_cast<chrono::microseconds>(end2 - start).count() << dendl;
+    location = cct->_conf->rgw_datacache_path + "/" + del_oid;
+    remove(location.c_str());
+    directoryUpdate(del_oid, del_weight, true);
+    return freed_size;
+  }
+}
 
 
 size_t DataCache::lfuda_eviction(){
@@ -1189,15 +1243,23 @@ void DataCache::put(bufferlist& bl, uint64_t len, string oid_orig, cache_block *
 
   cache_lock.lock();
   if(cct->_conf->rgw_lfuda == true){
-    auto key_position = m_key_map.find(obj_id);
+   if (lfu_cache_map.find(obj_id) != lfu_cache_map.end()) {
+	 ldout(cct, 10) << "Warning: obj data already is cached, no re-write" << dendl;
+      cache_lock.unlock();
+      return;
+   }
+  /* auto key_position = m_key_map.find(obj_id);
 	ldout(cct, 10) << __func__  <<" oid:" << obj_id <<dendl;
     if ( key_position != m_key_map.end() ){
 	   ldout(cct, 10) << "Warning: obj data already is cached, no re-write" << dendl;
       cache_lock.unlock();
       return;
     }
+ */
   
-  } else { 
+  }
+  
+   else { 
   map<string, ChunkDataInfo *>::iterator iter = cache_map.find(obj_id);
 	if (iter != cache_map.end()) {
 	  cache_lock.unlock();
@@ -1225,7 +1287,7 @@ void DataCache::put(bufferlist& bl, uint64_t len, string oid_orig, cache_block *
    while (static_cast<int64_t>(len) >= static_cast<int64_t>(_free_data_cache_size - _outstanding_write_size + freed_size)){
     ldout(cct, 20) << "Datacache Eviction r=" << ret << "key"<<obj_id <<dendl;
 	if(cct->_conf->rgw_lfuda == true)
-	  ret = lfuda_eviction();
+	  ret = lfuda_eviction2();
 	else
 	  ret = lru_eviction();
     if(ret < 0)
@@ -1662,7 +1724,7 @@ int RemoteS3Request::submit_http_get_request_s3(){
    return -1;
   }
    auto end2 = chrono::steady_clock::now();
-   ldout(cct,10) << "__func__ " << " done dest " <<req->dest << " milisecond " <<
+   ldout(cct,10) << __func__  << " done dest " <<req->dest << " milisecond " <<
    chrono::duration_cast<chrono::microseconds>(end2 - start).count() 
    << dendl; 
   if (res != CURLE_OK) { return -1;}

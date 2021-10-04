@@ -414,8 +414,12 @@ struct DataCache {
           string obj_id;
           size_t size_in_bytes;
   };
+  
+  unordered_map<string, std::pair<element, int64_t>> lfu_cache_map; //key , <element , freq>
+  map<int64_t,std::list<string>> freq_map;
+  unordered_map<string, list<string>::iterator> key_iter;
 
-	        std::unordered_map<string, age_iterator> m_key_map;
+	std::unordered_map<string, age_iterator> m_key_map;
     std::multimap<int64_t, age_iterator> m_lfu_list;
         std::list<element> m_dynamic_age_list;
         std::list<string> victim_list;
@@ -462,6 +466,7 @@ struct DataCache {
     void submit_remote_req(struct RemoteRequest *c);
     size_t lru_eviction();
 	size_t lfuda_eviction();
+	size_t lfuda_eviction2();
 	void directoryUpdate(string del_oid, int64_t del_weight, bool t);
 	int evict_from_directory(string key);
 	void put(bufferlist& bl, uint64_t len, string obj_id, cache_block* c_block);

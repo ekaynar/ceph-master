@@ -263,17 +263,17 @@ int RGWObjectDirectory::existKey(string key, cpp_redis::client *client){
   try {
 	vector<string> keys;
 	keys.push_back(key);
-	ldout(cct,10) << __func__ << "  key2.1 " << key << dendl;
+//	ldout(cct,10) << __func__ << "  key2.1 " << key << dendl;
 
 	client->exists(keys, [&result](cpp_redis::reply &reply){
 		if (reply.is_integer())
 		  result = reply.as_integer();
 		});
 	client->sync_commit(std::chrono::milliseconds(1000));
-	ldout(cct,10) << __func__ << " res " << result << " key " << key << dendl;
+//	ldout(cct,10) << __func__ << " res " << result << " key " << key << dendl;
   }
   catch(exception &e) {
-	ldout(cct,10) << __func__ << " Error" << " key " << key << dendl;
+//	ldout(cct,10) << __func__ << " Error" << " key " << key << dendl;
 	result =  0;
   }
   
@@ -305,6 +305,7 @@ int RGWBlockDirectory::existKey(string key,cpp_redis::client *client){
 }
 
 int RGWBlockDirectory::resetGlobalWeight(string key){
+  auto start = chrono::steady_clock::now();
   cpp_redis::client client;
   findClient(key, &client);
   if (!client.is_connected()){
@@ -315,11 +316,14 @@ int RGWBlockDirectory::resetGlobalWeight(string key){
   client.hmset(key, list, [](cpp_redis::reply &reply){
 	  });
   client.sync_commit(std::chrono::milliseconds(1000));
+  auto end2 = chrono::steady_clock::now();
+  ldout(cct,10) << __func__  << " ms " << chrono::duration_cast<chrono::microseconds>(end2 - start).count()  << dendl;
 //  client.commit();
 
 }
 
 int RGWBlockDirectory::updateGlobalWeight(string key,  size_t weight , bool evict){
+  auto start = chrono::steady_clock::now();
   cpp_redis::client client;
   findClient(key, &client);
   if (!client.is_connected()){
@@ -370,7 +374,7 @@ int RGWBlockDirectory::updateGlobalWeight(string key,  size_t weight , bool evic
 	  ldout(cct,10) << __func__ << " old_val: " << old_val << " new_host: "<< new_host_list  <<dendl;
 	  list.push_back(make_pair("hosts", new_host_list));
 	  client.hmset(key, list, [](cpp_redis::reply &reply){});
-	  client.sync_commit(std::chrono::milliseconds(1000));
+//	  client.sync_commit(std::chrono::milliseconds(1000));
 	  client.hincrby(key, "accessCount", weight,  [&result](cpp_redis::reply &reply){
 		  if (reply.is_integer())
 		  result = reply.as_integer(); });
@@ -383,6 +387,7 @@ int RGWBlockDirectory::updateGlobalWeight(string key,  size_t weight , bool evic
     }
   }
 
+  ldout(cct,10) << __func__ <<" block2 key:" << key <<dendl;
   return result;
 }
 int RGWBlockDirectory::updateField(string key, string field, string value){
@@ -735,8 +740,9 @@ int RGWBlockDirectory::setValue(cache_block *ptr){
 	list.push_back(make_pair("hosts", hosts));
 	list.push_back(make_pair("lastAccessTime", to_string(ptr->lastAccessTime)));
 	client.hmset(key, list, [&result](cpp_redis::reply &reply){
-		result = reply.as_string();
+//		result = reply.as_string();
 		});
+	client.hincrby(key, "accessCount", ptr->access_count, [&result](cpp_redis::reply &reply){});
 	client.sync_commit(std::chrono::milliseconds(1000));
 	//client.sync_commit(std::chrono::milliseconds(1000));
 	//client.exec();
@@ -902,6 +908,7 @@ int RGWObjectDirectory::getValue(cache_obj *ptr){
 }
 
 int RGWBlockDirectory::getValue(cache_block *ptr, string key){
+  auto start = chrono::steady_clock::now();
   cpp_redis::client client;
   findClient(key, &client);
   ldout(cct,10) << __func__ <<" block2 key:" << key <<dendl;
@@ -913,7 +920,7 @@ int RGWBlockDirectory::getValue(cache_block *ptr, string key){
   int key_exist = -1;
   if (existKey(key, &client))
   {
-	ldout(cct,10) << __func__ <<" blokc key:" << key <<dendl;
+//	ldout(cct,10) << __func__ <<" blokc key:" << key <<dendl;
 	string hosts;
 	string size;
 	string bucket_name;
@@ -955,13 +962,13 @@ int RGWBlockDirectory::getValue(cache_block *ptr, string key){
 
 	stringstream sloction(hosts);
 	string tmp;
-	ldout(cct,10) << __func__ <<" ugur1:" << key <<dendl;
+//	ldout(cct,10) << __func__ <<" ugur1:" << key << " hosts "<< hosts<<dendl;
 	ptr->c_obj.owner = owner;
 	//host1_host2_host3_...
 	while(getline(sloction, tmp, '_')){
       if (tmp.compare(cct->_conf->remote_cache_addr) != 0){
-        if(tmp.compare("") == 0){
-//		  ptr->cachedOnRemote = true;
+        if(tmp.compare("") != 0){
+		  ptr->cachedOnRemote = true;
 		  ptr->hosts_list.push_back(tmp);
 		}
     }}
@@ -970,9 +977,9 @@ int RGWBlockDirectory::getValue(cache_block *ptr, string key){
 	ptr->c_obj.bucket_name = bucket_name;
 	ptr->c_obj.obj_name = obj_name;
 	ptr->block_id = stoull(block_id);
-	ldout(cct,10) << __func__ <<" ugur1:" << key <<dendl;
+//	ldout(cct,10) << __func__ <<" ugur1:" << key <<dendl;
 	ptr->access_count = stoull(access_count);
-	ldout(cct,10) << __func__ <<" ugur2:" << key <<dendl;
+//	ldout(cct,10) << __func__ <<" ugur2:" << key <<dendl;
 //	client.disconnect(true);
   }
   catch(exception &e) {
@@ -980,6 +987,8 @@ int RGWBlockDirectory::getValue(cache_block *ptr, string key){
   }
   
   }
+  auto end2 = chrono::steady_clock::now();
+  ldout(cct,10) << __func__  << " ms " << chrono::duration_cast<chrono::microseconds>(end2 - start).count()  << dendl;
   return key_exist;
 
 }
@@ -1046,7 +1055,7 @@ int RGWBlockDirectory::getValue(cache_block *ptr){
 	while(getline(sloction, tmp, '_')){
 	  if (tmp.compare(cct->_conf->remote_cache_addr) != 0){
 		ptr->hosts_list.push_back(tmp);
-//		ptr->cachedOnRemote = true;
+		ptr->cachedOnRemote = true;
 		}
 	}
 

@@ -359,6 +359,9 @@ done:
 
   dout(1) << "====== req done req=" << hex << req << dec
 	  << " op status=" << op_ret
+	  << " op type=" << s->op_type
+	  << " bucket_name=" << s->bucket_name
+	  << " obj_name=" << s->object.name
 	  << " http_status=" << s->err.http_ret
 	  << " latency=" << s->time_elapsed()
 	  << " ======"

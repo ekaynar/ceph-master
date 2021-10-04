@@ -402,7 +402,30 @@ struct ChunkDataInfo : public LRUObject {
 
 struct DataCache {
   private:
+
+  struct element;
+  using age_iterator   = typename std::list<element>::iterator;
+  //using age_iterator   = typename std::list<ChunkDataInfo*>::iterator;
+  using key_iterator = typename std::unordered_map<string, age_iterator>::iterator;
+  using lfu_iterator   = typename std::multimap<int64_t, age_iterator>::iterator;
+  struct element{
+          key_iterator key_position;
+          lfu_iterator lfu_position;
+          string obj_id;
+          size_t size_in_bytes;
+  };
+
+	        std::unordered_map<string, age_iterator> m_key_map;
+    std::multimap<int64_t, age_iterator> m_lfu_list;
+        std::list<element> m_dynamic_age_list;
+        std::list<string> victim_list;
+        //std::list<ChunkDataInfo*> m_dynamic_age_list;
+    age_iterator m_open_list_end;
+        int64_t cache_weight;
+        int64_t total_cache_weight;
 	std::vector<string> remote_cache_list;
+	std::unordered_map<string, int> remote_cache_weight_map;
+    int last_directory_query_time;
 	int remote_cache_count;
     std::map<string, ObjectDataInfo*> write_cache_map;
     std::map<string, ChunkDataInfo*> cache_map;
@@ -412,8 +435,8 @@ struct DataCache {
 	uint64_t total_write_size = 0;
 	CephContext *cct;
     std::string path;
-    uint64_t free_data_cache_size;
-    uint64_t outstanding_write_size;
+    int64_t free_data_cache_size;
+    int64_t outstanding_write_size;
     CacheThreadPool *tp;
     CacheThreadPool *aging_tp;
     ceph::mutex obj_cache_lock = ceph::make_mutex("DataCache::obj_cache_lock");
@@ -438,10 +461,12 @@ struct DataCache {
     void retrieve_block_info(cache_block* c_block, RGWRados *store);
     void submit_remote_req(struct RemoteRequest *c);
     size_t lru_eviction();
+	size_t lfuda_eviction();
+	void directoryUpdate(string del_oid, int64_t del_weight, bool t);
 	int evict_from_directory(string key);
 	void put(bufferlist& bl, uint64_t len, string obj_id, cache_block* c_block);
 	void put_obj(cache_obj* c_obj);
-    bool get(string oid);
+    bool get(string oid,  bool isRemote);
 	int create_aio_write_request(bufferlist& bl, uint64_t len, std::string obj_id, cache_block* c_block);
     void cache_aio_write_completion_cb(cacheAioWriteRequest *c);
     size_t get_used_pool_capacity(string pool_name, RGWRados *store);
@@ -466,6 +491,8 @@ struct DataCache {
       obj_tail = nullptr;
       outstanding_small_write_list = new std::list<cache_obj*>;
       small_writes = new std::list<string>;
+	  m_open_list_end = m_dynamic_age_list.begin();
+	  cache_weight = 1;
 	  set_remote_cache_list();
 	  local_hit = 0;
 	  remote_hit = 0;

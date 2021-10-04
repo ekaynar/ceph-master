@@ -2459,6 +2459,7 @@ struct cache_obj {
   string mapping_id;
   uint64_t offset;
   bool is_remote_req;
+  bool is_remote_req_put;
 };
 
 struct cache_block {
@@ -2468,8 +2469,9 @@ struct cache_block {
   uint64_t size_in_bytes; // block size_in_bytes
   string etag; //etag for s3 object
   vector<string> hosts_list; // list of hostnames <ip:post> of block locations
-  uint64_t access_count;
+  int64_t access_count;
   time_t lastAccessTime;
+  bool cachedOnRemote;
   //CacheLocation cache_location;  
  // string host; // hostname of remote cache
 };

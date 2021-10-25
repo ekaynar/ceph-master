@@ -995,6 +995,7 @@ int RGWBlockDirectory::getValue(cache_block *ptr, string key){
 
 
 int RGWBlockDirectory::getValue(cache_block *ptr){
+   auto start = chrono::steady_clock::now();
   int key_exist = -1;
   string key = buildIndex(ptr);
   cpp_redis::client client;
@@ -1073,6 +1074,8 @@ int RGWBlockDirectory::getValue(cache_block *ptr){
 	  return -1;
 	}
   }
+  auto end2 = chrono::steady_clock::now();
+  ldout(cct,10) << __func__  << " ms " << chrono::duration_cast<chrono::microseconds>(end2 - start).count()  << dendl;
   return key_exist;
 }
 

@@ -6346,6 +6346,10 @@ struct get_obj_data {
   ceph::mutex cache_lock = ceph::make_mutex("cache_lock");
   /* datacache */
 
+  /*d3n*/
+  std::string d3n_deterministic_hash(std::string oid);
+  bool d3n_deterministic_hash_is_local(string oid);
+  
   get_obj_data(RGWRados* store, RGWGetDataCB* cb, rgw::Aio* aio,
       uint64_t offset, optional_yield yield)
     : store(store), client_cb(cb), aio(aio), offset(offset), yield(yield) {}
@@ -6431,21 +6435,6 @@ cache_block get_obj_data::get_pending_block(std::string oid)
   return c;
 }
 
-/*
-void get_obj_data::add_pending_block(cache_block c_block)
-{
-  pending_block_list.push_back(c_block);
-}
-
-cache_block get_obj_data::get_pending_block()
-{
-  cache_block c_block;
-  if (!pending_block_list.empty()) {
-    c_block = pending_block_list.front();
-    pending_block_list.erase(pending_block_list.begin());
-  }
-  return c_block;
-}*/
 void get_obj_data::add_pending_key(std::string key)
 {
   pending_key_list.push_back(key);
@@ -6460,6 +6449,44 @@ string get_obj_data::get_pending_key()
     pending_key_list.pop_front();
   }
   return str;
+}
+
+std::string get_obj_data::d3n_deterministic_hash(std::string oid)
+{
+  std::string location = g_conf()->remote_cache_list;
+  string delimiters(",");
+
+  std::vector<std::string> tokens;
+  boost::split(tokens, location, boost::is_any_of(",")); 
+  int mod = tokens.size();
+
+  std::string::size_type sz;   // alias of size_t
+  std::vector<std::string> sv;
+  boost::split(sv, oid, boost::is_any_of("_"));
+  /* Make sure the input string to stoi starts with a number */
+  std::string key = sv[sv.size() - 1];
+  std::string key_length = to_string(key.size());
+  int hash = 0;
+  try { 
+    hash = std::stoi(key_length + key, &sz); 
+  }
+  catch(std::invalid_argument& e) {
+    dout(0) << "ERROR: d3n_deterministic_hash(): stoi() catch invalid_argumen" << dendl;
+    return 0; 
+  }
+  catch(std::out_of_range& e) {
+    dout(0) << "ERROR: d3n_deterministic_hash(): stoi() catch out_of_range" << dendl;
+    return 0; 
+  }
+  return tokens[hash%mod];
+}
+
+bool get_obj_data::d3n_deterministic_hash_is_local(string oid) {
+  if( g_conf()->rgw_d3n_enabled == false ) {
+    return true;
+  } else {
+	  return (d3n_deterministic_hash(oid).compare(g_conf()->remote_cache_addr)==0);
+  }
 }
 
 
@@ -9395,21 +9422,31 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
 
 	  
   else {
+		
 	ret = blkDirectory->getValue(&c_block);
 	if ( c_block.c_obj.is_remote_req == true) {
 	  ret = -1;
+	}
+	
+	if (g_conf()->rgw_d3n_enabled == true ) {
+	  if (d->d3n_deterministic_hash_is_local(oid))
+		 ret = -1;
 	}
 
 	if (ret == 0) { // read from remote cache
 	  dout(10) << __func__   << "datacache HIT remote cache, key:" << oid<< dendl; 
 	  rgw_user user_id(c_block.c_obj.owner);
-	  dout(10) << __func__   << "datacache HIT remote cache, c_block.hosts_list.size:" << c_block.hosts_list.size() << dendl; 
 	  int random_val = rand() % c_block.hosts_list.size();
 	  string add = c_block.hosts_list[random_val];
 	  if (add.compare(cct->_conf->remote_cache_addr) == 0)
 	  {
 		add = cct->_conf->backend_url;	
 	  }
+	  if (g_conf()->rgw_d3n_enabled == true ) {
+		add = d->d3n_deterministic_hash(oid);
+		dout(10) << __func__   << "datacache d3n oid:"<< oid << " location: "<< add << dendl; 
+	  }
+
 	  //string dest= "http://" + c_block.hosts_list[0];
 	  string dest= "http://" + add;
 	  dest= add;
@@ -9632,6 +9669,7 @@ int RGWRados::retrieve_obj_acls(cache_obj& c_obj){
   if (ret < 0 )
     return ret;
 
+  dout(10)  << "after get_obj  ugur2.3 etag " << etag << dendl;
   bufferlist& extra_data_bl = cb.get_extra_data();
   if (extra_data_bl.length()) {
     JSONParser jp;
@@ -9917,7 +9955,7 @@ int RGWRados::fetch_remote(RGWRados *store, string userid, string dest_bucket_na
 
   ret = conn->complete_request(in_stream_req, &etag, &set_mtime, &expected_size, nullptr, nullptr);
 
-  dout(10)  << "after get_obj  ugur etag " << etag << dendl;
+  dout(10)  << "after get_obj22  ugur etag " << etag << dendl;
   if (ret < 0)
     return ret;
   ret = cb.flush();

@@ -414,11 +414,10 @@ struct DataCache {
           string obj_id;
           size_t size_in_bytes;
   };
-  
+ 
   unordered_map<string, std::pair<element, int64_t>> lfu_cache_map; //key , <element , freq>
-  map<int64_t,std::list<string>> freq_map;
+  unordered_map<int64_t,std::list<string>> freq_map;
   unordered_map<string, list<string>::iterator> key_iter;
-
 	std::unordered_map<string, age_iterator> m_key_map;
     std::multimap<int64_t, age_iterator> m_lfu_list;
         std::list<element> m_dynamic_age_list;
@@ -450,8 +449,11 @@ struct DataCache {
     RGWBlockDirectory *blkDirectory;
     RGWObjectDirectory *objDirectory;
 	int local_hit ;
+	int local_remote_hit;
+	int remote_miss;
 	int remote_hit;
 	int datalake_hit;
+	int64_t min_freq;
 
     struct ChunkDataInfo *head;
     struct ChunkDataInfo *tail;
@@ -498,8 +500,11 @@ struct DataCache {
       small_writes = new std::list<string>;
 	  m_open_list_end = m_dynamic_age_list.begin();
 	  cache_weight = 1;
+	  min_freq = 1;
 	  set_remote_cache_list();
 	  local_hit = 0;
+	  local_remote_hit = 0;
+	  remote_miss = 0;
 	  remote_hit = 0;
 	  datalake_hit = 0;
 	}

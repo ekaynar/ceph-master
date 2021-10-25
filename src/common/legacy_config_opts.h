@@ -1266,6 +1266,7 @@ OPTION(enable_coalesing_write,OPT_BOOL) // cache directory port
 OPTION(rgw_lfuda,OPT_BOOL) // cache directory port
 OPTION(coalesced_write_bucket_name,OPT_STR) // cache directory port
 OPTION(remote_cache_list,OPT_STR) // list of remote caches
+OPTION(rgw_d3n_enabled,OPT_BOOL) // cache directory port
 
 OPTION(rgw_max_attr_name_len, OPT_SIZE)
 OPTION(rgw_max_attr_size, OPT_SIZE)

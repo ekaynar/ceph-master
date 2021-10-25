@@ -7008,7 +7008,11 @@ std::vector<Option> get_rgw_options() {
     .set_default(false)
     .set_description("enabling rgw datacache"),
 
-    Option("rgw_lfuda", Option::TYPE_BOOL, Option::LEVEL_ADVANCED)
+    Option("rgw_d3n_enabled", Option::TYPE_BOOL, Option::LEVEL_ADVANCED)
+    .set_default(false)
+    .set_description("enabling d3n consistent hashing datacache"),
+    
+	Option("rgw_lfuda", Option::TYPE_BOOL, Option::LEVEL_ADVANCED)
     .set_default(false)
     .set_description("enabling lfudafor datacache"),
 

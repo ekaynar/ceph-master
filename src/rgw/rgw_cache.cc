@@ -424,10 +424,12 @@ void DataCache::submit_remote_req(RemoteRequest *c){
   string endpoint=cct->_conf->backend_url;
   cache_lock.lock();
 
-  ldout(cct, 1) << "submit_remote_req, dest " << c->dest << " endpoint "<< endpoint<< dendl;
+  ldout(cct, 1) << "submit_remote_req, dest " << c->dest << " endpoint "<< endpoint<< " read_len" << c->read_len << " c->key " << c->key << dendl;
   if ((c->dest).compare(endpoint) == 0) {
         datalake_hit ++;
+		datalake_hit_bytes += c->read_len;
 	    ldout(cct, 1) << "submit_remote_req, datalake_hit " << datalake_hit<< dendl;
+	    ldout(cct, 1) << "submit_remote_req, datalake2_hit_bytes " << datalake_hit_bytes<< dendl;
   } else {
         remote_hit++;
 	    ldout(cct, 1) << "submit_remote_req, remote_hit " <<  remote_hit<< dendl;
@@ -999,7 +1001,6 @@ size_t DataCache::lfuda_eviction2(){
   string del_oid, location;
   auto start = chrono::steady_clock::now();
   cache_lock.lock();
-//  int64_t del_weight = freq_map.begin()->first;
   bool find = false;
   element tmp; 
   int64_t del_weight = min_freq;
@@ -1018,15 +1019,13 @@ size_t DataCache::lfuda_eviction2(){
 	    lfu_cache_map.erase(del_oid);
 	    key_iter.erase(del_oid);
 	    freq_map[min_freq].pop_front();
-	    //freq_map[del_weight].pop_front();
-	  } else {
+	  } 
+	  else {
          freq_map.erase(min_freq);
 		 min_freq++;
-	  
 	  }
-
   } 
-  ldout(cct, 10) << __func__  << "victim id: "<< del_oid << dendl;
+  ldout(cct, 10) << __func__  << "victim key: "<< del_oid << dendl;
   cache_lock.unlock();
 
   cache_block *victim = new cache_block();
@@ -1037,9 +1036,10 @@ size_t DataCache::lfuda_eviction2(){
 
   ret = blkDirectory->getValue(victim, del_oid);
   if (ret < 0)
-	ldout(cct, 10) << __func__  <<" ERROR: not in directory: " << del_oid << dendl;
+	ldout(cct, 10) << __func__  <<" ERROR: key is not in directory: " << del_oid << dendl;
 //  if(true){
-  if (victim->cachedOnRemote) {
+  if (victim->cachedOnRemote && ret>=0) {
+    ldout(cct, 10) << __func__  <<" remote copy is exist " << del_oid << dendl;
     freed_size = tmp.size_in_bytes;
 	cache_lock.lock();
     cache_weight = min_freq;
@@ -1082,7 +1082,7 @@ size_t DataCache::lfuda_eviction2(){
            ldout(cct,10) << __func__ << " last copy, nodw ms " << chrono::duration_cast<chrono::microseconds>(end2 - start).count()  << dendl;
 		   location = cct->_conf->rgw_datacache_path + "/" + del_oid;
            remove(location.c_str());
-		   int ret = blkDirectory->updateGlobalWeight(del_oid, del_weight, true);
+		  int ret = evict_from_directory(del_oid);
 		   return freed_size;
 	}
  }
@@ -1192,7 +1192,7 @@ size_t DataCache::lfuda_eviction(){
 //        ret = blkDirectory->setAvgCacheWeight(avg_w);
         location = cct->_conf->rgw_datacache_path + "/" + del_oid;
         remove(location.c_str());
-        ret = blkDirectory->updateGlobalWeight(del_oid, del_weight, true);
+//        ret = blkDirectory->updateGlobalWeight(del_oid, del_weight, true);
                 return freed_size;
           } else {
             ldout(cct, 10) << __func__  <<" last copy, no global access : " << del_oid <<dendl;

@@ -6376,7 +6376,8 @@ struct get_obj_data {
         key = get_pending_key();
         cache_block c_block = get_pending_block(key); 	
 		ldout(cct, 20) << "before_handle key " << key << " obj.length=" << c_block.c_obj.size_in_bytes << " block lenght  "<< bl.length()  <<dendl;
-        if (bl.length() == 0x400000){
+//        if (bl.length() == 0x400000){
+		  if(true){        
 		  store->put_data(key, bl , bl.length(), &c_block); 
 		  ldout(cct, 20) << "after_handle key " << key << " obj.length=" << c_block.c_obj.size_in_bytes << " block lenght  "<< bl.length() << " offset " << offset <<dendl;
         }
@@ -6453,7 +6454,8 @@ string get_obj_data::get_pending_key()
 
 std::string get_obj_data::d3n_deterministic_hash(std::string oid)
 {
-  std::string location = g_conf()->remote_cache_list;
+  CephContext *cct = store->ctx();
+  std::string location = cct->_conf->remote_cache_list;
   string delimiters(",");
 
   std::vector<std::string> tokens;
@@ -6466,6 +6468,7 @@ std::string get_obj_data::d3n_deterministic_hash(std::string oid)
   /* Make sure the input string to stoi starts with a number */
   std::string key = sv[sv.size() - 1];
   std::string key_length = to_string(key.size());
+  dout(0) << __func__ <<" d3n hash" << key << dendl;
   int hash = 0;
   try { 
     hash = std::stoi(key_length + key, &sz); 
@@ -6482,10 +6485,11 @@ std::string get_obj_data::d3n_deterministic_hash(std::string oid)
 }
 
 bool get_obj_data::d3n_deterministic_hash_is_local(string oid) {
-  if( g_conf()->rgw_d3n_enabled == false ) {
+  CephContext *cct = store->ctx();
+  if( cct->_conf->rgw_d3n_enabled == false ) {
     return true;
   } else {
-	  return (d3n_deterministic_hash(oid).compare(g_conf()->remote_cache_addr)==0);
+	  return (d3n_deterministic_hash(oid).compare(cct->_conf->remote_cache_addr)==0);
   }
 }
 
@@ -9428,9 +9432,12 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
 	  ret = -1;
 	}
 	
-	if (g_conf()->rgw_d3n_enabled == true ) {
-	  if (d->d3n_deterministic_hash_is_local(oid))
+	if (cct->_conf->rgw_d3n_enabled == true ) {
+	   dout(10) << __func__   << "datacache d3n oid:"<< oid << " enter" << dendl;
+	  if (d->d3n_deterministic_hash_is_local(oid)) {
 		 ret = -1;
+		  dout(10) << __func__   << "datacache d3n oid:"<< oid << " home cache" << dendl;
+	  }
 	}
 
 	if (ret == 0) { // read from remote cache
@@ -9442,7 +9449,7 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
 	  {
 		add = cct->_conf->backend_url;	
 	  }
-	  if (g_conf()->rgw_d3n_enabled == true ) {
+	  if (cct->_conf->rgw_d3n_enabled == true ) {
 		add = d->d3n_deterministic_hash(oid);
 		dout(10) << __func__   << "datacache d3n oid:"<< oid << " location: "<< add << dendl; 
 	  }
@@ -9669,7 +9676,6 @@ int RGWRados::retrieve_obj_acls(cache_obj& c_obj){
   if (ret < 0 )
     return ret;
 
-  dout(10)  << "after get_obj  ugur2.3 etag " << etag << dendl;
   bufferlist& extra_data_bl = cb.get_extra_data();
   if (extra_data_bl.length()) {
     JSONParser jp;
@@ -9680,6 +9686,7 @@ int RGWRados::retrieve_obj_acls(cache_obj& c_obj){
     JSONDecoder::decode_json("attrs", src_attrs, &jp);
   }
 
+  dout(10)  << "after get_obj  ugur2.3 etag " << etag << dendl;
   RGWAccessControlPolicy acl;
   auto aiter = src_attrs.find(RGW_ATTR_ACL);
   if (aiter != src_attrs.end()){
@@ -9704,6 +9711,7 @@ int RGWRados::retrieve_obj_acls(cache_obj& c_obj){
    c_obj.home_location = BACKEND;
    c_obj.dirty = false;
 
+  dout(10)  << "after get_obj  ugur2.34 etag " << etag << dendl;
   return 0;
 }
 

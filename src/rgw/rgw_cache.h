@@ -453,6 +453,7 @@ struct DataCache {
 	int remote_miss;
 	int remote_hit;
 	int datalake_hit;
+	int64_t datalake_hit_bytes;
 	int64_t min_freq;
 
     struct ChunkDataInfo *head;
@@ -507,6 +508,7 @@ struct DataCache {
 	  remote_miss = 0;
 	  remote_hit = 0;
 	  datalake_hit = 0;
+	  datalake_hit_bytes = 0;
 	}
 
 	void increase_remote_hit(){

@@ -361,11 +361,14 @@ struct cacheAioWriteRequest{
 
   void release() {
     ::close(fd);
-    cb->aio_buf = nullptr;
+	free(data);
+	data = nullptr;
+	delete(cb);
+    /*cb->aio_buf = nullptr;
     free(data);
     data = nullptr;
     free(cb);
-    free(this);
+    free(this);*/
   }
 };
 
@@ -454,6 +457,8 @@ struct DataCache {
 	int remote_hit;
 	int datalake_hit;
 	int64_t datalake_hit_bytes;
+	int64_t writeback_hit_bytes;
+	int64_t writeback_hit;
 	int64_t min_freq;
 
     struct ChunkDataInfo *head;
@@ -485,6 +490,8 @@ struct DataCache {
 	int getUid();
 	string get_date();
 	int submit_http_head_requests_s3(cache_obj *c_obj);
+	void incr_writeback(uint64_t size);
+	int deleteFromWriteObj(cache_obj *c_obj);
 	int submit_http_get_requests_s3(cache_obj *c_obj, string prefix, string marker, int max_b);
 	void set_remote_cache_list();
 	void init(CephContext *_cct) {
@@ -509,6 +516,8 @@ struct DataCache {
 	  remote_hit = 0;
 	  datalake_hit = 0;
 	  datalake_hit_bytes = 0;
+	  writeback_hit_bytes = 0;
+	  writeback_hit = 0;
 	}
 
 	void increase_remote_hit(){

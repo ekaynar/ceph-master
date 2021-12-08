@@ -53,12 +53,12 @@ struct LocalRequest : public CacheRequest{
 	std::replace(tmp.begin(), tmp.end(), x, y);
 	this->key = tmp;
     this->read_len = read_len;
-    this->stat = EINPROGRESS;	
+    this->stat = EINPROGRESS;
 	std::string loc = location+ "/" + this->key;
 	//cout << "prepare_op  " << loc << "\n";
     struct aiocb *cb = new struct aiocb;
     memset(cb, 0, sizeof(struct aiocb));
-    cb->aio_fildes = ::open(loc.c_str(), O_RDONLY);
+    cb->aio_fildes = ::open(loc.c_str(), O_CLOEXEC|O_RDONLY);
     if (cb->aio_fildes < 0) {
       return -1;
     }

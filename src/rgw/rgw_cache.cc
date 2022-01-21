@@ -879,10 +879,7 @@ int DataCache::deleteFromWriteObj(cache_obj *c_obj){
     obj_lru_remove(chdo);
     ldout(cct, 10) << __func__  << " oid "  <<obj_id <<dendl;
   }
-  
-  //free_wb_cache_capacity = free_wb_cache_capacity +  (uint64_t)(c_obj->size_in_bytes * cct->_conf->rgw_wb_cache_replication) ;
-=======
-
+    free_wb_cache_capacity = free_wb_cache_capacity +  (uint64_t)(c_obj->size_in_bytes * cct->_conf->rgw_wb_cache_replication) ;
   write_cache_map.erase(obj_id);
   obj_cache_lock.unlock();
   return 0; 

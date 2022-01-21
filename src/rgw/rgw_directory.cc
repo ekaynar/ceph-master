@@ -318,6 +318,7 @@ int RGWBlockDirectory::resetGlobalWeight(string key){
   client.sync_commit(std::chrono::milliseconds(1000));
   auto end2 = chrono::steady_clock::now();
   ldout(cct,10) << __func__  << " ms " << chrono::duration_cast<chrono::microseconds>(end2 - start).count()  << dendl;
+//  client.commit();
 
 }
 
@@ -381,22 +382,15 @@ int RGWBlockDirectory::updateGlobalWeight(string key,  size_t weight , bool evic
 	vector<pair<string, string>> list;
 	list.push_back(make_pair("hosts", new_host_list));
 	client.hmset(key, list, [](cpp_redis::reply &reply){});
-<<<<<<< HEAD
-	client.sync_commit(std::chrono::milliseconds(1000));
-=======
     //client.commit();
 	//client.sync_commit(std::chrono::milliseconds(1000));
->>>>>>> 851e6b637d71001a1826c14416c24d0192be0bf7
 	int64_t inc = static_cast<int64_t>(weight);
 	client.hincrby(key, "accessCount", inc,  [&result](cpp_redis::reply &reply){
 		  if (reply.is_integer())
 			result = reply.as_integer(); 
 			});
 	client.sync_commit(std::chrono::milliseconds(1000));
-<<<<<<< HEAD
-=======
     //client.commit();
->>>>>>> 851e6b637d71001a1826c14416c24d0192be0bf7
   ldout(cct,10) << __func__ <<" done: " << key << "res "<< result << dendl;
 
 
@@ -679,6 +673,7 @@ int RGWBlockDirectory::setAvgCacheWeight(int64_t weight){
 	return result;
   }
   client.set(key, std::to_string(weight), [&result](cpp_redis::reply &reply){});
+//  client.commit();
   client.sync_commit(std::chrono::milliseconds(1000));
   return result;
 }

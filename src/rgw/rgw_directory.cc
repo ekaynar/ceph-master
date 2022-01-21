@@ -335,10 +335,7 @@ int RGWBlockDirectory::updateGlobalWeight(string key,  size_t weight , bool evic
 	  if (reply.is_integer())
 		result = reply.as_integer(); });
     client.sync_commit(std::chrono::milliseconds(1000));
-<<<<<<< HEAD
-=======
     //client.commit();
->>>>>>> 851e6b637d71001a1826c14416c24d0192be0bf7
 
 	ldout(cct,10) << __func__ <<" no evict updated weight: "<< weight << " oid " << key << "result" << result << dendl;
 	return result;

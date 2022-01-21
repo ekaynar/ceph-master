@@ -192,6 +192,7 @@ public:
   virtual void execute() = 0;
   /*datacache*/
   virtual void cache_execute() {}  
+  virtual void remote_cache_put_execute() {}
   virtual bool cache_head_op() {return true;}  
   virtual bool cache_authorize() {return true;}  
   virtual bool object_in_cache() {return true;}; /*datacache*/
@@ -1209,6 +1210,7 @@ public:
   int verify_permission() override;
   void pre_exec() override;
   void execute() override;
+  void remote_cache_put_execute() override; //datacache
 
   /* this is for cases when copying data from other object */
   virtual int get_decrypt_filter(std::unique_ptr<RGWGetObj_Filter>* filter,

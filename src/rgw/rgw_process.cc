@@ -118,7 +118,18 @@ int rgw_process_authenticated(RGWHandler_REST * const handler,
       return 0;
     }
 
-  }
+  }	if ( (s->cct->_conf->rgw_lfuda == true) && (s->cct->_conf->rgw_datacache_enabled) ){
+	  //if (true) {
+	  if (s->info.env->get("HTTP_CACHE_PUT_REQ")) {
+		ldpp_dout(op, 2) << "executing" << dendl;
+		op->remote_cache_put_execute();
+		ldpp_dout(op, 2) << "completing" << dendl;
+		op->complete();
+		return 0;
+	  }
+	   ldpp_dout(op, 2) << "no in " << 
+	  s->info.env->get("HTTP_CACHE_PUT_REQ") << dendl;
+	}
 
   
 

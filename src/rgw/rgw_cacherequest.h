@@ -125,14 +125,15 @@ struct RemoteRequest : public CacheRequest{
   RGWRESTConn *conn;
   string path;
   string ak;
-  string sk; 
+  string sk;
+  bool req_type; 
   //bufferlist pbl;// =nullptr;
   std::string s;
   size_t sizeleft;
   const char *readptr;
   f func; 
   cache_block *c_block;
-  RemoteRequest() :  CacheRequest(), c_block(nullptr) {}
+  RemoteRequest() :  CacheRequest(), c_block(nullptr) , req_type(0){}
 
 
   ~RemoteRequest(){}

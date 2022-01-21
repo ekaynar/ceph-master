@@ -334,8 +334,10 @@ class RemoteS3Request : public Task {
     }
     string sign_s3_request(string HTTP_Verb, string uri, string date, string YourSecretAccessKeyID, string AWSAccessKeyId);
     string get_date();
+	string sign_s3_request2(string HTTP_Verb, string uri, string date, string YourSecretAccessKeyID, string AWSAccessKeyId);
   private:
     int submit_http_get_request_s3();
+	int submit_http_put_request_s3();
   private:
     pthread_mutex_t qmtx;
     pthread_cond_t wcond;

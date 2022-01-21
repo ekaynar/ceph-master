@@ -1124,6 +1124,7 @@ public:
   int fetch_remote(RGWRados *store, string userid, string dest_bucket_name, string dest_obj_name, string location, RGWGetDataCB *cb, RGWObjectCtx& ctx);
   int retrieve_oid(cache_obj& c_obj, rgw_raw_obj& read_obj, uint64_t obj_ofs, optional_yield y);
   int retrieve_obj_acls(cache_obj& c_obj);
+  int create_cache_request(cache_block& c_block,bufferlist&& bl);
   int retrieve_obj_size(cache_obj& c_obj, RGWRados *store);
   int get_head_obj(cache_obj& c_obj);
   vector<string> get_xml_data(string &text, string tag);

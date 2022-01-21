@@ -6377,10 +6377,17 @@ struct get_obj_data {
         cache_block c_block = get_pending_block(key); 	
 		ldout(cct, 20) << "before_handle key " << key << " obj.length=" << c_block.c_obj.size_in_bytes << " block lenght  "<< bl.length()  <<dendl;
 //        if (bl.length() == 0x400000){
-		  if(true){        
+		if(cct->_conf->rgw_distributed_cache == false ){  
 		  store->put_data(key, bl , bl.length(), &c_block); 
 		  ldout(cct, 20) << "after_handle key " << key << " obj.length=" << c_block.c_obj.size_in_bytes << " block lenght  "<< bl.length() << " offset " << offset <<dendl;
         }
+		else if (cct->_conf->rgw_distributed_cache == true ){
+		  if (!c_block.cachedOnRemote){
+		  store->put_data(key, bl , bl.length(), &c_block);
+          ldout(cct, 20) << "distributed_cache cache first copy" << key << " obj.length=" << c_block.c_obj.size_in_bytes << " block lenght  "<< bl.length() << " offset " << offset <<dendl;
+		  }
+		
+		}
       }
      
 	  
@@ -6416,9 +6423,13 @@ struct get_obj_data {
 
 void get_obj_data::add_pending_block(std::string oid, cache_block c_block)
 {
+
+	struct cache_block c;
+	c = c_block;
 //	cache_lock.lock();
 //	cache_block_map.insert(pair<std::string, cache_block*>(oid, &c_block));
-	cache_block_map[oid] = c_block;
+	cache_block_map[oid] = c;
+	//cache_block_map[oid] = c_block;
 	//cache_lock.unlock();
 
 }
@@ -9391,6 +9402,8 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
 
   d->add_pending_key(oid);
   d->cache_enable = true;
+  if( c_block.c_obj.home_location == 0)
+	d->cache_enable = false;
   c_block.size_in_bytes = read_len;
   c_block.cachedOnRemote = false;
 
@@ -9431,9 +9444,7 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
 	if ( c_block.c_obj.is_remote_req == true) {
 	  ret = -1;
 	}
-	
 	if (cct->_conf->rgw_d3n_enabled == true ) {
-	   dout(10) << __func__   << "datacache d3n oid:"<< oid << " enter" << dendl;
 	  if (d->d3n_deterministic_hash_is_local(oid)) {
 		 ret = -1;
 		  dout(10) << __func__   << "datacache d3n oid:"<< oid << " home cache" << dendl;
@@ -9469,15 +9480,13 @@ int RGWRados::get_cache_obj_iterate_cb(cache_block& c_block, off_t obj_ofs, off_
 	  ret = obj.open();
 	  string path = c_block.c_obj.bucket_name + "/"+c_block.c_obj.obj_name;
 	  auto completed = d->aio->get(obj, rgw::Aio::remote_op(std::move(op) , d->yield, obj_ofs, read_ofs, read_len, dest, c, &c_block, path, datacache), cost, id);
-//	  datacache->submit_remote_req(c);
-//	return d->drain();
       auto res =  d->flush(std::move(completed));
-	  dout(10) << __func__   << "datacache HIT Error: failed to drain/flush" << res << dendl;
 	  return res;
 	}		
 	
 	else if(c_block.c_obj.home_location == 0) { // read from write-back cache
 	  dout(10) << __func__   << "datacache HIT write cache, key:" << oid<< dendl; 
+	  datacache->incr_writeback(read_len); 
 	  c_block.access_count = 0;
 	  rgw_raw_obj read_obj;
 	  d->add_pending_block(oid, c_block);
@@ -9671,7 +9680,7 @@ int RGWRados::retrieve_obj_acls(cache_obj& c_obj){
 
   ret = conn->complete_request(in_stream_req, &etag, &set_mtime, &obj_size, nullptr, &pheaders);
 
-  dout(10)  << "after get_obj  ugur etag " << etag << dendl;
+//  dout(10)  << "after get_obj  ugur etag " << etag << dendl;
   c_obj.etag = etag;
   if (ret < 0 )
     return ret;
@@ -9686,7 +9695,8 @@ int RGWRados::retrieve_obj_acls(cache_obj& c_obj){
     JSONDecoder::decode_json("attrs", src_attrs, &jp);
   }
 
-  dout(10)  << "after get_obj  ugur2.3 etag " << etag << dendl;
+ ldout(cct, 10) << __func__ << "after get_obj  ugur2.3 etag " << dendl;
+ // dout(10)  << "after get_obj  ugur2.3 etag " << etag << dendl;
   RGWAccessControlPolicy acl;
   auto aiter = src_attrs.find(RGW_ATTR_ACL);
   if (aiter != src_attrs.end()){
@@ -9711,7 +9721,7 @@ int RGWRados::retrieve_obj_acls(cache_obj& c_obj){
    c_obj.home_location = BACKEND;
    c_obj.dirty = false;
 
-  dout(10)  << "after get_obj  ugur2.34 etag " << etag << dendl;
+ ldout(cct, 10) << __func__ << "after get_obj  ugur2.4 etag " << dendl;
   return 0;
 }
 

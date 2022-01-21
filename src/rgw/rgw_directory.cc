@@ -10,7 +10,6 @@
 #include <vector>
 #include <list>
 #define dout_subsys ceph_subsys_rgw
-
 void tokenize(string &str, char delim, list<string> &out)
 {
 	size_t start;
@@ -318,22 +317,39 @@ int RGWBlockDirectory::resetGlobalWeight(string key){
   client.sync_commit(std::chrono::milliseconds(1000));
   auto end2 = chrono::steady_clock::now();
   ldout(cct,10) << __func__  << " ms " << chrono::duration_cast<chrono::microseconds>(end2 - start).count()  << dendl;
-//  client.commit();
 
 }
 
 int RGWBlockDirectory::updateGlobalWeight(string key,  size_t weight , bool evict){
+
+  if(!evict){
+	int result = 0;
+	cpp_redis::client client;
+    findClient(key, &client);
+    if (!client.is_connected())
+      return -1;
+
+	int64_t inc = static_cast<int64_t>(weight);
+	client.hincrby(key, "accessCount", inc,  [&result](cpp_redis::reply &reply){
+	  if (reply.is_integer())
+		result = reply.as_integer(); });
+    client.sync_commit(std::chrono::milliseconds(1000));
+
+	ldout(cct,10) << __func__ <<" no evict updated weight: "<< weight << " oid " << key << "result" << result << dendl;
+	return result;
+  }
+
   auto start = chrono::steady_clock::now();
   string old_val;
   int result = getHosts(key, old_val);
   string endpoint=cct->_conf->remote_cache_addr; 
-  ldout(cct,10) << __func__ << "key: " << key << " hosts: "<< old_val  <<dendl;
+  ldout(cct,10) << __func__ << " key: " << key << " hosts: "<< old_val  << "cache_weight" << weight << dendl;
   
   stringstream sloction(old_val);
   string tmp;
   string new_host_list;
   vector<string> hosts_list;
-  bool first = true;
+  bool first = true; 
   while(getline(sloction, tmp, '_')) {
   if (tmp.compare(endpoint) != 0) {
 	if (!first)
@@ -344,26 +360,35 @@ int RGWBlockDirectory::updateGlobalWeight(string key,  size_t weight , bool evic
 	  hosts_list.push_back(tmp);
 	  }
   }
+
+  ldout(cct,10) << __func__ << " 22:  host size "<< hosts_list.size()<< " key " << key <<dendl;
   if (hosts_list.size() <= 0) {
+	ldout(cct,10) << __func__ << " del value: " << key << " host size "<< hosts_list.size()<<dendl;
 	result = delValue(key);
-	ldout(cct,10) << __func__ << " del value: " << key <<dendl;
 	} 
 	
   else {
+	ldout(cct,10) << __func__ << " else:  host size "<< hosts_list.size()<< " key " << key <<dendl;
 	cpp_redis::client client;
 	findClient(key, &client);
 	if (!client.is_connected()){
+	   ldout(cct,10) << __func__ << "client is not connected" << dendl;
 	  return -1;
 	}
-	ldout(cct,10) << __func__ << " old_val: " << old_val << " new_host: "<< new_host_list  <<dendl;
+	ldout(cct,10) << __func__ << " old_val: " << old_val << " new_host: "<< new_host_list  << " key " << key << dendl;
 	vector<pair<string, string>> list;
 	list.push_back(make_pair("hosts", new_host_list));
 	client.hmset(key, list, [](cpp_redis::reply &reply){});
-	client.hincrby(key, "accessCount", weight,  [&result](cpp_redis::reply &reply){
+	client.sync_commit(std::chrono::milliseconds(1000));
+	int64_t inc = static_cast<int64_t>(weight);
+	client.hincrby(key, "accessCount", inc,  [&result](cpp_redis::reply &reply){
 		  if (reply.is_integer())
 			result = reply.as_integer(); 
 			});
 	client.sync_commit(std::chrono::milliseconds(1000));
+  ldout(cct,10) << __func__ <<" done: " << key << "res "<< result << dendl;
+
+
 	}
   
   ldout(cct,10) << __func__ <<" done: " << key <<dendl;
@@ -441,7 +466,7 @@ int RGWObjectDirectory::delValue(cache_obj *ptr){
 	return -1;
   }
 }
-int RGWBlockDirectory::getHosts(string key, string hosts){
+int RGWBlockDirectory::getHosts(string key, string &hosts){
   cpp_redis::client client;
   findClient(key, &client);
   if (!(client.is_connected())){
@@ -453,6 +478,7 @@ int RGWBlockDirectory::getHosts(string key, string hosts){
 	  hosts = reply.as_string();
 	  });
   client.sync_commit(std::chrono::milliseconds(1000));
+    ldout(cct,10) << __func__ << " hosts" << hosts<< " key " << key << dendl;
   }
    catch(exception &e) {
     ldout(cct,10) << __func__ << " Error" << " key " << key << dendl;
@@ -642,7 +668,6 @@ int RGWBlockDirectory::setAvgCacheWeight(int64_t weight){
 	return result;
   }
   client.set(key, std::to_string(weight), [&result](cpp_redis::reply &reply){});
-//  client.commit();
   client.sync_commit(std::chrono::milliseconds(1000));
   return result;
 }
@@ -721,7 +746,20 @@ int RGWBlockDirectory::setValue(cache_block *ptr){
 	  list.push_back(make_pair("hosts", hosts));
 	  client.hmset(key, list, [&result](cpp_redis::reply &reply){});
 	  client.sync_commit(std::chrono::milliseconds(1000));
+	  
 	  ldout(cct,10) <<__func__<<" key exist " << key << " updated hostslist: " << hosts <<dendl;
+	  string old_val;
+	  std::vector<std::string> fields;
+	  fields.push_back("hosts");
+	  client.hmget(key, fields, [&old_val](cpp_redis::reply &reply){
+          if (reply.is_array()){
+            auto arr = reply.as_array();
+            if (!arr[0].is_null())
+              old_val = arr[0].as_string();
+      }});
+	  client.sync_commit(std::chrono::milliseconds(1000));
+	    ldout(cct,10) <<__func__<<" after hmset " << key << " updated hostslist: " << old_val <<dendl;
+	
 	}
 	return 0;
   }
@@ -936,6 +974,7 @@ int RGWBlockDirectory::getValue(cache_block *ptr, string key){
 	stringstream sloction(hosts);
 	string tmp;
 	ptr->c_obj.owner = owner;
+	ptr->cachedOnRemote = false;
 	while(getline(sloction, tmp, '_')){
       if (tmp.compare(cct->_conf->remote_cache_addr) != 0){
         if(tmp.compare("") != 0){
@@ -943,8 +982,6 @@ int RGWBlockDirectory::getValue(cache_block *ptr, string key){
 		  ptr->hosts_list.push_back(tmp);
 		}
     }}
-	if (ptr->hosts_list.size() <= 0)
-      return -1;
 
 	ldout(cct,10) << __func__ <<" key:" << key << " in  hosts "<< hosts<<dendl;
 	ptr->size_in_bytes = stoull(size);
@@ -952,6 +989,8 @@ int RGWBlockDirectory::getValue(cache_block *ptr, string key){
 	ptr->c_obj.obj_name = obj_name;
 	ptr->block_id = stoull(block_id);
 	ptr->access_count = stoull(access_count);
+	if (ptr->hosts_list.size() <= 0)
+      return -1;
   }
   catch(exception &e) {
     return -1;

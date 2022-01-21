@@ -1242,6 +1242,8 @@ OPTION(rados_osd_op_timeout, OPT_DOUBLE) // how many seconds to wait for a respo
 OPTION(rados_tracing, OPT_BOOL) // true if LTTng-UST tracepoints should be enabled
 
 OPTION(rgw_datacache_enabled, OPT_BOOL) // enable rgw object datacache
+OPTION(rgw_distributed_cache, OPT_BOOL) // enable rgw object datacache
+OPTION(rgw_local_lru, OPT_BOOL) // enable rgw object datacache local lru polcy
 OPTION(rgw_datacache_path, OPT_STR) // rgw local read cache path
 OPTION(remote_cache_addr, OPT_STR) // rgw local read cache path
 OPTION(aging_interval_in_minutes, OPT_INT) // rgw write cache aging interval in minutes
@@ -1251,6 +1253,8 @@ OPTION(max_remote_retries, OPT_INT) // maximum retry count for remote cache requ
 OPTION(max_aging_retries, OPT_INT) // maximum retry count for remote aging requests
 OPTION(cache_threadpool_size ,OPT_INT) // cache threadpool size for remote requests
 OPTION(cache_aging_threadpool_size ,OPT_INT) // cache threadpool size for aging objects to remote storage
+OPTION(rgw_wb_cache_size ,OPT_INT) //wb cache capacity
+OPTION(rgw_wb_cache_replication ,OPT_FLOAT) //wb cache capacity
 OPTION(rgw_cache_size ,OPT_INT) // rgw local read cache capacity
 OPTION(rgw_directory_address ,OPT_STR) // cache directory address 
 OPTION(rgw_directory_address2 ,OPT_STR) // cache directory address 

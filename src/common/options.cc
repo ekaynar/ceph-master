@@ -7003,10 +7003,26 @@ std::vector<Option> get_rgw_options() {
     Option("rgw_cache_size", Option::TYPE_INT, Option::LEVEL_ADVANCED)
     .set_default(1073741824)
     .set_description("rgw local read cache capacity"),
-
-    Option("rgw_datacache_enabled", Option::TYPE_BOOL, Option::LEVEL_ADVANCED)
+    
+	Option("rgw_wb_cache_size", Option::TYPE_INT, Option::LEVEL_ADVANCED)
+    .set_default(1073741824)
+    .set_description("rgw local read cache capacity"),
+    
+    Option("rgw_wb_cache_replication", Option::TYPE_FLOAT, Option::LEVEL_ADVANCED)
+    .set_default(1.5)
+    .set_description("rgw local read cache capacity"),
+	
+	Option("rgw_datacache_enabled", Option::TYPE_BOOL, Option::LEVEL_ADVANCED)
     .set_default(false)
     .set_description("enabling rgw datacache"),
+    
+	Option("rgw_distributed_cache", Option::TYPE_BOOL, Option::LEVEL_ADVANCED)
+    .set_default(false)
+    .set_description("enabling rgw distributed datacache"),
+
+	Option("rgw_local_lru", Option::TYPE_BOOL, Option::LEVEL_ADVANCED)
+    .set_default(false)
+    .set_description("enabling rgw distributed datacache"),
 
     Option("rgw_d3n_enabled", Option::TYPE_BOOL, Option::LEVEL_ADVANCED)
     .set_default(false)

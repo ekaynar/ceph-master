@@ -8313,7 +8313,8 @@ bool RGWDeleteObj::object_in_cache(){
   c_obj.bucket_name = s->bucket_name;
   c_obj.obj_name = s->object.name;
   c_obj.owner = s->user->get_info().user_id.id;
-  int op_ret = store->getRados()->objDirectory->delValue(&c_obj);
+  int op_ret = store->getRados()->datacache->deleteFromWriteObj(&c_obj);
+  op_ret = store->getRados()->objDirectory->delValue(&c_obj);
 
   /*int op_ret = store->getRados()->objDirectory->getValue(&c_obj);
   if (op_ret < 0){
@@ -8362,9 +8363,9 @@ bool RGWGetObj::cache_authorize(){
   ldpp_dout(this, 10) << __func__  << "op22 " << op_ret << dendl;
 	if (op_ret < 0)
       return false;
-	op_ret = store->getRados()->objDirectory->setValue(&c_obj);
-  ldpp_dout(this, 10) << __func__  << "op23 " << op_ret << dendl;
-    return compare_acls();
+   op_ret = store->getRados()->objDirectory->setValue(&c_obj);
+   ldpp_dout(this, 10) << __func__  << "op23 " << op_ret << dendl;
+   return compare_acls();
   
   } else { // Object is in write-back cache 
 	return compare_acls(); 

@@ -1242,6 +1242,7 @@ OPTION(rados_osd_op_timeout, OPT_DOUBLE) // how many seconds to wait for a respo
 OPTION(rados_tracing, OPT_BOOL) // true if LTTng-UST tracepoints should be enabled
 
 OPTION(rgw_datacache_enabled, OPT_BOOL) // enable rgw object datacache
+OPTION(rgw_datacache_test, OPT_BOOL) // enable rgw test variable for datacache
 OPTION(rgw_distributed_cache, OPT_BOOL) // enable rgw object datacache
 OPTION(rgw_local_lru, OPT_BOOL) // enable rgw object datacache local lru polcy
 OPTION(rgw_datacache_path, OPT_STR) // rgw local read cache path

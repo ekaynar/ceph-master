@@ -1126,7 +1126,8 @@ size_t DataCache::lfuda_eviction2(){
 		   total_cache_weight = total_cache_weight - cache_weight;
 		   cache_lock.unlock();
 		   auto end2 = chrono::steady_clock::now();
-		  if (true){
+		  if (cct->_conf->rgw_datacache_test){
+		  //if (true){
 			string cache_id = "10.12.1.15:8082";
 			//this->getRemoteCacheWeight();
 			ldout(cct, 10) << __func__  <<" last copy, no dw, remote copy : " << del_oid <<dendl;

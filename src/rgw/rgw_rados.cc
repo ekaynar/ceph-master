@@ -9643,15 +9643,15 @@ int RGWRados::get_head_obj(cache_obj& c_obj){
   return ret;
   }
 
-int RGWRados::retrieve_obj_acls(cache_obj& c_obj){
+int RGWRados::retrieve_obj_acls(cache_obj* c_obj){
   ldout(cct, 20) << __func__ <<dendl;
-  get_s3_credentials(store->getRados(), c_obj.owner, c_obj.accesskey);
+  get_s3_credentials(store->getRados(), c_obj->owner, c_obj->accesskey);
   RGWRESTStreamRWRequest *in_stream_req;
   string backend_url = cct->_conf->backend_url;
 
-  rgw_user user_id(c_obj.owner);
+  rgw_user user_id(c_obj->owner);
   rgw_bucket bucket;
-  bucket.name = c_obj.bucket_name;
+  bucket.name = c_obj->bucket_name;
 /*  if (c_obj.obj_name.find("/") != std::string::npos) {
 	if (c_obj.obj_name.find("out") != std::string::npos ){
 	  dout(10) << __func__   << "output bucket" << c_obj.bucket_name  <<dendl;
@@ -9671,10 +9671,10 @@ int RGWRados::retrieve_obj_acls(cache_obj& c_obj){
   list<string> endpoints;
   endpoints.push_back(backend_url);
   ldout(cct, 20) << __func__ << " url " << backend_url <<dendl; 
-  rgw_obj src_obj(bucket, c_obj.obj_name);
+  rgw_obj src_obj(bucket, c_obj->obj_name);
   map<string, bufferlist> src_attrs;
 
-  RGWRESTConn *conn = new RGWRESTConn(this->cct, nullptr, "", endpoints, c_obj.accesskey);
+  RGWRESTConn *conn = new RGWRESTConn(this->cct, nullptr, "", endpoints, c_obj->accesskey);
   RGWGetExtraDataCB cb;
   real_time set_mtime;
   map<string, string> pheaders;
@@ -9698,7 +9698,7 @@ int RGWRados::retrieve_obj_acls(cache_obj& c_obj){
   ret = conn->complete_request(in_stream_req, &etag, &set_mtime, &obj_size, nullptr, &pheaders);
 
 //  dout(10)  << "after get_obj  ugur etag " << etag << dendl;
-  c_obj.etag = etag;
+  c_obj->etag = etag;
   if (ret < 0 )
     return ret;
 
@@ -9730,14 +9730,14 @@ int RGWRados::retrieve_obj_acls(cache_obj& c_obj){
       ACLPermission_S3* const pp = static_cast<ACLPermission_S3*>(&perm);
       stringstream so;
       pp->to_xml(so);
-      c_obj.acl = so.str();
-      stripTags(c_obj.acl);
+      c_obj->acl = so.str();
+      stripTags(c_obj->acl);
     }
   }
-   c_obj.size_in_bytes = obj_size;
-   c_obj.home_location = BACKEND;
-   c_obj.dirty = false;
-
+   c_obj->size_in_bytes = obj_size;
+   c_obj->home_location = BACKEND;
+   c_obj->dirty = false;
+   c_obj->intermediate = false;
  ldout(cct, 10) << __func__ << "after get_obj  ugur2.4 etag " << dendl;
   return 0;
 }

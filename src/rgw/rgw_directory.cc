@@ -199,13 +199,13 @@ void RGWObjectDirectory::findClient(string key, cpp_redis::client *client){
 
   try {
 	if (slot < 4096)
-	  client->connect(cct->_conf->rgw_directory_address, cct->_conf->rgw_directory_port, nullptr,   500, 100, 1000);
+	  client->connect(cct->_conf->rgw_directory_address, cct->_conf->rgw_directory_port, nullptr,   500, 10, 1000);
 	else if (slot < 8192)
-	  client->connect(cct->_conf->rgw_directory_address2, cct->_conf->rgw_directory_port2 ,nullptr, 500, 100, 1000);
+	  client->connect(cct->_conf->rgw_directory_address2, cct->_conf->rgw_directory_port2 ,nullptr, 500, 10, 1000);
 	else if (slot < 12288)
-	  client->connect(cct->_conf->rgw_directory_address3, cct->_conf->rgw_directory_port3 ,nullptr, 500, 100, 1000);
+	  client->connect(cct->_conf->rgw_directory_address3, cct->_conf->rgw_directory_port3 ,nullptr, 500, 10, 1000);
 	else
-	  client->connect(cct->_conf->rgw_directory_address4, cct->_conf->rgw_directory_port4 ,nullptr, 500, 100, 1000);
+	  client->connect(cct->_conf->rgw_directory_address4, cct->_conf->rgw_directory_port4 ,nullptr, 500, 10, 1000);
 
   } catch(exception &e) {
 	ldout(cct,10) << __func__ <<"Redis client connected failed with " << e.what()<< dendl;
@@ -220,14 +220,14 @@ void RGWBlockDirectory::findClient(string key, cpp_redis::client *client){
   try {
 	/* if you had four *4* redis masters */
 	if (slot < 4096)
-	  client->connect(cct->_conf->rgw_directory_address, cct->_conf->rgw_directory_port, nullptr , 0, 100, 1000);
+	  client->connect(cct->_conf->rgw_directory_address, cct->_conf->rgw_directory_port, nullptr , 5000, 10, 1000);
 	else if (slot < 8192)
-	  client->connect(cct->_conf->rgw_directory_address2, cct->_conf->rgw_directory_port2 ,nullptr, 0,100, 1000);
+	  client->connect(cct->_conf->rgw_directory_address2, cct->_conf->rgw_directory_port2 ,nullptr, 500,10, 1000);
 	//client = &client2;
 	else if (slot < 12288)
-	  client->connect(cct->_conf->rgw_directory_address3, cct->_conf->rgw_directory_port3,nullptr, 0, 100, 1000);
+	  client->connect(cct->_conf->rgw_directory_address3, cct->_conf->rgw_directory_port3,nullptr, 500, 10, 1000);
 	else
-	  client->connect(cct->_conf->rgw_directory_address4, cct->_conf->rgw_directory_port4, nullptr, 0, 100, 1000);
+	  client->connect(cct->_conf->rgw_directory_address4, cct->_conf->rgw_directory_port4, nullptr, 500, 10, 1000);
 	//client = &client3;
 
   }  catch(exception &e) {
@@ -314,12 +314,10 @@ int RGWBlockDirectory::resetGlobalWeight(string key){
   list.push_back(make_pair("accessCount", "0"));
   client.hmset(key, list, [](cpp_redis::reply &reply){
 	  });
-  //client.commit();
   client.sync_commit(std::chrono::milliseconds(1000));
   auto end2 = chrono::steady_clock::now();
   ldout(cct,10) << __func__  << " ms " << chrono::duration_cast<chrono::microseconds>(end2 - start).count()  << dendl;
-//  client.commit();
-
+  return 0;
 }
 
 int RGWBlockDirectory::updateGlobalWeight(string key,  size_t weight , bool evict){
@@ -586,7 +584,14 @@ int RGWObjectDirectory::setValue(cache_obj *ptr){
 	ss << ptr->hosts_list[i];
   }
   hosts = ss.str();
-
+  hosts = "meta";
+  ptr->mapping_id ="None";
+  ptr->intermediate="False";
+  time_t rawTime = time(NULL);
+  ptr->aclTimeStamp = mktime(gmtime(&rawTime));
+  ptr->lastAccessTime = mktime(gmtime(&rawTime));
+  ptr->creationTime = mktime(gmtime(&rawTime));
+  ptr->offset = 0;
   //creating a list of key's properties
   list.push_back(make_pair("key", key));
   list.push_back(make_pair("owner", ptr->owner));
@@ -817,6 +822,7 @@ int RGWObjectDirectory::getValue(cache_obj *ptr){
   ldout(cct,10) << __func__ << " object in func getValue "<< key << dendl;
   try{
   findClient(key, &client);
+  ldout(cct,10) << __func__ << " object findclient func"<< key << dendl;
   }
   catch(exception &e) {
       return -1;

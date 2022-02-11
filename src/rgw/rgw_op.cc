@@ -8356,13 +8356,16 @@ bool RGWGetObj::cache_authorize(){
   int op_ret;
   
   op_ret = store->getRados()->objDirectory->getValue(&c_obj);
-  //op_ret=-1;
+  op_ret=-1;
   ldpp_dout(this, 10) << __func__  << "op " << op_ret << dendl;
   if (op_ret < 0){
-	op_ret = store->getRados()->retrieve_obj_acls(c_obj);
+	op_ret = store->getRados()->retrieve_obj_acls(&c_obj);
   ldpp_dout(this, 10) << __func__  << "op22 " << op_ret << dendl;
 	if (op_ret < 0)
       return false;
+   // c_obj.dirty = false;
+   //c_obj.intermediate = false;
+   //c_obj.home_location = BACKEND;
    op_ret = store->getRados()->objDirectory->setValue(&c_obj);
    ldpp_dout(this, 10) << __func__  << "op23 " << op_ret << dendl;
    return compare_acls();
